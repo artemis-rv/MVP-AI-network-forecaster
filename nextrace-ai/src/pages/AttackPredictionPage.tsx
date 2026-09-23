@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Target, Clock, Shield,
   ChevronRight, Info,
@@ -190,6 +191,11 @@ function ForecastCard({ forecast }: { forecast: ForecastResult | null }) {
       <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', background: 'var(--bg-workspace)', borderRadius: 8, padding: '6px 10px' }}>
         ⚠ {forecast?.demo_label ?? 'Deterministic demo prediction'}
       </div>
+
+      {/* Investigate target button */}
+      {!isBenign && forecast?.target && forecast.target !== 'None detected' && forecast.target !== 'N/A' && (
+        <InvestigateTargetBtn target={forecast.target} />
+      )}
     </div>
   );
 }
@@ -538,3 +544,26 @@ const cardStyle: React.CSSProperties = {
   boxShadow: 'var(--shadow-sm)',
   padding: 20,
 };
+
+// ─── Investigate Target Button ─────────────────────────────────────────────────
+function InvestigateTargetBtn({ target }: { target: string }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate(`/investigation?ip=${encodeURIComponent(target)}&source=forecast`)}
+      style={{
+        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        gap: 7, padding: '9px 14px', borderRadius: 10, cursor: 'pointer',
+        background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+        border: 'none', color: 'white', fontSize: 12, fontWeight: 700,
+        boxShadow: '0 4px 12px rgba(99,102,241,0.3)',
+        transition: 'all 0.2s',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 20px rgba(99,102,241,0.5)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(99,102,241,0.3)'; }}
+    >
+      <span style={{ fontSize: 13 }}>🔍</span>
+      Investigate Predicted Target: {target}
+    </button>
+  );
+}

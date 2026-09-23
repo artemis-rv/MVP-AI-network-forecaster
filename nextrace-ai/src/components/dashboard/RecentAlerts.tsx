@@ -1,10 +1,23 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { recentAlerts } from '@/data/mockData';
 import { Badge } from '@/components/ui/Badge';
 import { ChevronRight } from 'lucide-react';
 
 export function RecentAlerts() {
   const [hovered, setHovered] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  function handleInvestigate(alert: typeof recentAlerts[0], e: React.MouseEvent) {
+    e.stopPropagation();
+    const params = new URLSearchParams({
+      ip: alert.source,
+      source: 'alert',
+      alertId: alert.id,
+      event: alert.event,
+    });
+    navigate(`/investigation?${params.toString()}`);
+  }
 
   return (
     <div
@@ -49,7 +62,7 @@ export function RecentAlerts() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--bg-workspace)' }}>
-              {['Time', 'Severity', 'Event', 'Source IP', 'Destination IP'].map((col) => (
+              {['Time', 'Severity', 'Event', 'Source IP', 'Destination IP', ''].map((col) => (
                 <th
                   key={col}
                   style={{
@@ -95,6 +108,21 @@ export function RecentAlerts() {
                 </td>
                 <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                   {alert.destination}
+                </td>
+                <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                  <button
+                    onClick={(e) => handleInvestigate(alert, e)}
+                    style={{
+                      fontSize: 11, fontWeight: 700, padding: '5px 12px', borderRadius: 8,
+                      background: hovered === alert.id ? 'var(--primary)' : 'transparent',
+                      color: hovered === alert.id ? 'white' : 'var(--primary)',
+                      border: '1px solid var(--primary)',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    Investigate
+                  </button>
                 </td>
               </tr>
             ))}

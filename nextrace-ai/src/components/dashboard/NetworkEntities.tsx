@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { networkNodes, networkEdges } from '@/data/mockData';
 import { Info } from 'lucide-react';
-import { useAppStore } from '@/store/appStore';
 import type { LiveNode, LiveEdge } from '@/types/live';
 
 // Adapter: convert LiveNode to the internal node shape
@@ -42,7 +42,7 @@ const NODE_COLORS: Record<NodeType, { bg: string; border: string; text: string; 
 export function NetworkEntities({ nodes: propNodes, edges: propEdges }: { nodes?: LiveNode[]; edges?: LiveEdge[] } = {}) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const { addToast } = useAppStore();
+  const navigate = useNavigate();
 
   // Use live data if provided, else fall back to mock
   const nodes = propNodes ? adaptLiveNodes(propNodes) : networkNodes;
@@ -147,7 +147,6 @@ export function NetworkEntities({ nodes: propNodes, edges: propEdges }: { nodes?
                 onMouseLeave={() => setHoveredNode(null)}
                 onClick={() => {
                   setSelectedNode(selectedNode === node.id ? null : node.id);
-                  if (node.type === 'suspicious') addToast(`Investigating ${node.ip} — Click "Investigation" in sidebar for full workflow.`, 'warning');
                 }}
               >
                 {/* Glow ring */}
@@ -230,7 +229,10 @@ export function NetworkEntities({ nodes: propNodes, edges: propEdges }: { nodes?
               </div>
             )}
             <button
-              onClick={() => addToast('Open "Investigation" from the sidebar to start a full entity investigation workflow.', 'info')}
+              onClick={() => {
+                const ip = selectedNodeData.ip;
+                navigate(`/investigation?ip=${encodeURIComponent(ip)}&source=entity`);
+              }}
               style={{
                 width: '100%',
                 padding: '7px',

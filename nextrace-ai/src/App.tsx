@@ -5,9 +5,10 @@ import { ToastContainer } from '@/components/ui/Toast';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { LiveMonitoringPage } from '@/pages/LiveMonitoringPage';
 import { AttackPredictionPage } from '@/pages/AttackPredictionPage';
+import { InvestigationPage } from '@/pages/InvestigationPage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import {
-  Bell, Search, FileSearch,
+  Bell, FileSearch,
   FileText, ShieldCheck, Activity,
 } from 'lucide-react';
 
@@ -30,13 +31,7 @@ function App() {
                   icon={<Bell size={36} />}
                 />
               } />
-              <Route path="/investigation" element={
-                <PlaceholderPage
-                  title="Investigation"
-                  description="Deep entity investigation workflow with evidence review, ATT&CK mapping, behavior analysis, and finding generation."
-                  icon={<Search size={36} />}
-                />
-              } />
+              <Route path="/investigation" element={<InvestigationPage />} />
               <Route path="/historical-pcap" element={
                 <PlaceholderPage
                   title="Historical PCAP Analysis"
