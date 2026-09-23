@@ -6,7 +6,8 @@ import { NetworkEntities } from '@/components/dashboard/NetworkEntities';
 import { RecentAlerts } from '@/components/dashboard/RecentAlerts';
 import { InvestigationAssistant } from '@/components/dashboard/InvestigationAssistant';
 import { LatestReports } from '@/components/dashboard/LatestReports';
-import { kpiData } from '@/data/mockData';
+import { kpiData, trafficData } from '@/data/mockData';
+import { useLiveStore } from '@/store/liveStore';
 import {
   ShieldAlert, Activity, TrendingUp, Folder
 } from 'lucide-react';
@@ -19,6 +20,27 @@ const kpiIcons = [
 ];
 
 export function DashboardPage() {
+  const { session, temporalHistory, currentTemporal, liveNodes, liveEdges } = useLiveStore();
+  const isLive = session?.running ?? false;
+
+  // Derive live KPI values when a session is active
+  const liveKpiValues = isLive && session ? [
+    { value: session.suspicious_count > 0 ? Math.ceil(session.suspicious_count / 10) : 2 },
+    { value: session.suspicious_count },
+    { value: currentTemporal ? Math.ceil(currentTemporal.suspicious_ratio * 10) : 3 },
+    { value: 1 },
+  ] : null;
+
+  // Chart data: use real temporal history if available, else mock
+  const chartData = temporalHistory.length > 0
+    ? temporalHistory.slice(-20).map(t => ({
+        time: new Date((t.window_end as unknown as number) * 1000).toLocaleTimeString('en-US', { hour12: false }),
+        total: t.packet_count,
+        benign: t.benign_count,
+        suspicious: t.suspicious_count,
+      }))
+    : trafficData;
+
   return (
     <div>
       {/* Header */}
@@ -37,10 +59,10 @@ export function DashboardPage() {
           <KpiCard
             key={kpi.id}
             label={kpi.label}
-            value={kpi.value}
+            value={liveKpiValues ? liveKpiValues[i].value : kpi.value}
             change={kpi.change}
             changeType={kpi.changeType}
-            comparison={kpi.comparison}
+            comparison={isLive && i < 2 ? 'Live session' : kpi.comparison}
             color={kpi.color as 'critical' | 'warning' | 'primary' | 'secondary'}
             icon={kpiIcons[i]}
             sparkline={kpi.sparkline}
@@ -58,13 +80,13 @@ export function DashboardPage() {
           marginBottom: 20,
         }}
       >
-        <LiveNetworkChart />
+        <LiveNetworkChart data={chartData} isLive={isLive} />
         <AttackForecast />
       </div>
 
       {/* Network Entities — Full Width */}
       <div style={{ marginBottom: 20 }}>
-        <NetworkEntities />
+        <NetworkEntities nodes={liveNodes.length > 0 ? liveNodes : undefined} edges={liveEdges.length > 0 ? liveEdges : undefined} />
       </div>
 
       {/* Alerts — Full Width */}

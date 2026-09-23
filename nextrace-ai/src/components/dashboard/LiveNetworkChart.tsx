@@ -5,6 +5,15 @@ import {
 } from 'recharts';
 import { trafficData } from '@/data/mockData';
 
+interface ChartDataPoint {
+  time: string;
+  total?: number;
+  benign?: number;
+  suspicious?: number;
+  // mock fields
+  [key: string]: unknown;
+}
+
 const TIME_RANGES = ['Last 5 min', 'Last 15 min', 'Last 30 min'];
 
 interface TooltipPayload {
@@ -37,11 +46,12 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   );
 };
 
-export function LiveNetworkChart() {
+export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }: { data?: ChartDataPoint[]; isLive?: boolean } = {}) {
   const [range, setRange] = useState('Last 15 min');
 
   const slice = range === 'Last 5 min' ? 10 : range === 'Last 15 min' ? 20 : 30;
-  const data = trafficData.slice(-slice);
+  const data = externalData ?? trafficData.slice(-slice);
+  const isLiveDisplay = externalIsLive ?? true;
 
   return (
     <div
@@ -63,14 +73,18 @@ export function LiveNetworkChart() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: '0.5px',
-              color: 'var(--color-live)',
-              background: 'rgba(16,185,129,0.1)',
-              border: '1px solid rgba(16,185,129,0.25)',
+              color: isLiveDisplay ? 'var(--color-live)' : 'var(--text-muted)',
+              background: isLiveDisplay ? 'rgba(16,185,129,0.1)' : 'var(--bg-input)',
+              border: `1px solid ${isLiveDisplay ? 'rgba(16,185,129,0.25)' : 'var(--border-default)'}`,
               borderRadius: 999,
               padding: '2px 8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
             }}
           >
-            LIVE
+            {isLiveDisplay && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-live)', display: 'inline-block', animation: 'pulse-dot 1.5s infinite' }} />}
+            {isLiveDisplay ? 'LIVE' : 'DEMO'}
           </span>
         </div>
         {/* Time range */}

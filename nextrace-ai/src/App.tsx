@@ -3,9 +3,11 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { ToastContainer } from '@/components/ui/Toast';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { LiveMonitoringPage } from '@/pages/LiveMonitoringPage';
+import { AttackPredictionPage } from '@/pages/AttackPredictionPage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import {
-  Radio, TrendingUp, Bell, Search, FileSearch,
+  Bell, Search, FileSearch,
   FileText, ShieldCheck, Activity,
 } from 'lucide-react';
 
@@ -19,20 +21,8 @@ function App() {
           <main className="app-content">
             <Routes>
               <Route path="/" element={<DashboardPage />} />
-              <Route path="/live-monitoring" element={
-                <PlaceholderPage
-                  title="Live Monitoring"
-                  description="Real-time packet capture and traffic analysis with Scapy-generated benign and malicious scenarios. Start/stop controls and protocol filters."
-                  icon={<Radio size={36} />}
-                />
-              } />
-              <Route path="/attack-prediction" element={
-                <PlaceholderPage
-                  title="Attack Prediction"
-                  description="Temporal network state forecasting and fixed-K attack progression simulator with LSTM/deterministic demo logic."
-                  icon={<TrendingUp size={36} />}
-                />
-              } />
+              <Route path="/live-monitoring" element={<LiveMonitoringPage />} />
+              <Route path="/attack-prediction" element={<AttackPredictionPage />} />
               <Route path="/alerts" element={
                 <PlaceholderPage
                   title="Alerts"

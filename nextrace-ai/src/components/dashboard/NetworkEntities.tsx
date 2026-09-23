@@ -2,6 +2,32 @@ import { useState, useCallback } from 'react';
 import { networkNodes, networkEdges } from '@/data/mockData';
 import { Info } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import type { LiveNode, LiveEdge } from '@/types/live';
+
+// Adapter: convert LiveNode to the internal node shape
+function adaptLiveNodes(nodes: LiveNode[]) {
+  return nodes.map(n => ({
+    id: n.id,
+    label: n.ip,
+    type: n.type as 'internal' | 'suspicious' | 'server' | 'external',
+    x: n.x,
+    y: n.y,
+    ip: n.ip,
+    status: n.type === 'suspicious' ? 'Suspicious' : 'Active',
+    connections: 1,
+    riskScore: n.type === 'suspicious' ? 85 : 20,
+  }));
+}
+
+function adaptLiveEdges(edges: LiveEdge[]) {
+  return edges.map(e => ({
+    from: e.from,
+    to: e.to,
+    label: e.label,
+    suspicious: e.suspicious,
+    strength: e.suspicious ? 'high' : 'medium',
+  }));
+}
 
 type NodeType = 'internal' | 'suspicious' | 'server' | 'external';
 
@@ -13,10 +39,15 @@ const NODE_COLORS: Record<NodeType, { bg: string; border: string; text: string; 
 };
 
 
-export function NetworkEntities() {
+export function NetworkEntities({ nodes: propNodes, edges: propEdges }: { nodes?: LiveNode[]; edges?: LiveEdge[] } = {}) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const { addToast } = useAppStore();
+
+  // Use live data if provided, else fall back to mock
+  const nodes = propNodes ? adaptLiveNodes(propNodes) : networkNodes;
+  const edges = propEdges ? adaptLiveEdges(propEdges) : networkEdges;
+  const isLiveData = !!propNodes;
 
   const isEdgeHighlighted = useCallback((from: string, to: string) => {
     if (!hoveredNode && !selectedNode) return false;
@@ -24,7 +55,7 @@ export function NetworkEntities() {
     return from === active || to === active;
   }, [hoveredNode, selectedNode]);
 
-  const selectedNodeData = networkNodes.find(n => n.id === selectedNode);
+  const selectedNodeData = nodes.find(n => n.id === selectedNode);
 
   return (
     <div
@@ -39,9 +70,11 @@ export function NetworkEntities() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Global Network Entities</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {isLiveData ? 'Live Network Entities' : 'Global Network Entities'}
+          </h3>
           <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-            Click a node to inspect · Hover to highlight connections
+            {isLiveData ? `${nodes.length} entities discovered` : 'Click a node to inspect · Hover to highlight connections'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -66,11 +99,12 @@ export function NetworkEntities() {
           <rect width="100%" height="100%" fill="url(#grid)" />
 
           {/* Edges */}
-          {networkEdges.map((edge, i) => {
-            const from = networkNodes.find(n => n.id === edge.from)!;
-            const to = networkNodes.find(n => n.id === edge.to)!;
+          {edges.map((edge, i) => {
+            const from = nodes.find(n => n.id === edge.from);
+            const to   = nodes.find(n => n.id === edge.to);
+            if (!from || !to) return null;
             const highlighted = isEdgeHighlighted(edge.from, edge.to);
-            const isSuspicious = from.type === 'suspicious' || to.type === 'suspicious';
+            const isSuspicious = (from.type === 'suspicious' || to.type === 'suspicious') || !!(edge as {suspicious?: boolean}).suspicious;
 
             return (
               <g key={i}>
@@ -98,7 +132,7 @@ export function NetworkEntities() {
           })}
 
           {/* Nodes */}
-          {networkNodes.map((node) => {
+          {nodes.map((node) => {
             const c = NODE_COLORS[node.type as NodeType];
             const isHovered = hoveredNode === node.id;
             const isSelected = selectedNode === node.id;
