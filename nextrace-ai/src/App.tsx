@@ -6,9 +6,10 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { LiveMonitoringPage } from '@/pages/LiveMonitoringPage';
 import { AttackPredictionPage } from '@/pages/AttackPredictionPage';
 import { InvestigationPage } from '@/pages/InvestigationPage';
+import { HistoricalAnalysisPage } from '@/pages/HistoricalAnalysisPage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import {
-  Bell, FileSearch,
+  Bell,
   FileText, ShieldCheck, Activity,
 } from 'lucide-react';
 
@@ -32,13 +33,7 @@ function App() {
                 />
               } />
               <Route path="/investigation" element={<InvestigationPage />} />
-              <Route path="/historical-pcap" element={
-                <PlaceholderPage
-                  title="Historical PCAP Analysis"
-                  description="Upload a PCAP to create an independent analysis job. Chronological timeline, attack-path reconstruction, and hypothesis generation."
-                  icon={<FileSearch size={36} />}
-                />
-              } />
+              <Route path="/historical-pcap" element={<HistoricalAnalysisPage />} />
               <Route path="/reports" element={
                 <PlaceholderPage
                   title="Reports"
