@@ -3,9 +3,10 @@
 // No imports from liveStore, forecastStore, or investigationStore.
 
 import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReactFlowProvider } from '@xyflow/react';
 import {
-  Upload, Play, RefreshCw, AlertTriangle, Info,
+  Upload, Play, RefreshCw, AlertTriangle, Info, Search,
 } from 'lucide-react';
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -69,6 +70,7 @@ const STAGE_LABELS: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function HistoricalAnalysisPage() {
+  const navigate = useNavigate();
   const {
     status, progress, packetsProcessed, flowsDetected, currentStage,
     error, result, isDemo, currentJobId, jobMeta,
@@ -79,6 +81,10 @@ export function HistoricalAnalysisPage() {
     status === 'idle' ? 'upload' :
     status === 'completed' ? 'result' :
     status === 'failed' ? 'error' : 'processing';
+
+  function handleOpenForensic() {
+    if (currentJobId) navigate(`/forensic/${currentJobId}`);
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minHeight: 'calc(100vh - 60px)' }}>
@@ -102,9 +108,24 @@ export function HistoricalAnalysisPage() {
               )}
               {isDemo && <DemoBadge />}
               {view === 'result' && (
-                <button onClick={clearJob} style={ghostBtnStyle}>
-                  <RefreshCw size={12} /> New Analysis
-                </button>
+                <>
+                  <button
+                    id="open-forensic-analysis-btn"
+                    onClick={handleOpenForensic}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      fontSize: 12, fontWeight: 700, padding: '7px 16px', borderRadius: 8, border: 'none',
+                      background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
+                      color: 'white', cursor: 'pointer', boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <Search size={12} /> Open Forensic Analysis
+                  </button>
+                  <button onClick={clearJob} style={ghostBtnStyle}>
+                    <RefreshCw size={12} /> New Analysis
+                  </button>
+                </>
               )}
             </div>
           )}

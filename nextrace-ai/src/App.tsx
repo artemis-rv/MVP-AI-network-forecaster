@@ -8,6 +8,8 @@ import { AttackPredictionPage } from '@/pages/AttackPredictionPage';
 import { InvestigationPage } from '@/pages/InvestigationPage';
 import { HistoricalAnalysisPage } from '@/pages/HistoricalAnalysisPage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
+import { ForensicAnalysisPage } from '@/pages/ForensicAnalysisPage';
+import { SimulationPage } from '@/pages/SimulationPage';
 import {
   Bell,
   FileText, ShieldCheck, Activity,
@@ -34,6 +36,8 @@ function App() {
               } />
               <Route path="/investigation" element={<InvestigationPage />} />
               <Route path="/historical-pcap" element={<HistoricalAnalysisPage />} />
+              <Route path="/forensic/:jobId" element={<ForensicAnalysisPage />} />
+              <Route path="/simulation" element={<SimulationPage />} />
               <Route path="/reports" element={
                 <PlaceholderPage
                   title="Reports"

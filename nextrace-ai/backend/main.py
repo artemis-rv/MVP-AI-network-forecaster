@@ -11,6 +11,8 @@ from backend.api.live import router as live_router
 from backend.api.forecast import router as forecast_router
 from backend.api.websocket_handler import router as ws_router
 from backend.api.historical import router as historical_router
+from backend.api.forensic import router as forensic_router
+from backend.api.simulator import router as simulator_router
 
 app = FastAPI(
     title="NEXTRACE AI Backend",
@@ -39,6 +41,8 @@ app.include_router(live_router,       prefix="/api")
 app.include_router(forecast_router,   prefix="/api")
 app.include_router(ws_router)
 app.include_router(historical_router, prefix="/api")
+app.include_router(forensic_router,   prefix="/api")
+app.include_router(simulator_router,  prefix="/api")
 
 
 @app.get("/")

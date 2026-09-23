@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Radio, TrendingUp, Bell, Search,
-  FileSearch, FileText, ShieldCheck, Activity, Zap
+  FileSearch, FileText, ShieldCheck, Activity, Zap, Target
 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 
@@ -12,6 +12,7 @@ const navItems = [
   { id: 'alerts', label: 'Alerts', icon: Bell, path: '/alerts', badge: 3 },
   { id: 'investigation', label: 'Investigation', icon: Search, path: '/investigation' },
   { id: 'historical-pcap', label: 'Historical PCAP', icon: FileSearch, path: '/historical-pcap' },
+  { id: 'attack-simulator', label: 'Attack Simulator', icon: Target, path: '/simulation' },
   { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
   { id: 'admin', label: 'Admin', icon: ShieldCheck, path: '/admin' },
   { id: 'system-status', label: 'System Status', icon: Activity, path: '/system-status' },

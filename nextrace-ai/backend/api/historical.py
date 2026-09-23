@@ -5,6 +5,7 @@ Isolated from live-session and forecast endpoints.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import tempfile
 import time
@@ -27,13 +28,23 @@ _MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB guard
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _new_job(filename: str, file_size: int, is_demo: bool = False) -> dict[str, Any]:
+def _new_job(
+    filename: str,
+    file_size: int,
+    is_demo: bool = False,
+    sha256: str | None = None,
+    upload_at: float | None = None,
+) -> dict[str, Any]:
     job_id = f"HIST-{str(uuid.uuid4())[:8].upper()}"
+    now = upload_at or time.time()
     _JOBS[job_id] = {
         "job_id":             job_id,
         "filename":           filename,
         "file_size":          file_size,
         "is_demo":            is_demo,
+        "sha256":             sha256,               # None for demo until simulated
+        "upload_timestamp":   now,
+        "processing_start":   None,
         "status":             "queued",
         "progress":           0.0,
         "packets_processed":  0,
@@ -41,7 +52,7 @@ def _new_job(filename: str, file_size: int, is_demo: bool = False) -> dict[str, 
         "current_stage":      "queued",
         "error":              None,
         "result":             None,
-        "created_at":         time.time(),
+        "created_at":         now,
         "completed_at":       None,
         "temp_path":          None,
     }
@@ -71,7 +82,8 @@ async def _run_analysis_async(job_id: str, path: str) -> None:
 
     def _run() -> None:
         try:
-            job["status"] = "parsing"
+            _JOBS[job_id]["status"]          = "parsing"
+            _JOBS[job_id]["processing_start"] = time.time()
             from backend.historical.analyzer import run_analysis
             result = run_analysis(path, window_seconds=15.0, progress_callback=_progress_cb)
             _JOBS[job_id]["result"]           = result
@@ -109,7 +121,13 @@ async def _run_demo_async(job_id: str) -> None:
         ("completed",          100.0, 0.0),
     ]
 
-    _JOBS[job_id]["status"] = "processing"
+    _JOBS[job_id]["status"]          = "processing"
+    _JOBS[job_id]["processing_start"] = time.time()
+    # Assign a deterministic simulated hash for the demo dataset.
+    # Clearly labelled — this is NOT a real capture hash.
+    _JOBS[job_id]["sha256"] = (
+        "SIMULATED:a3f8c2d1e9b4076f5ae12890cd34567890abcdef1234567890abcdef12345678"
+    )
 
     for stage, pct, delay in stages:
         if delay:
@@ -146,6 +164,7 @@ async def upload_pcap(file: UploadFile = File(...)) -> JSONResponse:
         )
 
     # Read file content
+    upload_ts = time.time()
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
@@ -154,6 +173,9 @@ async def upload_pcap(file: UploadFile = File(...)) -> JSONResponse:
             status_code=413,
             detail=f"File too large. Maximum allowed: {_MAX_FILE_SIZE // 1024 // 1024} MB",
         )
+
+    # SHA-256 of uploaded bytes — computed once over the exact byte stream.
+    file_sha256 = hashlib.sha256(content).hexdigest()
 
     # Write to temp file
     suffix = ext if ext in _ALLOWED_EXTENSIONS else ".pcap"
@@ -164,17 +186,19 @@ async def upload_pcap(file: UploadFile = File(...)) -> JSONResponse:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to save upload: {exc}")
 
-    job = _new_job(filename, len(content), is_demo=False)
+    job = _new_job(filename, len(content), is_demo=False, sha256=file_sha256, upload_at=upload_ts)
     job["temp_path"] = temp_path
 
     # Fire-and-forget background task
     asyncio.create_task(_run_analysis_async(job["job_id"], temp_path))
 
     return JSONResponse({
-        "job_id":    job["job_id"],
-        "filename":  filename,
-        "file_size": len(content),
-        "status":    job["status"],
+        "job_id":            job["job_id"],
+        "filename":          filename,
+        "file_size":         len(content),
+        "sha256":            file_sha256,
+        "upload_timestamp":  upload_ts,
+        "status":            job["status"],
     }, status_code=202)
 
 
@@ -207,6 +231,9 @@ async def get_job_status(job_id: str) -> JSONResponse:
         "job_id":            job["job_id"],
         "filename":          job["filename"],
         "is_demo":           job["is_demo"],
+        "sha256":            job.get("sha256"),
+        "upload_timestamp":  job.get("upload_timestamp"),
+        "processing_start":  job.get("processing_start"),
         "status":            job["status"],
         "progress":          job["progress"],
         "packets_processed": job["packets_processed"],
@@ -242,11 +269,16 @@ async def get_job_result(job_id: str) -> JSONResponse:
         raise HTTPException(status_code=500, detail="Result is missing despite completed status.")
 
     return JSONResponse({
-        "job_id":    job["job_id"],
-        "filename":  job["filename"],
-        "is_demo":   job["is_demo"],
-        "status":    job["status"],
-        "result":    result,
+        "job_id":             job["job_id"],
+        "filename":           job["filename"],
+        "file_size":          job["file_size"],
+        "is_demo":            job["is_demo"],
+        "sha256":             job.get("sha256"),
+        "upload_timestamp":   job.get("upload_timestamp"),
+        "processing_start":   job.get("processing_start"),
+        "completed_at":       job.get("completed_at"),
+        "status":             job["status"],
+        "result":             result,
     })
 
 
