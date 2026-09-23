@@ -1,7 +1,28 @@
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { latestReports } from '@/data/mockData';
-import { ChevronRight, CheckCircle } from 'lucide-react';
+import { ChevronRight, CheckCircle, FileText, AlertTriangle } from 'lucide-react';
+import { useFindingsStore } from '@/store/findingsStore';
+import type { ReportListItem } from '@/types/report';
+
+function tsShort(ts: number): string {
+  return new Date(ts * 1000).toLocaleString('en-US', {
+    month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
 
 export function LatestReports() {
+  const navigate = useNavigate();
+  const { reportList, fetchReportList } = useFindingsStore();
+
+  // Load reports on mount — non-blocking, silently ignores errors
+  useEffect(() => {
+    fetchReportList();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hasRealReports = reportList.length > 0;
+
   return (
     <div
       style={{
@@ -24,6 +45,7 @@ export function LatestReports() {
       >
         <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Latest Reports</h3>
         <button
+          onClick={() => navigate('/reports')}
           style={{
             fontSize: 12,
             color: 'var(--primary)',
@@ -64,17 +86,72 @@ export function LatestReports() {
             </tr>
           </thead>
           <tbody>
-            {latestReports.map((report) => (
-              <ReportRow key={report.id} report={report} />
-            ))}
+            {hasRealReports
+              ? reportList.slice(0, 5).map((r) => (
+                  <RealReportRow key={r.report_id} report={r} onClick={() => navigate(`/reports/${r.report_id}`)} />
+                ))
+              : latestReports.map((report) => (
+                  <MockReportRow key={report.id} report={report} />
+                ))
+            }
           </tbody>
         </table>
+
+        {hasRealReports && (
+          <div style={{ padding: '8px 16px 10px', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <FileText size={11} />
+            {reportList.length} generated report{reportList.length !== 1 ? 's' : ''}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function ReportRow({ report }: { report: typeof latestReports[0] }) {
+function RealReportRow({ report, onClick }: { report: ReportListItem; onClick: () => void }) {
+  const isSim = report.report_type === 'simulation';
+  return (
+    <tr
+      onClick={onClick}
+      style={{ borderTop: '1px solid var(--border-subtle)', transition: 'background var(--transition-fast)', cursor: 'pointer' }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-workspace)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+    >
+      <td style={{ padding: '13px 16px' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+          {report.title.slice(0, 44)}{report.title.length > 44 ? '…' : ''}
+        </span>
+      </td>
+      <td style={{ padding: '13px 16px' }}>
+        <span
+          style={{
+            fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 999,
+            background: isSim ? 'rgba(239,68,68,0.1)' : 'var(--primary-light)',
+            color: isSim ? '#dc2626' : 'var(--primary)',
+          }}
+        >
+          {isSim ? 'SIMULATION' : 'HISTORICAL'}
+        </span>
+      </td>
+      <td style={{ padding: '13px 16px', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+        {tsShort(report.generated_at)}
+      </td>
+      <td style={{ padding: '13px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          {report.status === 'GENERATED'
+            ? <CheckCircle size={13} color="var(--color-live)" />
+            : <AlertTriangle size={13} color="#d97706" />
+          }
+          <span style={{ fontSize: 12, fontWeight: 600, color: report.status === 'GENERATED' ? 'var(--color-live)' : '#d97706' }}>
+            {report.status}
+          </span>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function MockReportRow({ report }: { report: typeof latestReports[0] }) {
   return (
     <tr
       style={{ borderTop: '1px solid var(--border-subtle)', transition: 'background var(--transition-fast)', cursor: 'pointer' }}
@@ -89,12 +166,8 @@ function ReportRow({ report }: { report: typeof latestReports[0] }) {
       <td style={{ padding: '13px 16px' }}>
         <span
           style={{
-            fontSize: 11,
-            fontWeight: 600,
-            padding: '3px 10px',
-            borderRadius: 999,
-            background: 'var(--primary-light)',
-            color: 'var(--primary)',
+            fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 999,
+            background: 'var(--primary-light)', color: 'var(--primary)',
           }}
         >
           {report.type}

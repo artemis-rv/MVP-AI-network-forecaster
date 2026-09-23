@@ -3,14 +3,16 @@
 // SIMULATOR ONLY — no real network traffic generated.
 // Isolated from live, historical, forensic, and investigation state.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Play, Pause, SkipForward, Square, RotateCcw,
-  Cpu, Activity, Target, TrendingUp, AlertTriangle,
+  Cpu, Activity, Target, TrendingUp, AlertTriangle, FileText,
 } from 'lucide-react';
 import { ReactFlow, Background, Controls, type Node, type Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useSimulatorStore, DEFAULT_CONFIG, K_MIN, K_MAX } from '@/store/simulatorStore';
+import { useFindingsStore } from '@/store/findingsStore';
+import { useNavigate } from 'react-router-dom';
 import type { SimEvent, ForecastSnapshot, SyntheticFeatureProfile } from '@/types/simulator';
 
 // ── Stage colours (separate from forecast STAGE_COLORS) ─────────────────────
@@ -55,6 +57,21 @@ export function SimulationPage() {
 
   useEffect(() => { loadScenarios(); }, [loadScenarios]);
 
+  const navigate = useNavigate();
+  const { generateSimulationReport, loading: reportLoading } = useFindingsStore();
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  async function handleGenerateReport() {
+    if (!simulationId) return;
+    setReportError(null);
+    const reportId = await generateSimulationReport(simulationId);
+    if (reportId) {
+      navigate(`/reports/${reportId}`);
+    } else {
+      setReportError('Report generation failed. Ensure simulation is completed.');
+    }
+  }
+
   const isIdle      = status === 'idle';
   const isCompleted = status === 'completed';
   const isStopped   = status === 'stopped';
@@ -84,8 +101,30 @@ export function SimulationPage() {
             </p>
           </div>
           {simulationId && (
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--primary)', background: 'rgba(99,102,241,0.08)', padding: '5px 12px', borderRadius: 999, border: '1px solid rgba(99,102,241,0.2)', alignSelf: 'flex-start' }}>
-              {simulationId}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, alignSelf: 'flex-start' }}>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--primary)', background: 'rgba(99,102,241,0.08)', padding: '5px 12px', borderRadius: 999, border: '1px solid rgba(99,102,241,0.2)' }}>
+                {simulationId}
+              </div>
+              {isCompleted && (
+                <button
+                  id="generate-sim-report-btn"
+                  onClick={handleGenerateReport}
+                  disabled={reportLoading}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 12, fontWeight: 700, padding: '8px 16px', borderRadius: 8,
+                    background: reportLoading ? 'var(--bg-workspace)' : 'var(--primary)',
+                    border: '1px solid var(--primary)', color: 'white',
+                    cursor: reportLoading ? 'not-allowed' : 'pointer', opacity: reportLoading ? 0.7 : 1,
+                  }}
+                >
+                  <FileText size={13} />
+                  {reportLoading ? 'Generating…' : 'Generate Simulation Report'}
+                </button>
+              )}
+              {reportError && (
+                <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>{reportError}</span>
+              )}
             </div>
           )}
         </div>

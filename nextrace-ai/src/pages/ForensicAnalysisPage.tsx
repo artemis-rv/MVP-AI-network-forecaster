@@ -11,6 +11,7 @@ import {
   Activity, Search, Info,
 } from 'lucide-react';
 import { useForensicStore } from '@/store/forensicStore';
+import { useFindingsStore } from '@/store/findingsStore';
 import type {
   EvidenceIntegrity, AntiForensicIndicator,
   Hypothesis, FinalAssessment, EvidenceSummary,
@@ -92,6 +93,20 @@ export function ForensicAnalysisPage() {
     navigate('/historical-pcap');
   }
 
+  const { generateHistoricalReport, loading: reportLoading } = useFindingsStore();
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  async function handleGenerateReport() {
+    if (!jobId) return;
+    setReportError(null);
+    const reportId = await generateHistoricalReport(jobId);
+    if (reportId) {
+      navigate(`/reports/${reportId}`);
+    } else {
+      setReportError('Report generation failed. Ensure forensic analysis is complete.');
+    }
+  }
+
   const view =
     status === 'completed'  ? 'result' :
     status === 'failed'     ? 'error'  : 'processing';
@@ -124,6 +139,26 @@ export function ForensicAnalysisPage() {
               </div>
             )}
             {isDemo && <SimulatedBadge/>}
+            {status === 'completed' && (
+              <button
+                id="generate-report-btn"
+                onClick={handleGenerateReport}
+                disabled={reportLoading}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 12, fontWeight: 700, padding: '8px 16px', borderRadius: 8,
+                  background: reportLoading ? 'var(--bg-workspace)' : 'var(--primary)',
+                  border: '1px solid var(--primary)', color: 'white', cursor: reportLoading ? 'not-allowed' : 'pointer',
+                  opacity: reportLoading ? 0.7 : 1,
+                }}
+              >
+                <FileText size={13} />
+                {reportLoading ? 'Generating…' : 'Generate Report'}
+              </button>
+            )}
+            {reportError && (
+              <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>{reportError}</span>
+            )}
           </div>
         </div>
       </div>

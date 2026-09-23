@@ -41,6 +41,7 @@ export function RecentAlerts() {
       >
         <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Recent Alerts</h3>
         <button
+          onClick={() => navigate('/alerts')}
           style={{
             fontSize: 12,
             color: 'var(--primary)',

@@ -7,6 +7,13 @@ import type {
   ForensicStatusResponse,
   ForensicResultEnvelope,
 } from '@/types/forensic';
+import type {
+  Report,
+  ReportListResponse,
+  GenerateReportResponse,
+  FindingsResponse,
+} from '@/types/report';
+import type { Alert, AlertStats, AlertStatus } from '@/types/alert';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -106,6 +113,63 @@ export const apiService = {
   async getSimulatorResult(simulationId: string): Promise<import('@/types/simulator').SimulatorResult> {
     return request(`/api/simulator/${simulationId}/result`);
   },
+
+  // ── Reports — isolated from all live/forecast/historical/forensic/simulator methods ─
+
+  async getHistoricalFindings(jobId: string): Promise<FindingsResponse> {
+    return request(`/api/reports/historical/${jobId}/findings`);
+  },
+
+  async getSimulationFindings(simulationId: string): Promise<FindingsResponse> {
+    return request(`/api/reports/simulation/${simulationId}/findings`);
+  },
+
+  async generateHistoricalReport(jobId: string): Promise<GenerateReportResponse> {
+    return request(`/api/reports/historical/${jobId}/generate`, { method: 'POST' });
+  },
+
+  async generateSimulationReport(simulationId: string): Promise<GenerateReportResponse> {
+    return request(`/api/reports/simulation/${simulationId}/generate`, { method: 'POST' });
+  },
+
+  async getReport(reportId: string): Promise<Report> {
+    return request(`/api/reports/${reportId}`);
+  },
+
+  async getReportList(): Promise<ReportListResponse> {
+    return request('/api/reports/list');
+  },
+
+  // ── ALERTS API (Phase 10) ──────────────────────────────────────────────────
+
+  async getAlerts(params?: Record<string, string>): Promise<{ alerts: Alert[]; total: number }> {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request(`/api/alerts${qs}`);
+  },
+
+  async getAlertStats(): Promise<AlertStats> {
+    return request(`/api/alerts/stats`);
+  },
+
+  async getAlert(alertId: string): Promise<Alert> {
+    return request(`/api/alerts/${alertId}`);
+  },
+
+  async acknowledgeAlert(alertId: string): Promise<Alert> {
+    return request(`/api/alerts/${alertId}/acknowledge`, { method: 'POST' });
+  },
+
+  async resolveAlert(alertId: string): Promise<Alert> {
+    return request(`/api/alerts/${alertId}/resolve`, { method: 'POST' });
+  },
+
+  async updateAlert(alertId: string, updates: { status?: AlertStatus; assigned_to?: string | null }): Promise<Alert> {
+    return request(`/api/alerts/${alertId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
 };
+
 
 
