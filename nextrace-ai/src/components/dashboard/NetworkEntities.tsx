@@ -89,7 +89,7 @@ export function NetworkEntities({ nodes: propNodes, edges: propEdges }: { nodes?
 
       <div style={{ position: 'relative', height: 300, background: 'var(--bg-workspace)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
         {/* SVG Graph */}
-        <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0 }}>
+        <svg width="100%" height="100%" viewBox="-20 0 820 300" preserveAspectRatio="xMidYMid meet" style={{ position: 'absolute', inset: 0 }}>
           {/* Grid lines */}
           <defs>
             <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">

@@ -14,8 +14,6 @@ import { wsService } from '@/services/websocket';
 import type { DemoMode, WindowSecs } from '@/types/live';
 
 const WINDOW_OPTIONS: WindowSecs[] = [5, 10, 15, 30, 60];
-const PROTOCOLS = ['All', 'TCP', 'UDP', 'ICMP', 'DNS', 'HTTP'];
-const CLASSIFICATIONS = ['All', 'benign', 'suspicious'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 export function LiveMonitoringPage() {
@@ -25,8 +23,7 @@ export function LiveMonitoringPage() {
     allEvents, displayEvents, isPaused, setPaused, clearEvents,
     temporalHistory, currentTemporal,
     liveNodes, liveEdges,
-    filterProtocol, filterSrcIp, filterDstIp, filterClassification,
-    setFilterProtocol, setFilterSrcIp, setFilterDstIp, setFilterClassification,
+    searchQuery, setSearchQuery,
     windowSeconds, mode, setWindowSeconds, setMode,
   } = useLiveStore();
 
@@ -43,18 +40,16 @@ export function LiveMonitoringPage() {
 
   // ── Filtered events ──────────────────────────────────────────
   const filteredEvents = useMemo(() => {
+    if (!searchQuery.trim()) return displayEvents;
+    const q = searchQuery.toLowerCase();
     return displayEvents.filter(e => {
-      if (filterProtocol !== 'All' && e.protocol !== filterProtocol) return false;
-      if (filterSrcIp !== 'All' && e.src_ip !== filterSrcIp) return false;
-      if (filterDstIp !== 'All' && e.dst_ip !== filterDstIp) return false;
-      if (filterClassification !== 'All' && e.classification !== filterClassification) return false;
-      return true;
+      const parts = [
+        e.src_ip, e.dst_ip, e.protocol, e.classification,
+        String(e.src_port), String(e.dst_port), e.payload_info || ''
+      ].map(p => p.toLowerCase());
+      return parts.some(p => p.includes(q));
     });
-  }, [displayEvents, filterProtocol, filterSrcIp, filterDstIp, filterClassification]);
-
-  // Available IPs for filter dropdowns
-  const srcIps = useMemo(() => ['All', ...Array.from(new Set(allEvents.map(e => e.src_ip)))], [allEvents]);
-  const dstIps = useMemo(() => ['All', ...Array.from(new Set(allEvents.map(e => e.dst_ip)))], [allEvents]);
+  }, [displayEvents, searchQuery]);
 
   // ── Chart data from temporal history ────────────────────────
   const chartData = useMemo(() =>
@@ -309,12 +304,15 @@ export function LiveMonitoringPage() {
         </div>
 
         {/* Filter Row */}
-        <div style={{ display: 'flex', gap: 10, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap', alignItems: 'center', background: 'var(--bg-workspace)' }}>
-          <Filter size={13} color="var(--text-muted)" />
-          <FilterSelect label="Protocol" value={filterProtocol} options={PROTOCOLS} onChange={setFilterProtocol} />
-          <FilterSelect label="Source IP" value={filterSrcIp} options={srcIps.slice(0, 20)} onChange={setFilterSrcIp} />
-          <FilterSelect label="Dest IP" value={filterDstIp} options={dstIps.slice(0, 20)} onChange={setFilterDstIp} />
-          <FilterSelect label="Class" value={filterClassification} options={CLASSIFICATIONS} onChange={setFilterClassification} />
+        <div style={{ display: 'flex', gap: 10, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center', background: 'var(--bg-workspace)' }}>
+          <Filter size={14} color="var(--text-muted)" />
+          <input 
+            type="text" 
+            placeholder="Apply a display filter (e.g. 192.168.1.1, tcp, .exe)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ flex: 1, padding: '6px 12px', fontSize: 13, border: '1px solid var(--border-default)', borderRadius: 6, outline: 'none', fontFamily: 'var(--font-mono)' }}
+          />
         </div>
 
         {/* Packet Table */}
@@ -327,7 +325,7 @@ export function LiveMonitoringPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
                 <tr style={{ background: 'var(--bg-workspace)' }}>
-                  {['Timestamp', 'Protocol', 'Source IP', 'Dest IP', 'Src Port', 'Dst Port', 'Size', 'Class'].map(col => (
+                  {['Timestamp', 'Protocol', 'Source IP', 'Dest IP', 'Size', 'Info', 'Class'].map(col => (
                     <th key={col} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-default)' }}>{col}</th>
                   ))}
                 </tr>
@@ -443,11 +441,12 @@ function PacketRow({ event }: { event: import('@/types/live').PacketEvent & { id
           {event.protocol}
         </span>
       </td>
-      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{event.src_ip}</td>
-      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{event.dst_ip}</td>
-      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', textAlign: 'right' }}>{event.src_port}</td>
-      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', textAlign: 'right' }}>{event.dst_port}</td>
-      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', textAlign: 'right' }}>{event.packet_size}B</td>
+      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{event.src_ip} <span style={{color:'var(--text-muted)', fontSize: 10}}>:{event.src_port}</span></td>
+      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{event.dst_ip} <span style={{color:'var(--text-muted)', fontSize: 10}}>:{event.dst_port}</span></td>
+      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{event.packet_size}B</td>
+      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', fontSize: 11, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={event.payload_info}>
+        {event.payload_info || '-'}
+      </td>
       <td style={{ padding: '6px 12px' }}>
         <span style={{
           fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
@@ -483,9 +482,11 @@ function LiveEntityGraph({ nodes, edges, running }: { nodes: import('@/types/liv
     );
   }
 
+  const maxY = Math.max(260, ...nodes.map(n => n.y + 70));
+
   return (
-    <div style={{ position: 'relative', height: 260, background: 'var(--bg-workspace)', borderRadius: 12, border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-      <svg width="100%" height="100%">
+    <div style={{ position: 'relative', height: 260, background: 'var(--bg-workspace)', borderRadius: 12, border: '1px solid var(--border-subtle)', overflowY: 'auto', overflowX: 'hidden' }}>
+      <svg width="100%" height={maxY}>
         <defs>
           <pattern id="lgrid" width="30" height="30" patternUnits="userSpaceOnUse">
             <path d="M 30 0 L 0 0 0 30" fill="none" stroke="var(--border-subtle)" strokeWidth="0.5" />
@@ -521,11 +522,17 @@ function LiveEntityGraph({ nodes, edges, running }: { nodes: import('@/types/liv
               onMouseLeave={() => setHoveredNode(null)}
               onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}
             >
-              {active && <circle r={27} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}
-              <circle r={active ? 22 : 18} fill={c.bg} stroke={c.border} strokeWidth={active ? 2.5 : 1.5}
-                filter={active ? `drop-shadow(0 0 8px ${c.shadow})` : 'none'}
-                style={{ transition: 'all 0.2s' }}
-              />
+              {node.type === 'internal' || node.type === 'external' ? (
+                <>
+                  {active && <rect x={-27} y={-27} width={54} height={54} rx={8} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}
+                  <rect x={active ? -22 : -18} y={active ? -22 : -18} width={active ? 44 : 36} height={active ? 44 : 36} rx={6} fill={c.bg} stroke={c.border} strokeWidth={active ? 2.5 : 1.5} filter={active ? `drop-shadow(0 0 8px ${c.shadow})` : 'none'} style={{ transition: 'all 0.2s' }} />
+                </>
+              ) : (
+                <>
+                  {active && <circle r={27} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}
+                  <circle r={active ? 22 : 18} fill={c.bg} stroke={c.border} strokeWidth={active ? 2.5 : 1.5} filter={active ? `drop-shadow(0 0 8px ${c.shadow})` : 'none'} style={{ transition: 'all 0.2s' }} />
+                </>
+              )}
               <text textAnchor="middle" y={-27} fontSize={9} fill={c.border} fontWeight={700}>{node.ip}</text>
               <text textAnchor="middle" y={30} fontSize={9} fill="var(--text-muted)" fontWeight={500}>{node.label}</text>
               <text textAnchor="middle" dominantBaseline="central" fontSize={12} fill={c.border}>

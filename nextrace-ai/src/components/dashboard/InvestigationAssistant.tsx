@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { demoQuestions } from '@/data/mockData';
 import { Send, Bot, User } from 'lucide-react';
 
+import { MessageCircle, X } from 'lucide-react';
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -9,6 +11,7 @@ interface Message {
 }
 
 export function InvestigationAssistant() {
+  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'intro',
@@ -48,18 +51,55 @@ export function InvestigationAssistant() {
   };
 
   return (
-    <div
-      style={{
-        background: 'var(--bg-card)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border-default)',
-        boxShadow: 'var(--shadow-sm)',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        height: 460,
-      }}
-    >
+    <>
+      {/* Floating Button */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: 'var(--primary)',
+            color: 'white',
+            border: 'none',
+            boxShadow: '0 4px 12px rgba(99,102,241,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 1000,
+            transition: 'transform 0.2s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+        >
+          <MessageCircle size={24} />
+        </button>
+      )}
+
+      {/* Chat Window */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          width: 380,
+          background: 'var(--bg-card)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-default)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+          overflow: 'hidden',
+          display: isOpen ? 'flex' : 'none',
+          flexDirection: 'column',
+          height: 500,
+          zIndex: 1000,
+          animation: 'slideInRight 0.3s ease',
+        }}
+      >
       {/* Header */}
       <div
         style={{
@@ -90,20 +130,34 @@ export function InvestigationAssistant() {
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Ask questions about alerts, entities, or predictions.</div>
           </div>
         </div>
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: '0.5px',
-            color: 'var(--color-warning)',
-            background: 'rgba(245,158,11,0.1)',
-            border: '1px solid rgba(245,158,11,0.3)',
-            borderRadius: 999,
-            padding: '2px 8px',
-          }}
-        >
-          DEMO
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              color: 'var(--color-warning)',
+              background: 'rgba(245,158,11,0.1)',
+              border: '1px solid rgba(245,158,11,0.3)',
+              borderRadius: 999,
+              padding: '2px 8px',
+            }}
+          >
+            DEMO
+          </span>
+          <button
+            onClick={() => setIsOpen(false)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-muted)',
+              display: 'flex',
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
@@ -292,5 +346,6 @@ export function InvestigationAssistant() {
         </button>
       </div>
     </div>
+    </>
   );
 }

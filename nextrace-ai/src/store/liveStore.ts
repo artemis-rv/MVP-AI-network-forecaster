@@ -17,16 +17,7 @@ function classifyIp(ip: string): LiveNode['type'] {
   return 'internal';
 }
 
-function ipToPosition(ip: string): { x: number; y: number } {
-  const parts = ip.split('.').map(Number);
-  const hash = (parts[2] * 256 + parts[3]) % 100;
-  const type = classifyIp(ip);
-  // Zones by type: suspicious=far left, internal=center-left, server=center-right, external=far right
-  const zones: Record<LiveNode['type'], number> = { suspicious: 90, internal: 250, server: 470, external: 650 };
-  const x = zones[type];
-  const y = 70 + (hash % 5) * 55;
-  return { x, y };
-}
+// Position is now determined dynamically inside updateEntities based on type count
 
 function ipToLabel(ip: string): string {
   const type = classifyIp(ip);
@@ -55,11 +46,8 @@ interface LiveStore {
   liveNodes: LiveNode[];
   liveEdges: LiveEdge[];
 
-  // Filters
-  filterProtocol: string;
-  filterSrcIp: string;
-  filterDstIp: string;
-  filterClassification: string;
+  // Search Filter
+  searchQuery: string;
 
   // Session config (UI-controlled, sent on start)
   windowSeconds: WindowSecs;
@@ -74,10 +62,7 @@ interface LiveStore {
   setPaused: (p: boolean) => void;
   clearEvents: () => void;
   resetEntities: () => void;
-  setFilterProtocol: (f: string) => void;
-  setFilterSrcIp: (f: string) => void;
-  setFilterDstIp: (f: string) => void;
-  setFilterClassification: (f: string) => void;
+  setSearchQuery: (q: string) => void;
   setWindowSeconds: (w: WindowSecs) => void;
   setMode: (m: DemoMode) => void;
   updateEntities: (event: PacketEvent) => void;
@@ -99,10 +84,7 @@ export const useLiveStore = create<LiveStore>((set) => ({
   liveNodes: [],
   liveEdges: [],
 
-  filterProtocol: 'All',
-  filterSrcIp: 'All',
-  filterDstIp: 'All',
-  filterClassification: 'All',
+  searchQuery: '',
 
   windowSeconds: 15,
   mode: 'benign',
@@ -153,14 +135,19 @@ export const useLiveStore = create<LiveStore>((set) => ({
 
       const ensureNode = (ip: string) => {
         if (!nodesMap.has(ip)) {
-          const pos = ipToPosition(ip);
+          const type = classifyIp(ip);
+          // Calculate dynamic Y position based on existing nodes of this type to prevent overlap
+          const count = Array.from(nodesMap.values()).filter(n => n.type === type).length;
+          const x = { suspicious: 90, internal: 250, server: 470, external: 650 }[type] as number;
+          const y = 60 + (count * 60);
+          
           nodesMap.set(ip, {
             id: ip,
             ip,
             label: ipToLabel(ip),
-            type: classifyIp(ip),
-            x: pos.x,
-            y: pos.y,
+            type,
+            x,
+            y,
           });
         }
       };
@@ -186,10 +173,7 @@ export const useLiveStore = create<LiveStore>((set) => ({
     });
   },
 
-  setFilterProtocol: (f) => set({ filterProtocol: f }),
-  setFilterSrcIp: (f) => set({ filterSrcIp: f }),
-  setFilterDstIp: (f) => set({ filterDstIp: f }),
-  setFilterClassification: (f) => set({ filterClassification: f }),
+  setSearchQuery: (q) => set({ searchQuery: q }),
   setWindowSeconds: (w) => set({ windowSeconds: w }),
   setMode: (m) => set({ mode: m }),
 }));

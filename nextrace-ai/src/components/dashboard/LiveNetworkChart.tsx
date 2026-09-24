@@ -8,8 +8,7 @@ import { trafficData } from '@/data/mockData';
 interface ChartDataPoint {
   time: string;
   total?: number;
-  benign?: number;
-  suspicious?: number;
+  events?: number;
   // mock fields
   [key: string]: unknown;
 }
@@ -39,7 +38,9 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
       {payload.map((p) => (
         <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: p.color, marginBottom: 2 }}>
           <span>{p.name}:</span>
-          <span style={{ fontWeight: 700 }}>{p.value.toLocaleString()} pps</span>
+          <span style={{ fontWeight: 700 }}>
+            {p.value.toLocaleString()} {p.name === 'Events' ? 'occurrences' : 'pps'}
+          </span>
         </div>
       ))}
     </div>
@@ -50,7 +51,8 @@ export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }:
   const [range, setRange] = useState('Last 15 min');
 
   const slice = range === 'Last 5 min' ? 10 : range === 'Last 15 min' ? 20 : 30;
-  const data = externalData ?? trafficData.slice(-slice);
+  const sourceData = externalData ?? trafficData;
+  const data = sourceData.slice(-slice);
   const isLiveDisplay = externalIsLive ?? true;
 
   return (
@@ -67,7 +69,7 @@ export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }:
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Activity</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Traffic &amp; Security Events</h3>
           <span
             style={{
               fontSize: 9,
@@ -122,16 +124,12 @@ export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }:
         <AreaChart data={data} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
           <defs>
             <linearGradient id="gTotal" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+              <stop offset="5%" stopColor="var(--text-muted)" stopOpacity={0.15} />
+              <stop offset="95%" stopColor="var(--text-muted)" stopOpacity={0} />
             </linearGradient>
-            <linearGradient id="gBenign" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="gSuspicious" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+            <linearGradient id="gEvents" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
@@ -143,10 +141,19 @@ export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }:
             interval={Math.floor(data.length / 4)}
           />
           <YAxis
+            yAxisId="left"
             tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+            tickFormatter={(v) => `${(v / 1000).toFixed(1)}k`}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tick={{ fontSize: 10, fill: '#ef4444' }}
+            tickLine={false}
+            axisLine={false}
+            hide={true}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend
@@ -154,9 +161,8 @@ export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }:
             iconType="circle"
             iconSize={8}
           />
-          <Area type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} fill="url(#gTotal)" dot={false} />
-          <Area type="monotone" dataKey="benign" name="Benign" stroke="#10b981" strokeWidth={1.5} fill="url(#gBenign)" dot={false} />
-          <Area type="monotone" dataKey="suspicious" name="Suspicious" stroke="#ef4444" strokeWidth={1.5} fill="url(#gSuspicious)" dot={false} />
+          <Area yAxisId="left" type="monotone" dataKey="total" name="Total Traffic" stroke="var(--text-muted)" strokeWidth={1} fill="url(#gTotal)" dot={false} />
+          <Area yAxisId="right" type="step" dataKey="events" name="Events" stroke="#ef4444" strokeWidth={2} fill="url(#gEvents)" dot={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>

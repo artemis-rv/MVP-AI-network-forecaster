@@ -6,44 +6,44 @@ export const MOCK_LABEL = '⚠ Simulated demo data — not real network traffic'
 // ─── KPI Stats ───────────────────────────────────────────────
 export const kpiData = [
   {
-    id: 'threats',
-    label: 'Active Threats',
-    value: 2,
-    change: '+100%',
+    id: 'alerts',
+    label: 'Critical Alerts',
+    value: 7,
+    change: '+2',
     changeType: 'up' as const,
-    comparison: 'vs. last hour',
+    comparison: 'unresolved threats',
     color: 'critical',
-    sparkline: [0, 1, 0, 1, 2, 1, 2],
+    sparkline: [3, 4, 3, 5, 4, 6, 7],
   },
   {
-    id: 'sessions',
-    label: 'Suspicious Sessions',
-    value: 14,
-    change: '+27%',
+    id: 'entities',
+    label: 'High-Risk Entities',
+    value: 12,
+    change: '+15%',
     changeType: 'up' as const,
     comparison: 'vs. last hour',
     color: 'warning',
-    sparkline: [8, 9, 10, 11, 10, 13, 14],
+    sparkline: [8, 9, 10, 11, 10, 11, 12],
   },
   {
     id: 'predictions',
-    label: 'Predictions (Next 30s)',
+    label: 'Active Attack Paths',
     value: 3,
     change: null,
     changeType: 'neutral' as const,
-    comparison: 'Potential attack paths',
+    comparison: 'predicted progressions',
     color: 'primary',
     sparkline: [1, 2, 1, 3, 2, 3, 3],
   },
   {
-    id: 'pcap',
-    label: 'PCAP Jobs',
-    value: 1,
-    change: null,
-    changeType: 'neutral' as const,
-    comparison: 'Processing',
+    id: 'resolutions',
+    label: 'Recent Resolutions',
+    value: 45,
+    change: '+12%',
+    changeType: 'up' as const,
+    comparison: 'alerts mitigated',
     color: 'secondary',
-    sparkline: [0, 0, 1, 1, 1, 1, 1],
+    sparkline: [30, 32, 35, 40, 38, 42, 45],
   },
 ];
 
@@ -52,13 +52,14 @@ const generateTrafficData = () => {
   const now = new Date();
   return Array.from({ length: 30 }, (_, i) => {
     const t = new Date(now.getTime() - (29 - i) * 30000);
-    const benign = Math.floor(600 + Math.random() * 400 + Math.sin(i * 0.4) * 150);
-    const suspicious = Math.floor(100 + Math.random() * 350 + Math.sin(i * 0.6 + 1) * 80);
+    const total = Math.floor(600 + Math.random() * 400 + Math.sin(i * 0.4) * 150);
+    // Create spikes at specific intervals for security events
+    const isSpike = i === 10 || i === 11 || i === 25;
+    const events = isSpike ? Math.floor(200 + Math.random() * 300) : 0;
     return {
       time: t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
-      total: benign + suspicious,
-      benign,
-      suspicious,
+      total: total + events,
+      events,
     };
   });
 };

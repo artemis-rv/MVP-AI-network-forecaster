@@ -115,11 +115,11 @@ class LiveSession:
     # ─── Generator loop ───────────────────────────────────────
 
     async def _run_generator(self) -> None:
-        """Produce one event every ~100–400 ms."""
+        """Produce events rapidly to simulate continuous network traffic (20-100 pkts/sec)."""
         try:
             while self.running:
-                # Variable rate: suspicious mode is noisier
-                delay = random.uniform(0.08, 0.30) if self.mode == "suspicious" else random.uniform(0.15, 0.45)
+                # Variable rate: continuous and high volume
+                delay = random.uniform(0.01, 0.05) if self.mode == "suspicious" else random.uniform(0.02, 0.08)
                 await asyncio.sleep(delay)
 
                 event = generate_event(self.mode)

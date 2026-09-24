@@ -1,7 +1,7 @@
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
 import { forecastStages, forecastSummary } from '@/data/mockData';
-import { ArrowRight, Target, Clock, BarChart2 } from 'lucide-react';
+import { ArrowRight, Target, Clock, BarChart2, ShieldAlert } from 'lucide-react';
 import type { ForecastResult } from '@/types/forecast';
 import { STAGE_COLORS } from '@/types/forecast';
 
@@ -109,7 +109,15 @@ function MockAttackForecast() {
           <div key={stage.id} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
             <ForecastStageBubble stage={stage} />
             {i < forecastStages.length - 1 && (
-              <ArrowRight size={14} color={stage.completed ? 'var(--color-critical)' : 'var(--border-default)'} style={{ flexShrink: 0, margin: '0 4px' }} />
+              <ArrowRight
+                size={16}
+                color={stage.current || stage.completed ? 'var(--color-critical)' : 'var(--border-default)'}
+                style={{
+                  flexShrink: 0, margin: '0 4px',
+                  filter: stage.current || stage.completed ? 'drop-shadow(0 0 6px var(--color-critical-glow))' : 'none',
+                  animation: stage.current ? 'pulse-glow 2s infinite' : 'none'
+                }}
+              />
             )}
           </div>
         ))}
@@ -127,10 +135,8 @@ function MockAttackForecast() {
             <div style={{ height: 6, background: 'var(--bg-input)', borderRadius: 999, overflow: 'hidden' }}>
               <div style={{
                 height: '100%', width: `${stage.probability}%`, borderRadius: 999,
-                background: stage.current
-                  ? 'linear-gradient(90deg, var(--color-warning), var(--color-critical))'
-                  : stage.completed
-                  ? 'var(--color-warning)'
+                background: stage.current || stage.completed
+                  ? 'var(--color-critical)'
                   : 'var(--border-default)',
                 transition: 'width 1s ease',
               }} />
@@ -139,11 +145,20 @@ function MockAttackForecast() {
         ))}
       </div>
 
-      <div style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 12, padding: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <SumCard icon={<BarChart2 size={13} />} label="Most Likely Next Step" value={`${forecastSummary.nextStep} (${forecastSummary.probability}%)`} critical />
-        <SumCard icon={<Target size={13} />} label="Likely Target" value={forecastSummary.target} />
-        <SumCard icon={<Clock size={13} />} label="Time Window" value={forecastSummary.timeWindow} />
-        <SumCard icon={<BarChart2 size={13} />} label="Confidence" value={forecastSummary.confidence} />
+      <div style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 12, padding: '14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <SumCard icon={<BarChart2 size={13} />} label="Highest Risk Path" value={`Lateral Movement → Data Exfil`} critical />
+          <SumCard icon={<Target size={13} />} label="Likely Target" value={forecastSummary.target} />
+        </div>
+        <div style={{ background: 'rgba(239,68,68,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <ShieldAlert size={12} color="var(--color-critical)" />
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-critical)', textTransform: 'uppercase' }}>Recommended Action</span>
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+            Isolate target ({forecastSummary.target}) and revoke active session tokens immediately.
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -167,20 +182,20 @@ function ForecastStageBubble({ stage }: { stage: typeof forecastStages[0] }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 80 }}>
       <div style={{
         width: 36, height: 36, borderRadius: '50%',
-        border: `2px solid ${stage.current ? 'var(--color-critical)' : stage.completed ? 'var(--color-warning)' : 'var(--border-default)'}`,
-        background: stage.current ? 'var(--color-critical-light)' : stage.completed ? 'var(--color-warning-light)' : 'white',
+        border: `2px solid ${stage.current || stage.completed ? 'var(--color-critical)' : 'var(--border-default)'}`,
+        background: stage.current || stage.completed ? 'var(--color-critical-light)' : 'white',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: stage.current ? '0 0 12px var(--color-critical-glow)' : 'none',
+        boxShadow: stage.current || stage.completed ? '0 0 12px var(--color-critical-glow)' : 'none',
         transition: 'all 0.3s', position: 'relative',
       }}>
         {stage.current && (
           <div style={{ position: 'absolute', inset: -4, borderRadius: '50%', border: '2px solid rgba(239,68,68,0.3)', animation: 'pulse-glow 2s infinite' }} />
         )}
-        <span style={{ fontSize: 10, fontWeight: 800, color: stage.current ? 'var(--color-critical)' : stage.completed ? 'var(--color-warning)' : 'var(--text-muted)' }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: stage.current || stage.completed ? 'var(--color-critical)' : 'var(--text-muted)' }}>
           {stage.probability}%
         </span>
       </div>
-      <span style={{ fontSize: 10, fontWeight: stage.current ? 700 : 500, color: stage.current ? 'var(--color-critical)' : stage.completed ? 'var(--text-secondary)' : 'var(--text-muted)', textAlign: 'center', lineHeight: 1.3 }}>
+      <span style={{ fontSize: 10, fontWeight: stage.current || stage.completed ? 700 : 500, color: stage.current || stage.completed ? 'var(--color-critical)' : 'var(--text-muted)', textAlign: 'center', lineHeight: 1.3 }}>
         {stage.label}
       </span>
     </div>

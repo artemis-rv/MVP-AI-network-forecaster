@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { ToastContainer } from '@/components/ui/Toast';
@@ -12,13 +13,23 @@ import { ForensicAnalysisPage } from '@/pages/ForensicAnalysisPage';
 import { SimulationPage } from '@/pages/SimulationPage';
 import { ReportPage } from '@/pages/ReportPage';
 import { AlertsPage } from '@/pages/AlertsPage';
+import { InvestigationAssistant } from '@/components/dashboard/InvestigationAssistant';
 import {
   FileText, ShieldCheck, Activity,
 } from 'lucide-react';
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <div className="app-layout">
         <Sidebar />
         <div className="app-main">
@@ -59,6 +70,7 @@ function App() {
           </main>
         </div>
       </div>
+      <InvestigationAssistant />
       <ToastContainer />
     </BrowserRouter>
   );

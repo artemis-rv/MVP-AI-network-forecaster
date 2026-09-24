@@ -24,6 +24,7 @@ try:
 except Exception:
     pass
 
+
 # ── IP Pools (private / documentation ranges only) ───────────────────────────
 _INTERNAL_HOSTS  = [f"192.168.1.{i}" for i in range(10, 55)]
 _INTERNAL_SERVERS= [f"192.168.1.{i}" for i in range(100, 115)]
@@ -37,6 +38,9 @@ _COMMON_PORTS_UDP  = [53, 123, 161, 514]
 _SUSPICIOUS_PORTS  = [4444, 8888, 31337, 1337, 6666, 9999, 4321, 54321]
 
 _PROTOCOLS_BENIGN = ["TCP"] * 7 + ["UDP"] * 2 + ["ICMP"]
+
+_FILES_BENIGN = ["index.php", "style.css", "report.pdf", "app.js", "logo.png", "update.zip"]
+_FILES_SUSPICIOUS = ["shell.php", "payload.dll", "malware.exe", "config.bak", "dump.sql", "mimikatz.exe"]
 
 
 def _ts() -> str:
@@ -93,6 +97,20 @@ def generate_benign_event() -> dict:
     sport = random.randint(32768, 60999)
     size  = _packet_size(proto, src, dst, sport, dport)
 
+    # Generate payload info
+    payload_info = ""
+    if proto == "HTTP":
+        file = random.choice(_FILES_BENIGN)
+        payload_info = f"GET /{file} HTTP/1.1" if dport == 80 else f"Application Data (TLS v1.3)"
+    elif proto == "DNS":
+        payload_info = f"Standard query 0x{random.randint(1000,9999)} A {random.choice(['google.com', 'microsoft.com', 'aws.amazon.com'])}"
+    elif proto == "TCP":
+        payload_info = f"{sport} > {dport} [ACK] Seq={random.randint(1,1000)} Ack={random.randint(1,1000)} Win={random.randint(1000, 65535)}"
+    elif proto == "ICMP":
+        payload_info = "Echo (ping) request"
+    elif proto == "UDP":
+        payload_info = f"Source port: {sport}  Destination port: {dport}"
+
     return {
         "timestamp":      _ts(),
         "protocol":       proto,
@@ -103,6 +121,7 @@ def generate_benign_event() -> dict:
         "packet_size":    size,
         "direction":      random.choice(["outbound", "inbound"]),
         "classification": "benign",
+        "payload_info":   payload_info,
     }
 
 
@@ -159,6 +178,21 @@ def generate_suspicious_event() -> dict:
 
     size = _packet_size(proto, src, dst, sport, dport)
 
+    # Generate payload info based on pattern
+    payload_info = ""
+    if pattern == "port_scan":
+        payload_info = f"{sport} > {dport} [SYN] Seq=0 Win=1024 Len=0"
+    elif pattern == "brute_force":
+        payload_info = f"SSH: Encrypted request packet len={size}"
+    elif pattern == "lateral_movement":
+        file = random.choice([f for f in _FILES_SUSPICIOUS if f.endswith(".exe") or f.endswith(".dll")])
+        payload_info = f"SMB2 Read Response file: {file}" if dport == 445 else f"RPC Bind / Remote Execution"
+    elif pattern == "unusual_dns":
+        payload_info = f"Standard query 0x{random.randint(1000,9999)} TXT {random.choice(['malicious.ru', 'c2-server.net', 'drop.ninja'])}"
+    else:  # data_staging
+        file = random.choice([f for f in _FILES_SUSPICIOUS if f.endswith(".sql") or f.endswith(".bak")])
+        payload_info = f"POST /{random.choice(_FILES_SUSPICIOUS)} HTTP/1.1 (Transferring {file})" if dport == 80 else f"Application Data (TLS v1.3)"
+
     return {
         "timestamp":      _ts(),
         "protocol":       proto,
@@ -169,6 +203,7 @@ def generate_suspicious_event() -> dict:
         "packet_size":    size,
         "direction":      "outbound",
         "classification": classification,
+        "payload_info":   payload_info,
     }
 
 
@@ -186,5 +221,4 @@ def generate_event(mode: str) -> dict:
         return (generate_suspicious_event() if random.random() < 0.70
                 else generate_benign_event())
     else:
-        return (generate_suspicious_event() if random.random() < 0.05
-                else generate_benign_event())
+        return generate_benign_event()

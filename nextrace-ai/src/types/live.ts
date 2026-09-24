@@ -12,6 +12,7 @@ export interface PacketEvent {
   packet_size: number;
   direction: string;
   classification: 'benign' | 'suspicious';
+  payload_info?: string;
 }
 
 export interface TemporalState {
