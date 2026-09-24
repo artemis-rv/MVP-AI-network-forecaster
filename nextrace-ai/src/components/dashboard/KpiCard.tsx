@@ -12,6 +12,7 @@ interface KpiCardProps {
   icon: ReactNode;
   sparkline?: number[];
   delay?: number;
+  onClick?: () => void;
 }
 
 const colorMap = {
@@ -22,7 +23,7 @@ const colorMap = {
   live:     { bg: 'rgba(16,185,129,0.1)', icon: 'var(--color-live)', badge: 'var(--color-live-light)', text: 'var(--color-live)' },
 };
 
-export function KpiCard({ label, value, change, changeType, comparison, color, icon, sparkline, delay = 0 }: KpiCardProps) {
+export function KpiCard({ label, value, change, changeType, comparison, color, icon, sparkline, delay = 0, onClick }: KpiCardProps) {
   const [hovered, setHovered] = useState(false);
   const c = colorMap[color];
 
@@ -42,7 +43,7 @@ export function KpiCard({ label, value, change, changeType, comparison, color, i
         boxShadow: hovered ? 'var(--shadow-card-hover)' : 'var(--shadow-sm)',
         transition: 'all var(--transition-base)',
         transform: hovered ? 'translateY(-2px)' : 'none',
-        cursor: 'default',
+        cursor: onClick ? 'pointer' : 'default',
         animationDelay: `${delay}ms`,
         display: 'flex',
         flexDirection: 'column',
@@ -50,6 +51,7 @@ export function KpiCard({ label, value, change, changeType, comparison, color, i
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={onClick}
     >
       {/* Top row: icon + change badge */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

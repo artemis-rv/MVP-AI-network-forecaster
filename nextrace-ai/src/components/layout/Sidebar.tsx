@@ -1,25 +1,66 @@
+import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Radio, TrendingUp, Bell, Search,
-  FileSearch, FileText, ShieldCheck, Activity, Zap, Target
+  FileSearch, FileText, ShieldCheck, Activity, Zap, Target,
+  ChevronDown
 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 
-const navItems = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard, path: '/' },
-  { id: 'live-monitoring', label: 'Live Monitoring', icon: Radio, path: '/live-monitoring' },
-  { id: 'attack-prediction', label: 'Attack Prediction', icon: TrendingUp, path: '/attack-prediction' },
-  { id: 'alerts', label: 'Alerts', icon: Bell, path: '/alerts', badge: 3 },
-  { id: 'investigation', label: 'Investigation', icon: Search, path: '/investigation' },
-  { id: 'historical-pcap', label: 'Historical PCAP', icon: FileSearch, path: '/historical-pcap' },
-  { id: 'attack-simulator', label: 'Attack Simulator', icon: Target, path: '/simulation' },
-  { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
-  { id: 'admin', label: 'Admin', icon: ShieldCheck, path: '/admin' },
-  { id: 'system-status', label: 'System Status', icon: Activity, path: '/system-status' },
-];
-
 export function Sidebar() {
-  const { setActivePage } = useAppStore();
+  const { setActivePage, userRole } = useAppStore();
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    live: true,
+    historical: true,
+    system: true,
+    adminOperations: true,
+  });
+
+  const filteredNavGroups = userRole === 'admin' 
+    ? [
+        {
+          id: 'adminOperations',
+          title: 'Admin Operations',
+          items: [
+            { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+            { id: 'reports', label: 'View Reports', icon: FileText, path: '/reports' },
+          ]
+        },
+        {
+          id: 'system',
+          title: 'System Management',
+          items: [
+            { id: 'admin', label: 'User Management', icon: ShieldCheck, path: '/admin' },
+            { id: 'system-status', label: 'System Health', icon: Activity, path: '/system-status' },
+          ]
+        }
+      ]
+    : [
+        {
+          id: 'live',
+          title: 'Live Operations',
+          items: [
+            { id: 'overview', label: 'Overview', icon: LayoutDashboard, path: '/' },
+            { id: 'live-monitoring', label: 'Live Monitoring', icon: Radio, path: '/live-monitoring' },
+            { id: 'attack-prediction', label: 'Attack Prediction', icon: TrendingUp, path: '/attack-prediction' },
+            { id: 'alerts', label: 'Alerts', icon: Bell, path: '/alerts', badge: 3 },
+          ]
+        },
+        {
+          id: 'historical',
+          title: 'Forensic & Historical',
+          items: [
+            { id: 'investigation', label: 'Investigation', icon: Search, path: '/investigation' },
+            { id: 'historical-pcap', label: 'Historical PCAP', icon: FileSearch, path: '/historical-pcap' },
+            { id: 'attack-simulator', label: 'Attack Simulator', icon: Target, path: '/simulation' },
+            { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
+          ]
+        }
+      ];
+
+  const toggleGroup = (id: string) => {
+    setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   return (
     <aside
@@ -44,7 +85,6 @@ export function Sidebar() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-          {/* Logo Icon */}
           <div
             style={{
               width: 36,
@@ -81,11 +121,43 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
-        <div style={{ fontSize: 10, color: '#4a5568', fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase', padding: '0 8px 8px' }}>
-          Navigation
-        </div>
-        {navItems.map((item) => (
-          <SidebarNavItem key={item.id} item={item} onNavigate={() => setActivePage(item.id)} />
+        {filteredNavGroups.map((group) => (
+          <div key={group.id} style={{ marginBottom: 12 }}>
+            <div
+              onClick={() => toggleGroup(group.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '4px 12px',
+                cursor: 'pointer',
+                marginBottom: 4,
+              }}
+            >
+              <span style={{ fontSize: 10, color: '#4a5568', fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+                {group.title}
+              </span>
+              <ChevronDown
+                size={14}
+                color="#4a5568"
+                style={{
+                  transition: 'transform var(--transition-fast)',
+                  transform: expandedGroups[group.id] ? 'rotate(0deg)' : 'rotate(-90deg)',
+                }}
+              />
+            </div>
+            <div
+              style={{
+                overflow: 'hidden',
+                transition: 'max-height var(--transition-base)',
+                maxHeight: expandedGroups[group.id] ? 400 : 0,
+              }}
+            >
+              {group.items.map((item) => (
+                <SidebarNavItem key={item.id} item={item} onNavigate={() => setActivePage(item.id)} />
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 
@@ -110,7 +182,7 @@ export function Sidebar() {
   );
 }
 
-function SidebarNavItem({ item, onNavigate }: { item: typeof navItems[0]; onNavigate: () => void }) {
+function SidebarNavItem({ item, onNavigate }: { item: any; onNavigate: () => void }) {
   const location = useLocation();
   const isActive = item.path === '/'
     ? location.pathname === '/'

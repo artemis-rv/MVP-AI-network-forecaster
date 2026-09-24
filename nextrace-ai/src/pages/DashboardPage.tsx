@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { LiveNetworkChart } from '@/components/dashboard/LiveNetworkChart';
@@ -19,6 +20,7 @@ const kpiIcons = [
 ];
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const { session, temporalHistory, currentTemporal, liveNodes, liveEdges } = useLiveStore();
   const isLive = session?.running ?? false;
 
@@ -40,7 +42,7 @@ export function DashboardPage() {
     : trafficData;
 
   return (
-    <div>
+    <div style={{ height: 'calc(100vh - var(--topbar-height) - 40px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
       <DashboardHeader />
 
@@ -50,63 +52,76 @@ export function DashboardPage() {
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           gap: 16,
-          marginBottom: 24,
+          marginBottom: 16,
+          flexShrink: 0,
         }}
       >
-        {kpiData.map((kpi, i) => (
-          <KpiCard
-            key={kpi.id}
-            label={kpi.label}
-            value={liveKpiValues ? liveKpiValues[i].value : kpi.value}
-            change={kpi.change}
-            changeType={kpi.changeType}
-            comparison={isLive && i < 2 ? 'Live session' : kpi.comparison}
-            color={kpi.color as 'critical' | 'warning' | 'primary' | 'secondary'}
-            icon={kpiIcons[i]}
-            sparkline={kpi.sparkline}
-            delay={i * 80}
-          />
-        ))}
+        {kpiData.map((kpi, i) => {
+          const links = ['/alerts', '/live-monitoring', '/attack-prediction', '/reports'];
+          return (
+            <KpiCard
+              key={kpi.id}
+              label={kpi.label}
+              value={liveKpiValues ? liveKpiValues[i].value : kpi.value}
+              change={kpi.change}
+              changeType={kpi.changeType}
+              comparison={isLive && i < 2 ? 'Live session' : kpi.comparison}
+              color={kpi.color as 'critical' | 'warning' | 'primary' | 'secondary'}
+              icon={kpiIcons[i]}
+              sparkline={kpi.sparkline}
+              delay={i * 80}
+              onClick={() => navigate(links[i])}
+            />
+          );
+        })}
       </div>
 
-      {/* Main Two-Column */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 20,
-          marginBottom: 20,
-        }}
-      >
-        <LiveNetworkChart data={chartData} isLive={isLive} />
-        <AttackForecast />
-      </div>
+      {/* Main Content Area - Split into top and bottom rows that share remaining space */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, overflowY: 'auto', paddingRight: 8 }}>
+        
+        {/* Top Row: Charts */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 16,
+            minHeight: 300,
+          }}
+        >
+          <LiveNetworkChart data={chartData} isLive={isLive} />
+          <AttackForecast />
+        </div>
 
-      {/* Network Entities — Full Width */}
-      <div style={{ marginBottom: 20 }}>
-        <NetworkEntities nodes={liveNodes.length > 0 ? liveNodes : undefined} edges={liveEdges.length > 0 ? liveEdges : undefined} />
-      </div>
-
-      {/* Alerts — Full Width */}
-      <div style={{ marginBottom: 20 }}>
-        <RecentAlerts />
-      </div>
-
-      {/* Bottom Area */}
-      <div style={{ marginBottom: 20 }}>
-        <LatestReports />
+        {/* Bottom Row: Entities and Alerts */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 16,
+            minHeight: 350,
+          }}
+        >
+          <NetworkEntities nodes={liveNodes.length > 0 ? liveNodes : undefined} edges={liveEdges.length > 0 ? liveEdges : undefined} />
+          <RecentAlerts />
+        </div>
+        
+        {/* Bottom Area */}
+        <div style={{ paddingBottom: 16 }}>
+          <LatestReports />
+        </div>
       </div>
 
       {/* Footer */}
       <footer
         style={{
           borderTop: '1px solid var(--border-subtle)',
-          padding: '20px 0 8px',
+          padding: '12px 0 0',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: 12,
+          flexShrink: 0,
         }}
       >
         <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>

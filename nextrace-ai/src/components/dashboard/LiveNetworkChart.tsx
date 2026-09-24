@@ -36,11 +36,16 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
     >
       <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{label}</div>
       {payload.map((p) => (
-        <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: p.color, marginBottom: 2 }}>
-          <span>{p.name}:</span>
-          <span style={{ fontWeight: 700 }}>
-            {p.value.toLocaleString()} {p.name === 'Events' ? 'occurrences' : 'pps'}
-          </span>
+        <div key={p.name} style={{ marginBottom: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: p.color }}>
+            <span>{p.name}:</span>
+            <span style={{ fontWeight: 700 }}>
+              {p.value.toLocaleString()} {p.name === 'Events' ? 'occurrences' : 'pps'}
+            </span>
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, maxWidth: 200, whiteSpace: 'normal' }}>
+            {p.name === 'Events' ? 'Number of suspicious activities or attacks flagged by AI heuristics.' : 'Volume of raw network packets processed per second.'}
+          </div>
         </div>
       ))}
     </div>
@@ -165,6 +170,11 @@ export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }:
           <Area yAxisId="right" type="step" dataKey="events" name="Events" stroke="#ef4444" strokeWidth={2} fill="url(#gEvents)" dot={false} />
         </AreaChart>
       </ResponsiveContainer>
+      
+      {/* Simple Explanation Below Graph */}
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, textAlign: 'center', lineHeight: 1.4 }}>
+        This graph shows the total volume of network traffic (packets per second) versus the number of suspicious security events detected over time. A spike in the red line indicates a potential attack or anomalous behavior.
+      </div>
     </div>
   );
 }

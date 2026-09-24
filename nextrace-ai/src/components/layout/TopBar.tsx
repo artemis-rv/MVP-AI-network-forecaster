@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search, Bell, ChevronDown, Moon, Sun, X, User, Settings, LogOut } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import { useLiveStore } from '@/store/liveStore';
 
 export function TopBar() {
   const {
@@ -9,7 +10,11 @@ export function TopBar() {
     notifPanelOpen, setNotifPanelOpen,
     notifications, unreadCount, markAllRead,
     addToast,
+    userRole, setUserRole
   } = useAppStore();
+
+  const { session } = useLiveStore();
+  const isLiveRunning = session?.running ?? false;
 
   const [darkMode, setDarkMode] = useState(false);
   const [searchValue, setSearchValue] = useState('');
@@ -63,6 +68,20 @@ export function TopBar() {
         zIndex: 90,
       }}
     >
+      {isLiveRunning && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 3,
+            background: 'var(--color-critical)',
+            boxShadow: '0 0 8px var(--color-critical)',
+            zIndex: 100,
+          }}
+        />
+      )}
       {/* Search Bar */}
       <div
         style={{
@@ -145,6 +164,11 @@ export function TopBar() {
         }}
         onClick={() => addToast('Live demo mode is active. Data is simulated.', 'info')}
       >
+        {isLiveRunning && (
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-critical)', marginRight: 8, paddingRight: 8, borderRight: '1px solid rgba(0,0,0,0.1)' }}>
+            🟢 LIVE RUNNING
+          </span>
+        )}
         <div
           style={{
             width: 7,
@@ -319,9 +343,13 @@ export function TopBar() {
               flexShrink: 0,
             }}
           >
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'white' }}>SA</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'white' }}>
+              {userRole === 'admin' ? 'AD' : 'SA'}
+            </span>
           </div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>SOC Analyst</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+            {userRole === 'admin' ? 'Administrator' : 'SOC Analyst'}
+          </span>
           <ChevronDown
             size={14}
             color="var(--text-muted)"
@@ -346,8 +374,8 @@ export function TopBar() {
             }}
           >
             <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>SOC Analyst</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>analyst@nextrace.ai</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{userRole === 'admin' ? 'Administrator' : 'SOC Analyst'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{userRole === 'admin' ? 'admin@nextrace.ai' : 'analyst@nextrace.ai'}</div>
             </div>
             {[
               { icon: User, label: 'Profile' },
@@ -379,7 +407,7 @@ export function TopBar() {
             ))}
             <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
               <button
-                onClick={() => addToast('Logout — demo mode, no auth required.', 'info')}
+                onClick={() => setUserRole(null)}
                 style={{
                   width: '100%',
                   display: 'flex',
