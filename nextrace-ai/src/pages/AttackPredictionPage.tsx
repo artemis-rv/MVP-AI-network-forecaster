@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Target, Clock, Shield,
-  ChevronRight, Info,
+  ChevronRight, Info, AlertTriangle, Search, Key, ArrowLeftRight, UploadCloud, CheckCircle2, Pause, TrendingUp,
 } from 'lucide-react';
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
@@ -188,8 +188,9 @@ function ForecastCard({ forecast }: { forecast: ForecastResult | null }) {
       </div>
 
       {/* Demo disclaimer */}
-      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', background: 'var(--bg-workspace)', borderRadius: 8, padding: '6px 10px' }}>
-        ⚠ {forecast?.demo_label ?? 'Deterministic demo prediction'}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', background: 'var(--bg-workspace)', borderRadius: 8, padding: '6px 10px' }}>
+        <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+        <span>{forecast?.demo_label ?? 'Deterministic demo prediction'}</span>
       </div>
 
       {/* Investigate target button */}
@@ -401,8 +402,8 @@ function EvidencePanel({ forecast, isBenign }: { forecast: ForecastResult | null
           </div>
           {features.map((f, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 0', borderBottom: i < features.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
-              <span style={{ color: isBenign ? 'var(--color-live)' : 'var(--color-critical)', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-                {isBenign ? '✓' : '↑'}
+              <span style={{ color: isBenign ? 'var(--color-live)' : 'var(--color-critical)', display: 'inline-flex', marginTop: 2, flexShrink: 0 }}>
+                {isBenign ? <CheckCircle2 size={13} /> : <TrendingUp size={13} />}
               </span>
               <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{f}</span>
             </div>
@@ -416,8 +417,9 @@ function EvidencePanel({ forecast, isBenign }: { forecast: ForecastResult | null
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
             Simulated Feature Contribution
           </div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 8 }}>
-            ⚠ These are demo weights, not SHAP values.
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 8 }}>
+            <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+            <span>These are demo weights, not SHAP values.</span>
           </div>
           {contributions.slice(0, 6).map((c, i) => (
             <div key={i} style={{ marginBottom: 10 }}>
@@ -523,17 +525,16 @@ function Legend({ color, label }: { color: string; label: string }) {
 }
 
 // ─── Utility ───────────────────────────────────────────────────────────────────
-function stageIcon(stage: string): string {
-  const icons: Record<string, string> = {
-    'Reconnaissance':    '🔍',
-    'Initial Access':    '🚪',
-    'Lateral Movement':  '↔️',
-    'Data Exfiltration': '📤',
-    'Normal Activity':   '✅',
-    'No Active Session': '⏸️',
-    'N/A':               '—',
+function stageIcon(stage: string, size = 14): React.ReactNode {
+  const icons: Record<string, React.ReactNode> = {
+    'Reconnaissance':    <Search size={size} />,
+    'Initial Access':    <Key size={size} />,
+    'Lateral Movement':  <ArrowLeftRight size={size} />,
+    'Data Exfiltration': <UploadCloud size={size} />,
+    'Normal Activity':   <CheckCircle2 size={size} />,
+    'No Active Session': <Pause size={size} />,
   };
-  return icons[stage] ?? '●';
+  return icons[stage] ?? null;
 }
 
 // ─── Style helpers ─────────────────────────────────────────────────────────────
@@ -562,7 +563,7 @@ function InvestigateTargetBtn({ target }: { target: string }) {
       onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 20px rgba(99,102,241,0.5)'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(99,102,241,0.3)'; }}
     >
-      <span style={{ fontSize: 13 }}>🔍</span>
+      <Search size={14} />
       Investigate Predicted Target: {target}
     </button>
   );

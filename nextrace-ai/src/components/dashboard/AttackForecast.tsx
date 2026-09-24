@@ -1,7 +1,7 @@
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
 import { forecastStages, forecastSummary } from '@/data/mockData';
-import { ArrowRight, Target, Clock, BarChart2, ShieldAlert } from 'lucide-react';
+import { ArrowRight, Target, Clock, BarChart2, ShieldAlert, AlertTriangle } from 'lucide-react';
 import type { ForecastResult } from '@/types/forecast';
 import { STAGE_COLORS } from '@/types/forecast';
 
@@ -36,8 +36,9 @@ function LiveAttackForecast({ forecast }: { forecast: ForecastResult }) {
         </div>
       </div>
 
-      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-        ⚠ Deterministic demo prediction — not a real ML model output
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+        <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+        <span>Deterministic demo prediction — not a real ML model output</span>
       </div>
 
       {/* Current + Next */}
@@ -100,8 +101,9 @@ function MockAttackForecast() {
         <DemoBadge />
       </div>
 
-      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-        ⚠ Deterministic demo prediction — not a real ML model output
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+        <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+        <span>Deterministic demo prediction — not a real ML model output</span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'nowrap', overflowX: 'auto', padding: '4px 0' }}>

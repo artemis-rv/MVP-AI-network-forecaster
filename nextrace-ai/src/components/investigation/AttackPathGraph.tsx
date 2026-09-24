@@ -21,17 +21,18 @@ import {
   type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { Laptop, ShieldAlert, Server, Database, Globe, AlertTriangle } from 'lucide-react';
 import { useLiveStore } from '@/store/liveStore';
 import { useInvestigationStore } from '@/store/investigationStore';
 import type { AttackNodeData } from '@/types/investigation';
 
 // ─── Node category meta ───────────────────────────────────────────────────────
-const NODE_META: Record<string, { label: string; icon: string; bg: string; border: string; text: string; shadow: string }> = {
-  workstation: { label: 'WORKSTATION',     icon: '💻', bg: '#eff6ff', border: '#3b82f6', text: '#1d4ed8', shadow: 'rgba(59,130,246,0.3)' },
-  suspicious:  { label: 'SUSPICIOUS HOST', icon: '⚠️', bg: '#fee2e2', border: '#ef4444', text: '#b91c1c', shadow: 'rgba(239,68,68,0.4)' },
-  server:      { label: 'SERVER',          icon: '🖥️', bg: '#f0fdf4', border: '#10b981', text: '#065f46', shadow: 'rgba(16,185,129,0.3)' },
-  database:    { label: 'DATABASE',        icon: '🗄️', bg: '#fdf4ff', border: '#a855f7', text: '#6b21a8', shadow: 'rgba(168,85,247,0.3)' },
-  external:    { label: 'EXTERNAL',        icon: '🌐', bg: '#fff7ed', border: '#f97316', text: '#9a3412', shadow: 'rgba(249,115,22,0.3)' },
+const NODE_META: Record<string, { label: string; icon: React.ReactNode; bg: string; border: string; text: string; shadow: string }> = {
+  workstation: { label: 'WORKSTATION',     icon: <Laptop size={20} />, bg: '#eff6ff', border: '#3b82f6', text: '#1d4ed8', shadow: 'rgba(59,130,246,0.3)' },
+  suspicious:  { label: 'SUSPICIOUS HOST', icon: <ShieldAlert size={20} />, bg: '#fee2e2', border: '#ef4444', text: '#b91c1c', shadow: 'rgba(239,68,68,0.4)' },
+  server:      { label: 'SERVER',          icon: <Server size={20} />, bg: '#f0fdf4', border: '#10b981', text: '#065f46', shadow: 'rgba(168,85,247,0.3)' },
+  database:    { label: 'DATABASE',        icon: <Database size={20} />, bg: '#fdf4ff', border: '#a855f7', text: '#6b21a8', shadow: 'rgba(168,85,247,0.3)' },
+  external:    { label: 'EXTERNAL',        icon: <Globe size={20} />, bg: '#fff7ed', border: '#f97316', text: '#9a3412', shadow: 'rgba(249,115,22,0.3)' },
 };
 
 // ─── Custom Entity Node ────────────────────────────────────────────────────────
@@ -82,7 +83,9 @@ function EntityNode({ data }: NodeProps) {
       </div>
 
       {/* Icon */}
-      <div style={{ fontSize: 22, marginBottom: 4, lineHeight: 1 }}>{meta.icon}</div>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 6, color: meta.border }}>
+        {meta.icon}
+      </div>
 
       {/* IP */}
       <div style={{
@@ -322,8 +325,9 @@ export function AttackPathGraph({ focusIp, onNodeSelect }: AttackPathGraphProps)
           position: 'absolute', bottom: 48, right: 12,
           background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
           borderRadius: 8, padding: '4px 10px', fontSize: 10, color: '#92400e', fontWeight: 600,
+          display: 'flex', alignItems: 'center', gap: 5,
         }}>
-          ⚠ Demo attack path — simulated data
+          <AlertTriangle size={11} /> Demo attack path — simulated data
         </div>
       )}
     </div>

@@ -1,10 +1,7 @@
 """
 NEXTRACE AI — Historical Analyzer
-Deterministic heuristic detection and activity timeline building.
+Deterministic heuristic detection and activity timeline building for real network captures.
 Orchestrates the full historical analysis pipeline.
-
-NOTE: All detections are DEMO HEURISTICS for prototype purposes.
-They are NOT a production IDS or threat intelligence system.
 """
 from __future__ import annotations
 
@@ -18,17 +15,28 @@ from backend.historical.flow_builder import build_flows
 from backend.historical.feature_engineering import aggregate_temporal_windows
 
 
-# ── Heuristic thresholds (demo values) ───────────────────────────────────────
+# ── Heuristic thresholds (configured for real capture analysis) ───────────────
 class HeuristicConfig:
-    PORT_SCAN_UNIQUE_PORTS   = 20    # unique dst_ports from one src → recon indicator
-    BRUTE_FORCE_REPEATS      = 10    # repeated connections to same dst_port (22/3389)
-    ICMP_VOLUME_THRESHOLD    = 30    # ICMP packets per window → ICMP anomaly indicator
-    BEACON_INTERVAL_VARIANCE = 0.15  # low jitter in connection intervals → C2 indicator
-    LARGE_TRANSFER_BYTES     = 500_000  # bytes per flow → exfiltration indicator
-    DOS_PACKET_RATE          = 150   # packets/second in a window → DoS indicator
+    PORT_SCAN_VERTICAL_PORTS = 8     # unique dst_ports on single target from 1 src
+    PORT_SCAN_HORIZONTAL_IPS = 6     # unique dst_ips targeted by 1 src
+    PORT_SCAN_TOTAL_PORTS    = 12    # total unique dst_ports across network from 1 src
+    BRUTE_FORCE_FLOWS        = 4     # repeated flow attempts to same auth port from 1 src
+    BRUTE_FORCE_PACKETS      = 12    # repeated packets on auth port from 1 src
+    ICMP_VOLUME_THRESHOLD    = 20    # ICMP packets in a window
+    LARGE_TRANSFER_BYTES     = 250_000 # bytes per flow → exfiltration indicator
+    DOS_PACKET_RATE          = 80    # packets/second in a window → DoS indicator
+    DNS_ANOMALY_QUERY_COUNT  = 30    # DNS queries in a window
 
 
-AUTH_PORTS = {22, 3389, 23, 21, 25, 110, 143, 1433, 3306, 5432}
+AUTH_PORTS = {21, 22, 23, 25, 110, 143, 445, 1433, 1521, 3306, 3389, 5432, 5900, 6379, 27017}
+MALICIOUS_BACKDOOR_PORTS = {1337, 31337, 4444, 5555, 6667, 8888, 9001, 9999}
+SENSITIVE_SERVICE_NAMES: dict[int, str] = {
+    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 110: "POP3",
+    143: "IMAP", 445: "SMB/EternalBlue", 1433: "MSSQL", 1521: "Oracle DB",
+    3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL", 5900: "VNC",
+    6379: "Redis", 27017: "MongoDB", 4444: "Metasploit/Meterpreter C2",
+    6667: "IRC Botnet C2", 1337: "Elite Backdoor", 31337: "BackOrifice",
+}
 
 
 def run_analysis(
@@ -37,13 +45,7 @@ def run_analysis(
     progress_callback: Any = None,
 ) -> dict[str, Any]:
     """
-    Full historical analysis pipeline.
-    Args:
-        path: Absolute path to validated PCAP file.
-        window_seconds: Temporal window size.
-        progress_callback: Optional callable(stage: str, pct: float).
-    Returns:
-        Complete HistoricalResult dict.
+    Full historical analysis pipeline for real PCAP files.
     """
     def _progress(stage: str, pct: float) -> None:
         if progress_callback:
@@ -55,12 +57,22 @@ def run_analysis(
     _progress("parsing", 30.0)
 
     if not packets:
-        raise ValueError("No IP packets found in the PCAP file.")
+        raise ValueError("No valid IP or ARP packets found in the capture file.")
 
     # 2 — Build flows
     _progress("building_flows", 35.0)
     flows = build_flows(packets)
     _progress("building_flows", 55.0)
+
+    # Calculate capture span
+    ts_values = [p["timestamp"] for p in packets if p.get("timestamp")]
+    t_start = min(ts_values) if ts_values else 0.0
+    t_end   = max(ts_values) if ts_values else 0.0
+    duration = max(0.0, t_end - t_start)
+
+    # Adapt window size for very short captures
+    if duration > 0 and duration < window_seconds:
+        window_seconds = max(1.0, round(duration / 4, 1))
 
     # 3 — Feature engineering
     _progress("feature_engineering", 60.0)
@@ -78,18 +90,13 @@ def run_analysis(
     _progress("timeline", 95.0)
 
     # 6 — Entity relationships
-    entity_relationships = _build_entity_relationships(flows)
+    entity_relationships = _build_entity_relationships(flows, suspicious_events)
 
     # 7 — Metadata
-    ts_values = [p["timestamp"] for p in packets]
-    t_start = min(ts_values)
-    t_end   = max(ts_values)
-    duration = t_end - t_start
-
     protocol_counts = Counter(p["protocol"] for p in packets)
-    src_ip_counts   = Counter(p["src_ip"]   for p in packets)
-    dst_ip_counts   = Counter(p["dst_ip"]   for p in packets)
-    dst_port_counts = Counter(p["dst_port"] for p in packets)
+    src_ip_counts   = Counter(p["src_ip"]   for p in packets if p["src_ip"] not in ("0.0.0.0", ""))
+    dst_ip_counts   = Counter(p["dst_ip"]   for p in packets if p["dst_ip"] not in ("0.0.0.0", ""))
+    dst_port_counts = Counter(p["dst_port"] for p in packets if p["dst_port"] > 0)
 
     _progress("completed", 100.0)
 
@@ -131,7 +138,7 @@ def _detect_suspicious_activity(
 
     def _add_event(etype: str, ts: float, src: str, dst: str, proto: str,
                    severity: str, reason: str, port: int = 0) -> None:
-        eid = f"{etype}:{src}:{dst}:{int(ts)}"
+        eid = f"{etype}:{src}:{dst}:{port}:{int(ts)}"
         if eid in seen_ids:
             return
         seen_ids.add(eid)
@@ -145,52 +152,107 @@ def _detect_suspicious_activity(
             "protocol":   proto,
             "severity":   severity,
             "reason":     reason,
-            "demo_label": "DEMO HEURISTIC — not confirmed attack evidence",
+            "demo_label": "Suspicious Activity Indicator",
         })
 
-    # ── Per-source port scan detection ────────────────────────────────────────
-    src_dst_ports: dict[str, set[int]] = defaultdict(set)
-    src_dst_ips:   dict[str, set[str]] = defaultdict(set)
+    # ── 1. Reconnaissance: Port Scans & Subnet Sweeps ───────────────────────────
+    src_target_ports: dict[tuple[str, str], set[int]] = defaultdict(set)
+    src_all_ports:    dict[str, set[int]] = defaultdict(set)
+    src_all_dsts:     dict[str, set[str]] = defaultdict(set)
+    src_first_ts:     dict[str, float] = {}
+
     for pkt in packets:
-        src_dst_ports[pkt["src_ip"]].add(pkt["dst_port"])
-        src_dst_ips[pkt["src_ip"]].add(pkt["dst_ip"])
+        s = pkt["src_ip"]
+        d = pkt["dst_ip"]
+        p = pkt["dst_port"]
+        ts = pkt["timestamp"]
+        if s not in src_first_ts or ts < src_first_ts[s]:
+            src_first_ts[s] = ts
+        if p > 0:
+            src_target_ports[(s, d)].add(p)
+            src_all_ports[s].add(p)
+        if d not in ("0.0.0.0", "255.255.255.255", ""):
+            src_all_dsts[s].add(d)
 
-    for src_ip, dst_ports in src_dst_ports.items():
-        if len(dst_ports) >= HeuristicConfig.PORT_SCAN_UNIQUE_PORTS:
-            earliest = min(
-                (p["timestamp"] for p in packets if p["src_ip"] == src_ip),
-                default=0,
-            )
+    # Vertical Port Scan (single destination targeted across multiple ports)
+    for (src_ip, dst_ip), ports in src_target_ports.items():
+        if len(ports) >= HeuristicConfig.PORT_SCAN_VERTICAL_PORTS:
             _add_event(
-                "port_scan_indicator", earliest, src_ip, "multiple", "TCP",
-                "medium",
-                f"Suspicious Indicator: {len(dst_ports)} unique destination ports contacted from {src_ip}. "
-                f"May indicate reconnaissance/port scan. (Demo heuristic)",
+                "port_scan_indicator", src_first_ts.get(src_ip, 0.0), src_ip, dst_ip, "TCP",
+                "high",
+                f"Vertical Port Scan: {len(ports)} distinct ports probed on {dst_ip} from {src_ip}.",
             )
 
-    # ── Brute-force on auth ports ─────────────────────────────────────────────
-    auth_key_counts: Counter = Counter()
-    auth_key_first: dict = {}
+    # Horizontal Sweep / Subnet Sweep
+    for src_ip, dsts in src_all_dsts.items():
+        if len(dsts) >= HeuristicConfig.PORT_SCAN_HORIZONTAL_IPS and len(src_all_ports.get(src_ip, set())) >= 2:
+            _add_event(
+                "port_scan_indicator", src_first_ts.get(src_ip, 0.0), src_ip, "multiple_targets", "TCP",
+                "medium",
+                f"Network Sweep: {len(dsts)} distinct destination hosts probed by {src_ip}.",
+            )
+
+    # Stealth Flag Scans (NULL, Xmas, FIN-only scans)
+    stealth_counts: Counter = Counter()
+    stealth_first: dict = {}
+    for pkt in packets:
+        flags = pkt.get("flags", "")
+        if pkt["protocol"] == "TCP":
+            # NULL scan (no flags), Xmas scan (FPU / FIN-PSH-URG), FIN scan
+            is_stealth = (flags == "" or "FPU" in flags or (flags == "F" and pkt["dst_port"] > 0))
+            if is_stealth:
+                key = (pkt["src_ip"], pkt["dst_ip"], pkt["dst_port"])
+                stealth_counts[key] += 1
+                if key not in stealth_first:
+                    stealth_first[key] = pkt["timestamp"]
+
+    for (s, d, p), cnt in stealth_counts.items():
+        if cnt >= 2:
+            _add_event(
+                "port_scan_indicator", stealth_first.get((s, d, p), 0.0), s, d, "TCP",
+                "high",
+                f"Stealth TCP Scan: {cnt} abnormal flag probes (NULL/Xmas/FIN) to {d}:{p} from {s}.",
+                port=p,
+            )
+
+    # ── 2. Brute-Force Authentication Probing ─────────────────────────────────
+    auth_attempts: Counter = Counter()
+    auth_first: dict = {}
+    auth_pkts: Counter = Counter()
+
     for flow in flows:
-        if flow["dst_port"] in AUTH_PORTS and flow["packet_count"] >= HeuristicConfig.BRUTE_FORCE_REPEATS:
-            key = f"{flow['src_ip']}→{flow['dst_ip']}:{flow['dst_port']}"
-            auth_key_counts[key] += 1
-            if key not in auth_key_first:
-                auth_key_first[key] = flow["first_seen"] or 0
+        if flow["dst_port"] in AUTH_PORTS:
+            key = (flow["src_ip"], flow["dst_ip"], flow["dst_port"])
+            auth_attempts[key] += 1
+            auth_pkts[key] += flow["packet_count"]
+            if key not in auth_first:
+                auth_first[key] = flow["first_seen"] or 0.0
 
-    for key, cnt in auth_key_counts.items():
-        src, rest = key.split("→")
-        dst, port_str = rest.rsplit(":", 1)
-        port = int(port_str)
-        _add_event(
-            "brute_force_indicator", auth_key_first.get(key, 0), src, dst, "TCP",
-            "high",
-            f"Suspicious Indicator: {cnt} repeated connection attempts to port {port} from {src}. "
-            f"May indicate brute-force attempt on authentication service. (Demo heuristic)",
-            port=port,
-        )
+    for (src, dst, port), num_flows in auth_attempts.items():
+        svc = SENSITIVE_SERVICE_NAMES.get(port, f"Port {port}")
+        tot_pkts = auth_pkts.get((src, dst, port), 0)
+        if num_flows >= HeuristicConfig.BRUTE_FORCE_FLOWS or tot_pkts >= HeuristicConfig.BRUTE_FORCE_PACKETS:
+            _add_event(
+                "brute_force_indicator", auth_first.get((src, dst, port), 0.0), src, dst, "TCP",
+                "high",
+                f"Authentication Service Probing: {num_flows} connection attempts ({tot_pkts} pkts) to {svc} ({dst}:{port}) from {src}.",
+                port=port,
+            )
 
-    # ── ICMP anomaly per window ───────────────────────────────────────────────
+    # ── 3. Malicious / Backdoor / C2 Port Activity ────────────────────────────
+    for flow in flows:
+        p = flow["dst_port"]
+        if p in MALICIOUS_BACKDOOR_PORTS:
+            svc_name = SENSITIVE_SERVICE_NAMES.get(p, f"Port {p}")
+            _add_event(
+                "backdoor_c2_indicator", flow["first_seen"] or 0.0,
+                flow["src_ip"], flow["dst_ip"], flow["protocol"],
+                "critical",
+                f"Known Exploit/Backdoor Port Active: Communication on {svc_name} ({flow['dst_ip']}:{p}) with {flow['packet_count']} packets.",
+                port=p,
+            )
+
+    # ── 4. ICMP Anomalies / Ping Flood ────────────────────────────────────────
     for win in windows:
         if win["icmp_count"] >= HeuristicConfig.ICMP_VOLUME_THRESHOLD:
             icmp_pkts = [
@@ -203,24 +265,21 @@ def _detect_suspicious_activity(
             _add_event(
                 "icmp_anomaly", win["window_start"], src, dst, "ICMP",
                 "medium",
-                f"Suspicious Indicator: {win['icmp_count']} ICMP packets in 15s window. "
-                f"May indicate network scanning or ICMP-based reconnaissance. (Demo heuristic)",
+                f"ICMP Anomaly: {win['icmp_count']} ICMP packets in temporal window from {src} to {dst}.",
             )
 
-    # ── Large transfer (exfiltration indicator) ───────────────────────────────
+    # ── 5. Large Data Transfer / Potential Exfiltration ───────────────────────
     for flow in flows:
         if flow["byte_count"] >= HeuristicConfig.LARGE_TRANSFER_BYTES:
             _add_event(
-                "large_transfer_indicator", flow["first_seen"] or 0,
+                "large_transfer_indicator", flow["first_seen"] or 0.0,
                 flow["src_ip"], flow["dst_ip"], flow["protocol"],
                 "high",
-                f"Suspicious Indicator: {flow['byte_count']:,} bytes in single flow "
-                f"({flow['src_ip']} → {flow['dst_ip']}). "
-                f"May indicate large data transfer / exfiltration pattern. (Demo heuristic)",
+                f"Large Data Transfer: {flow['byte_count']:,} bytes in single flow ({flow['src_ip']} → {flow['dst_ip']}:{flow['dst_port']}).",
                 port=flow["dst_port"],
             )
 
-    # ── High packet rate (DoS indicator) ─────────────────────────────────────
+    # ── 6. High Packet Rate / Denial-of-Service Flood ─────────────────────────
     for win in windows:
         if win["connection_rate"] >= HeuristicConfig.DOS_PACKET_RATE:
             pkts_in_win = [
@@ -232,8 +291,7 @@ def _detect_suspicious_activity(
             _add_event(
                 "high_rate_indicator", win["window_start"], src, dst, "TCP",
                 "critical",
-                f"Suspicious Indicator: {win['connection_rate']:.1f} packets/sec in window. "
-                f"May indicate DoS-style or flood activity. (Demo heuristic)",
+                f"Volumetric Anomaly: {win['connection_rate']:.1f} packets/sec observed in window #{win['window_index']}.",
             )
 
     events.sort(key=lambda e: e["timestamp"])
@@ -243,28 +301,23 @@ def _detect_suspicious_activity(
 # ── Activity Timeline Builder ─────────────────────────────────────────────────
 
 _STAGE_MAPPING = {
-    "port_scan_indicator":      ("Reconnaissance",    "Observed Activity"),
-    "brute_force_indicator":    ("Initial Access",    "Suspicious Indicator"),
-    "icmp_anomaly":             ("Reconnaissance",    "Observed Activity"),
-    "large_transfer_indicator": ("Data Exfiltration", "Suspicious Indicator"),
-    "high_rate_indicator":      ("Lateral Movement",  "Suspicious Indicator"),
+    "port_scan_indicator":      ("Reconnaissance",    "Port / Network Scan"),
+    "brute_force_indicator":    ("Initial Access",    "Authentication Probing"),
+    "icmp_anomaly":             ("Reconnaissance",    "ICMP Sweep / Flood"),
+    "backdoor_c2_indicator":    ("Command & Control", "Backdoor / C2 Communication"),
+    "large_transfer_indicator": ("Data Exfiltration", "High Volume Transfer"),
+    "high_rate_indicator":      ("Impact",            "Traffic Flood / DoS"),
 }
-
-_SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
 
 def _build_activity_timeline(
     suspicious_events: list[dict],
     windows: list[dict],
 ) -> list[dict]:
-    """
-    Merge suspicious events + temporal window observations into a chronological
-    activity timeline with stage labels.
-    """
     timeline: list[dict] = []
 
     for event in suspicious_events:
-        stage, label = _STAGE_MAPPING.get(event["type"], ("Unknown", "Observed Activity"))
+        stage, label = _STAGE_MAPPING.get(event["type"], ("Observed Activity", "Security Event"))
         timeline.append({
             "entry_type":  "suspicious",
             "timestamp":   event["timestamp"],
@@ -275,15 +328,10 @@ def _build_activity_timeline(
             "src_ip":      event["src_ip"],
             "dst_ip":      event["dst_ip"],
             "protocol":    event["protocol"],
-            "demo_label":  "DEMO HEURISTIC — not confirmed attack stage",
+            "demo_label":  "Observed Security Indicator",
         })
 
-    # Add a normal-activity entry per window where no suspicious event was detected
-    sus_windows = {
-        int((e["timestamp"] - (windows[0]["window_start"] if windows else 0)) / (windows[0]["window_end"] - windows[0]["window_start"] + 0.001))
-        for e in suspicious_events
-    } if windows else set()
-
+    # Add baseline activity entries for windows without suspicious events
     for win in windows:
         if not any(
             win["window_start"] <= e["timestamp"] < win["window_end"]
@@ -293,14 +341,13 @@ def _build_activity_timeline(
                 "entry_type":  "normal",
                 "timestamp":   win["window_start"],
                 "stage":       "Normal Activity",
-                "label":       "Observed Activity",
-                "description": f"Window {win['window_index']}: {win['packet_count']} packets, "
-                               f"{win['flow_count']} flows, {win['connection_rate']} pkt/s",
+                "label":       "Traffic Baseline",
+                "description": f"Window #{win['window_index']}: {win['packet_count']} pkts, {win['flow_count']} flows ({win['connection_rate']} pkt/s)",
                 "severity":    "low",
                 "src_ip":      "",
                 "dst_ip":      "",
                 "protocol":    "MIXED",
-                "demo_label":  "Observed demo activity",
+                "demo_label":  "Baseline Network Activity",
             })
 
     timeline.sort(key=lambda e: e["timestamp"])
@@ -309,10 +356,13 @@ def _build_activity_timeline(
 
 # ── Entity Relationship Builder ───────────────────────────────────────────────
 
-def _build_entity_relationships(flows: list[dict]) -> list[dict]:
+def _build_entity_relationships(
+    flows: list[dict],
+    suspicious_events: list[dict] | None = None,
+) -> list[dict]:
     """
     Build entity relationship records for network graph rendering.
-    Each unique (src_ip, dst_ip) pair becomes a relationship edge.
+    Maps real host interactions and marks suspicious communication edges.
     """
     edge_map: dict[tuple[str, str], dict] = defaultdict(lambda: {
         "packet_count": 0, "byte_count": 0, "protocols": set(),
@@ -320,35 +370,54 @@ def _build_entity_relationships(flows: list[dict]) -> list[dict]:
     })
 
     for flow in flows:
-        key = (flow["src_ip"], flow["dst_ip"])
+        s = flow["src_ip"]
+        d = flow["dst_ip"]
+        if not s or not d or s == "0.0.0.0" or d == "0.0.0.0":
+            continue
+        key = (s, d)
         edge = edge_map[key]
         edge["packet_count"] += flow["packet_count"]
         edge["byte_count"]   += flow["byte_count"]
         edge["protocols"].add(flow["protocol"])
-        if flow["dst_port"]:
+        if flow["dst_port"] and flow["dst_port"] > 0:
             edge["ports"].add(flow["dst_port"])
         if edge["first_seen"] is None or (flow["first_seen"] and flow["first_seen"] < edge["first_seen"]):
             edge["first_seen"] = flow["first_seen"]
         if edge["last_seen"] is None or (flow["last_seen"] and flow["last_seen"] > edge["last_seen"]):
             edge["last_seen"] = flow["last_seen"]
 
-    relationships = []
-    # Collect unique IPs for node classification
-    all_src = {k[0] for k in edge_map}
-    all_dst = {k[1] for k in edge_map}
-    all_ips = all_src | all_dst
+    # Build suspicious IP pairs set
+    sus_pairs: set[tuple[str, str]] = set()
+    if suspicious_events:
+        for ev in suspicious_events:
+            s_ip = ev.get("src_ip", "")
+            d_ip = ev.get("dst_ip", "")
+            if s_ip and d_ip:
+                sus_pairs.add((s_ip, d_ip))
 
+    relationships = []
     for (src, dst), data in edge_map.items():
+        ports_list = sorted(data["ports"])
+        is_sus = (
+            (src, dst) in sus_pairs or
+            any(p in MALICIOUS_BACKDOOR_PORTS for p in ports_list) or
+            len(ports_list) >= 8 or
+            (any(p in AUTH_PORTS for p in ports_list) and data["packet_count"] >= 10)
+        )
+
         relationships.append({
             "src_ip":       src,
             "dst_ip":       dst,
             "packet_count": data["packet_count"],
             "byte_count":   data["byte_count"],
             "protocols":    sorted(data["protocols"]),
-            "ports":        sorted(data["ports"])[:10],
+            "ports":        ports_list[:12],
             "first_seen":   data["first_seen"],
             "last_seen":    data["last_seen"],
-            "is_suspicious": len(data["ports"]) >= 15,  # heuristic for graph highlighting
+            "is_suspicious": is_sus,
         })
 
+    # Sort relationships by packet count descending
+    relationships.sort(key=lambda r: r["packet_count"], reverse=True)
     return relationships
+

@@ -4,6 +4,7 @@ import {
   CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import { trafficData } from '@/data/mockData';
+import { AlertTriangle } from 'lucide-react';
 
 interface ChartDataPoint {
   time: string;
@@ -115,8 +116,9 @@ export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }:
       </div>
 
       {/* Demo label */}
-      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 12, fontStyle: 'italic' }}>
-        ⚠ Simulated demo data — not real network traffic
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)', marginBottom: 12, fontStyle: 'italic' }}>
+        <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+        <span>Simulated demo data — not real network traffic</span>
       </div>
 
       {/* Chart */}

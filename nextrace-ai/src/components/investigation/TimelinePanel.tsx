@@ -3,6 +3,7 @@
 import { useForecastStore } from '@/store/forecastStore';
 import { useInvestigationStore } from '@/store/investigationStore';
 import { STAGE_COLORS } from '@/types/forecast';
+import { AlertTriangle } from 'lucide-react';
 
 const TYPE_CONFIG = {
   observed: { dot: 'var(--color-live)',     label: 'OBSERVED',  labelColor: 'var(--color-live)'     },
@@ -80,8 +81,9 @@ export function TimelinePanel() {
 
       {/* Forecast disclaimer */}
       {currentForecast && (
-        <div style={{ marginTop: 12, borderTop: '1px solid var(--border-subtle)', paddingTop: 10, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-          ⚠ Timeline combines observed demo events with deterministic forecast predictions. Not real attack evidence.
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 12, borderTop: '1px solid var(--border-subtle)', paddingTop: 10, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+          <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+          <span>Timeline combines observed demo events with deterministic forecast predictions. Not real attack evidence.</span>
         </div>
       )}
     </div>

@@ -84,16 +84,19 @@ def _build_evidence_summary(result: dict[str, Any]) -> dict[str, Any]:
             w for w in windows if w.get("suspicious_ratio", 0) > 0.1
         ]
         peak_win = max(windows, key=lambda w: w.get("suspicious_ratio", 0))
-        first_win_ts = min(w.get("window_start", float("inf")) for w in windows
-                           if any(e["timestamp"] >= w.get("window_start", 0)
-                                  and e["timestamp"] < w.get("window_end", 0)
-                                  for e in events)) if events else None
+        first_win_ts = min(
+            (w.get("window_start", float("inf")) for w in windows
+             if any(e["timestamp"] >= w.get("window_start", 0)
+                    and e["timestamp"] < w.get("window_end", 0)
+                    for e in events)),
+            default=None,
+        ) if events else None
 
-        if events:
-            first_event_ts = min(e["timestamp"] for e in events)
+        if events and t_start is not None:
+            first_event_ts = min((e["timestamp"] for e in events), default=t_start)
             temporal_evidence.append(
                 f"First suspicious indicator observed at "
-                f"T+{first_event_ts - t_start:.1f}s into capture."
+                f"T+{max(0.0, first_event_ts - t_start):.1f}s into capture."
             )
 
         temporal_evidence.append(
@@ -292,8 +295,10 @@ def run_forensic_analysis(
         hist_result, hypotheses, af_indicators, is_demo=is_demo
     )
 
+    fid = f"FA-{str(uuid.uuid4())[:8].upper()}"
     return {
-        "id":                        f"FA-{str(uuid.uuid4())[:8].upper()}",
+        "id":                        fid,
+        "forensic_id":               fid,
         "historical_job_id":         job.get("job_id"),
         "status":                    "completed",
         "is_demo":                   is_demo,

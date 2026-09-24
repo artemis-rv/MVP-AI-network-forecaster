@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   Play, Square, WifiOff, Pause, RotateCcw, Trash2,
-  Radio, Filter, RefreshCw,
+  Radio, Filter, RefreshCw, AlertTriangle, ShieldAlert, CheckCircle2, ShieldCheck, Clock,
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -20,7 +20,7 @@ export function LiveMonitoringPage() {
   const { addToast } = useAppStore();
   const {
     wsConnected, session, backendAvailable, setBackendAvailable,
-    allEvents, displayEvents, isPaused, setPaused, clearEvents,
+    displayEvents, isPaused, setPaused, clearEvents,
     temporalHistory, currentTemporal,
     liveNodes, liveEdges,
     searchQuery, setSearchQuery,
@@ -114,8 +114,8 @@ export function LiveMonitoringPage() {
             Real-time demo traffic stream · Temporal aggregation · Feature engineering
           </p>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning)', borderRadius: 8, padding: '6px 12px' }}>
-          ⚠ SIMULATED DEMO TRAFFIC — not real network telemetry
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning)', borderRadius: 8, padding: '6px 12px' }}>
+          <AlertTriangle size={12} /> SIMULATED DEMO TRAFFIC — not real network telemetry
         </div>
       </div>
 
@@ -160,7 +160,10 @@ export function LiveMonitoringPage() {
                     transition: 'all var(--transition-fast)',
                   }}
                 >
-                  {m === 'suspicious' ? '⚠ Suspicious Demo' : '✓ Benign'}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {m === 'suspicious' ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
+                    {m === 'suspicious' ? 'Suspicious Demo' : 'Benign Traffic'}
+                  </span>
                 </button>
               ))}
             </div>
@@ -318,8 +321,18 @@ export function LiveMonitoringPage() {
         {/* Packet Table */}
         <div style={{ overflowX: 'auto', maxHeight: 340, overflowY: 'auto' }}>
           {filteredEvents.length === 0 ? (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-              {isRunning ? '⏳ Waiting for events…' : '▶ Start a live demo session to see packet events.'}
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              {isRunning ? (
+                <>
+                  <Clock size={15} color="var(--primary)" />
+                  <span>Waiting for events…</span>
+                </>
+              ) : (
+                <>
+                  <Play size={15} color="var(--color-live)" />
+                  <span>Start a live demo session to see packet events.</span>
+                </>
+              )}
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -449,11 +462,13 @@ function PacketRow({ event }: { event: import('@/types/live').PacketEvent & { id
       </td>
       <td style={{ padding: '6px 12px' }}>
         <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
           fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
           background: isSusp ? 'var(--color-critical-light)' : 'var(--color-live-light)',
           color: isSusp ? 'var(--color-critical)' : 'var(--color-live)',
         }}>
-          {isSusp ? '⚠ suspicious' : '✓ benign'}
+          {isSusp ? <ShieldAlert size={10} /> : <CheckCircle2 size={10} />}
+          {isSusp ? 'suspicious' : 'benign'}
         </span>
       </td>
     </tr>
@@ -535,9 +550,19 @@ function LiveEntityGraph({ nodes, edges, running }: { nodes: import('@/types/liv
               )}
               <text textAnchor="middle" y={-27} fontSize={9} fill={c.border} fontWeight={700}>{node.ip}</text>
               <text textAnchor="middle" y={30} fontSize={9} fill="var(--text-muted)" fontWeight={500}>{node.label}</text>
-              <text textAnchor="middle" dominantBaseline="central" fontSize={12} fill={c.border}>
-                {node.type === 'suspicious' ? '⚠' : node.type === 'server' ? '▣' : node.type === 'external' ? '◈' : '◉'}
-              </text>
+              {node.type === 'suspicious' ? (
+                <g transform="translate(0, 0)">
+                  <path d="M 0 -6 L 6 5 L -6 5 Z" fill={c.border} />
+                  <line x1="0" y1="-2" x2="0" y2="1" stroke="white" strokeWidth="1.2" />
+                  <circle cx="0" cy="3" r="0.6" fill="white" />
+                </g>
+              ) : node.type === 'server' ? (
+                <rect x="-5" y="-5" width="10" height="10" rx="2" fill="none" stroke={c.border} strokeWidth="1.5" />
+              ) : node.type === 'external' ? (
+                <polygon points="0,-6 6,0 0,6 -6,0" fill="none" stroke={c.border} strokeWidth="1.5" />
+              ) : (
+                <circle r="4" fill="none" stroke={c.border} strokeWidth="1.5" />
+              )}
             </g>
           );
         })}
@@ -565,26 +590,22 @@ function LiveEntityGraph({ nodes, edges, running }: { nodes: import('@/types/liv
 
 function EmptyChartState({ running }: { running: boolean }) {
   return (
-    <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-      {running ? '⏳ Waiting for first temporal window…' : '▶ Start a session to see live chart data.'}
+    <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+      {running ? (
+        <>
+          <Clock size={15} color="var(--primary)" />
+          <span>Waiting for first temporal window…</span>
+        </>
+      ) : (
+        <>
+          <Play size={15} color="var(--color-live)" />
+          <span>Start a session to see live chart data.</span>
+        </>
+      )}
     </div>
   );
 }
 
-function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{label}:</span>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{ fontSize: 12, padding: '4px 24px 4px 8px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'white', color: 'var(--text-primary)', cursor: 'pointer', outline: 'none', appearance: 'none', fontFamily: 'var(--font-sans)' }}
-      >
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
-}
 
 function FeatureChip({ label, value, color }: { label: string; value: string; color?: string }) {
   return (

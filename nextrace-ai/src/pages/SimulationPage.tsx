@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react';
 import {
   Play, Pause, SkipForward, Square, RotateCcw,
   Cpu, Activity, Target, TrendingUp, AlertTriangle, FileText,
+  Search, Key, Eye, ArrowLeftRight, Radio, UploadCloud, Lock, Zap, Settings,
+  CheckCircle2, Clock, Circle,
 } from 'lucide-react';
 import { ReactFlow, Background, Controls, type Node, type Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -16,17 +18,17 @@ import { useNavigate } from 'react-router-dom';
 import type { SimEvent, ForecastSnapshot, SyntheticFeatureProfile } from '@/types/simulator';
 
 // ── Stage colours (separate from forecast STAGE_COLORS) ─────────────────────
-const STAGE_META: Record<string, { color: string; bg: string; border: string; icon: string }> = {
-  'Reconnaissance':     { color: '#f59e0b', bg: '#fef3c7', border: '#f59e0b', icon: '🔍' },
-  'Initial Access':     { color: '#f97316', bg: '#ffedd5', border: '#f97316', icon: '🔑' },
-  'Internal Discovery': { color: '#8b5cf6', bg: '#ede9fe', border: '#8b5cf6', icon: '🕵️' },
-  'Lateral Movement':   { color: '#ef4444', bg: '#fee2e2', border: '#ef4444', icon: '↔️' },
-  'Command & Control':  { color: '#06b6d4', bg: '#cffafe', border: '#06b6d4', icon: '📡' },
-  'Data Exfiltration':  { color: '#dc2626', bg: '#fecaca', border: '#dc2626', icon: '📤' },
-  'Persistence':        { color: '#7c3aed', bg: '#ede9fe', border: '#7c3aed', icon: '🔒' },
-  'Impact':             { color: '#b91c1c', bg: '#fee2e2', border: '#b91c1c', icon: '💥' },
+const STAGE_META: Record<string, { color: string; bg: string; border: string; icon: (size?: number) => React.ReactNode }> = {
+  'Reconnaissance':     { color: '#f59e0b', bg: '#fef3c7', border: '#f59e0b', icon: (s = 14) => <Search size={s} /> },
+  'Initial Access':     { color: '#f97316', bg: '#ffedd5', border: '#f97316', icon: (s = 14) => <Key size={s} /> },
+  'Internal Discovery': { color: '#8b5cf6', bg: '#ede9fe', border: '#8b5cf6', icon: (s = 14) => <Eye size={s} /> },
+  'Lateral Movement':   { color: '#ef4444', bg: '#fee2e2', border: '#ef4444', icon: (s = 14) => <ArrowLeftRight size={s} /> },
+  'Command & Control':  { color: '#06b6d4', bg: '#cffafe', border: '#06b6d4', icon: (s = 14) => <Radio size={s} /> },
+  'Data Exfiltration':  { color: '#dc2626', bg: '#fecaca', border: '#dc2626', icon: (s = 14) => <UploadCloud size={s} /> },
+  'Persistence':        { color: '#7c3aed', bg: '#ede9fe', border: '#7c3aed', icon: (s = 14) => <Lock size={s} /> },
+  'Impact':             { color: '#b91c1c', bg: '#fee2e2', border: '#b91c1c', icon: (s = 14) => <Zap size={s} /> },
 };
-const STAGE_DEFAULT = { color: '#94a3b8', bg: '#f1f5f9', border: '#cbd5e1', icon: '⚙️' };
+const STAGE_DEFAULT = { color: '#94a3b8', bg: '#f1f5f9', border: '#cbd5e1', icon: (s = 14) => <Settings size={s} /> };
 
 function getStageMeta(name: string) {
   return STAGE_META[name] ?? STAGE_DEFAULT;
@@ -191,8 +193,9 @@ export function SimulationPage() {
 
         {/* ── Error banner ── */}
         {error && (
-          <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#b91c1c' }}>
-            ⚠ {error}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#b91c1c' }}>
+            <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+            <span>{error}</span>
           </div>
         )}
 
@@ -426,13 +429,13 @@ function RunningControls({
       </div>
 
       {isCompleted && (
-        <div style={{ background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#065f46', textAlign: 'center', fontWeight: 600 }}>
-          ✅ Simulation completed — {totalSteps} stages
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#065f46', textAlign: 'center', fontWeight: 600 }}>
+          <CheckCircle2 size={13} /> Simulation completed — {totalSteps} stages
         </div>
       )}
       {isStopped && (
-        <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#b91c1c', textAlign: 'center', fontWeight: 600 }}>
-          ⛔ Simulation stopped at step {currentStep + 1}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#b91c1c', textAlign: 'center', fontWeight: 600 }}>
+          <Square size={13} /> Simulation stopped at step {currentStep + 1}
         </div>
       )}
     </div>
@@ -477,8 +480,16 @@ function SimStatusPanel({
                   transition: 'all 0.15s', minWidth: 80,
                 }}
               >
-                <div style={{ fontSize: 16 }}>
-                  {isDone ? '✅' : isCurrent ? m.icon : isNext ? '⏳' : '⬜'}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 20 }}>
+                  {isDone ? (
+                    <CheckCircle2 size={16} color="#059669" />
+                  ) : isCurrent ? (
+                    <span style={{ color: m.color }}>{m.icon(16)}</span>
+                  ) : isNext ? (
+                    <Clock size={16} color="#d97706" />
+                  ) : (
+                    <Circle size={10} color="var(--border-default)" />
+                  )}
                 </div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: isDone ? '#059669' : isCurrent ? m.color : 'var(--text-muted)', textAlign: 'center', lineHeight: 1.2 }}>
                   {i + 1}. {stage}
@@ -515,10 +526,12 @@ function ForecastPanel({ forecast }: { forecast: ForecastSnapshot }) {
       {/* Current → Predicted */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 12, alignItems: 'center' }}>
         <div style={{ background: curMeta.bg, border: `1.5px solid ${curMeta.border}`, borderRadius: 12, padding: '12px 14px', textAlign: 'center' }}>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 6 }}>
             Step {forecast.step + 1} · Current Stage
           </div>
-          <div style={{ fontSize: 22 }}>{curMeta.icon}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 28, color: curMeta.color }}>
+            {curMeta.icon(22)}
+          </div>
           <div style={{ fontSize: 14, fontWeight: 800, color: curMeta.color, marginTop: 4 }}>
             {forecast.current_stage}
           </div>
@@ -535,10 +548,12 @@ function ForecastPanel({ forecast }: { forecast: ForecastSnapshot }) {
         </div>
 
         <div style={{ background: nextMeta.bg, border: `1.5px dashed ${nextMeta.border}`, borderRadius: 12, padding: '12px 14px', textAlign: 'center', opacity: forecast.predicted_next_stage === 'Simulation Complete' ? 0.6 : 1 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 6 }}>
             Predicted Next
           </div>
-          <div style={{ fontSize: 22 }}>{nextMeta.icon}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 28, color: nextMeta.color }}>
+            {nextMeta.icon(22)}
+          </div>
           <div style={{ fontSize: 14, fontWeight: 800, color: nextMeta.color, marginTop: 4 }}>
             {forecast.predicted_next_stage}
           </div>
@@ -618,7 +633,7 @@ function EventDetailPanel({ event }: { event: SimEvent }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ background: m.bg, border: `1px solid ${m.border}40`, borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>
-        <span style={{ fontSize: 20 }}>{m.icon}</span>
+        <span style={{ color: m.color, display: 'inline-flex' }}>{m.icon(20)}</span>
         <div>
           <div style={{ fontSize: 13, fontWeight: 800, color: m.color }}>Step {event.step + 1}: {event.stage}</div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtSimTs(event.timestamp)}</div>
@@ -685,8 +700,8 @@ function EventTable({ events, selectedStep, onSelect }: {
               >
                 <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{ev.step + 1}</td>
                 <td style={{ padding: '7px 10px' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: m.bg, color: m.color, whiteSpace: 'nowrap' }}>
-                    {m.icon} {ev.stage}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: m.bg, color: m.color, whiteSpace: 'nowrap' }}>
+                    {m.icon(11)} {ev.stage}
                   </span>
                 </td>
                 <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
@@ -741,15 +756,15 @@ function ForecastTimeline({ forecasts, selectedStep, onSelect }: {
               {fc.step + 1}
             </div>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: curMeta.bg, color: curMeta.color, display: 'inline-block' }}>
-                {curMeta.icon} {fc.current_stage}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: curMeta.bg, color: curMeta.color }}>
+                {curMeta.icon(11)} {fc.current_stage}
               </div>
               <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{fc.time_window}</div>
             </div>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>→</span>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: nextMeta.bg, color: nextMeta.color, display: 'inline-block', opacity: fc.predicted_next_stage === 'Simulation Complete' ? 0.6 : 1 }}>
-                {nextMeta.icon} {fc.predicted_next_stage}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: nextMeta.bg, color: nextMeta.color, opacity: fc.predicted_next_stage === 'Simulation Complete' ? 0.6 : 1 }}>
+                {nextMeta.icon(11)} {fc.predicted_next_stage}
               </div>
             </div>
             <div style={{ fontSize: 12, fontWeight: 900, color: fc.confidence >= 75 ? '#059669' : '#d97706', textAlign: 'right' }}>
@@ -777,10 +792,10 @@ function NetworkGraph({ currentStage, currentEvent }: {
   currentStage: string | null; currentEvent: SimEvent | null;
 }) {
   const nodes: Node[] = [
-    { id: 'ext',  position: ENTITY_POSITIONS['Simulated External'], data: { label: '🌐 Simulated External\n198.51.100.20', type: 'external', active: currentEvent?.source_label === 'Simulated External' || currentEvent?.destination_label === 'Simulated External' }, type: 'default' },
-    { id: 'ws',   position: ENTITY_POSITIONS['Workstation'],        data: { label: '💻 Workstation\n10.10.1.10', type: 'internal', active: currentEvent?.source_label === 'Workstation' || currentEvent?.destination_label === 'Workstation' }, type: 'default' },
-    { id: 'srv',  position: ENTITY_POSITIONS['Internal Server'],     data: { label: '🖥 Internal Server\n10.10.2.20', type: 'internal', active: currentEvent?.source_label === 'Internal Server' || currentEvent?.destination_label === 'Internal Server' }, type: 'default' },
-    { id: 'db',   position: ENTITY_POSITIONS['Database'],            data: { label: '🗄 Database\n10.10.3.30', type: 'internal', active: currentEvent?.source_label === 'Database' || currentEvent?.destination_label === 'Database' }, type: 'default' },
+    { id: 'ext',  position: ENTITY_POSITIONS['Simulated External'], data: { label: 'Simulated External\n198.51.100.20', type: 'external', active: currentEvent?.source_label === 'Simulated External' || currentEvent?.destination_label === 'Simulated External' }, type: 'default' },
+    { id: 'ws',   position: ENTITY_POSITIONS['Workstation'],        data: { label: 'Workstation\n10.10.1.10', type: 'internal', active: currentEvent?.source_label === 'Workstation' || currentEvent?.destination_label === 'Workstation' }, type: 'default' },
+    { id: 'srv',  position: ENTITY_POSITIONS['Internal Server'],     data: { label: 'Internal Server\n10.10.2.20', type: 'internal', active: currentEvent?.source_label === 'Internal Server' || currentEvent?.destination_label === 'Internal Server' }, type: 'default' },
+    { id: 'db',   position: ENTITY_POSITIONS['Database'],            data: { label: 'Database\n10.10.3.30', type: 'internal', active: currentEvent?.source_label === 'Database' || currentEvent?.destination_label === 'Database' }, type: 'default' },
   ].map(n => ({
     ...n,
     style: {
@@ -826,8 +841,8 @@ function NetworkGraph({ currentStage, currentEvent }: {
 
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10, fontSize: 9, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1px solid rgba(245,158,11,0.4)' }}>
-        ⚠ SYNTHETIC NETWORK — SIMULATION ONLY{currentStage ? ` · Active: ${currentStage}` : ''}
+      <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10, fontSize: 9, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1px solid rgba(245,158,11,0.4)', display: 'flex', alignItems: 'center', gap: 5 }}>
+        <AlertTriangle size={11} /> SYNTHETIC NETWORK — SIMULATION ONLY{currentStage ? ` · Active: ${currentStage}` : ''}
       </div>
       <div style={{ height: 320, borderRadius: 12, overflow: 'hidden', background: 'var(--bg-workspace)', border: '1px solid var(--border-subtle)' }}>
         <ReactFlow nodes={nodes} edges={edges} fitView nodesDraggable panOnDrag zoomOnScroll={false}>
@@ -875,18 +890,24 @@ function StatusPill({ status }: { status: string }) {
     idle:      ['#94a3b8', '#f1f5f9'],
   };
   const [c, bg] = styles[status] ?? styles['idle'];
-  const icons: Record<string, string> = { running: '▶', paused: '⏸', completed: '✅', stopped: '⛔', idle: '○' };
+  const icons: Record<string, React.ReactNode> = {
+    running:   <Play size={10} style={{ display: 'inline', marginRight: 4 }} />,
+    paused:    <Pause size={10} style={{ display: 'inline', marginRight: 4 }} />,
+    completed: <CheckCircle2 size={10} style={{ display: 'inline', marginRight: 4 }} />,
+    stopped:   <Square size={10} style={{ display: 'inline', marginRight: 4 }} />,
+    idle:      <Circle size={8} style={{ display: 'inline', marginRight: 4 }} />,
+  };
   return (
-    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: bg, color: c, border: `1px solid ${c}40`, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-      {icons[status] ?? '○'} {status}
+    <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: bg, color: c, border: `1px solid ${c}40`, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+      {icons[status] ?? null} {status}
     </span>
   );
 }
 
 function SimOnlyBadge() {
   return (
-    <div style={{ fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 999, background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1.5px solid rgba(245,158,11,0.5)', letterSpacing: '0.5px' }}>
-      ⚠ SIMULATION ONLY
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 999, background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1.5px solid rgba(245,158,11,0.5)', letterSpacing: '0.5px' }}>
+      <AlertTriangle size={12} /> SIMULATION ONLY
     </div>
   );
 }

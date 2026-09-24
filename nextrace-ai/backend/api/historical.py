@@ -22,7 +22,7 @@ router = APIRouter(prefix="/historical", tags=["Historical Analysis"])
 # Keyed by job_id. Never shares state with live_session.py.
 _JOBS: dict[str, dict[str, Any]] = {}
 
-_ALLOWED_EXTENSIONS = {".pcap", ".pcapng", ".cap"}
+_ALLOWED_EXTENSIONS = {".pcap", ".pcapng", ".cap", ".gz", ".dmp"}
 _MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB guard
 
 

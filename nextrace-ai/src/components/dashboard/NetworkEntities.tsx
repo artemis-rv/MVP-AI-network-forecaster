@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { networkNodes, networkEdges } from '@/data/mockData';
-import { Info } from 'lucide-react';
+import { Info, AlertTriangle } from 'lucide-react';
 import type { LiveNode, LiveEdge } from '@/types/live';
 
 // Adapter: convert LiveNode to the internal node shape
@@ -170,10 +170,20 @@ export function NetworkEntities({ nodes: propNodes, edges: propEdges }: { nodes?
                 <text textAnchor="middle" y={32} fontSize={9} fill="var(--text-muted)" fontWeight={500}>
                   {node.label}
                 </text>
-                {/* Icon placeholder */}
-                <text textAnchor="middle" dominantBaseline="central" fontSize={12} fill={c.border}>
-                  {node.type === 'suspicious' ? '⚠' : node.type === 'server' ? '▣' : node.type === 'external' ? '◈' : '◉'}
-                </text>
+                {/* Icon shape */}
+                {node.type === 'suspicious' ? (
+                  <g transform="translate(0, 0)">
+                    <path d="M 0 -6 L 6 5 L -6 5 Z" fill={c.border} />
+                    <line x1="0" y1="-2" x2="0" y2="1" stroke="white" strokeWidth="1.2" />
+                    <circle cx="0" cy="3" r="0.6" fill="white" />
+                  </g>
+                ) : node.type === 'server' ? (
+                  <rect x="-5" y="-5" width="10" height="10" rx="2" fill="none" stroke={c.border} strokeWidth="1.5" />
+                ) : node.type === 'external' ? (
+                  <polygon points="0,-6 6,0 0,6 -6,0" fill="none" stroke={c.border} strokeWidth="1.5" />
+                ) : (
+                  <circle r="4" fill="none" stroke={c.border} strokeWidth="1.5" />
+                )}
               </g>
             );
           })}
@@ -216,6 +226,9 @@ export function NetworkEntities({ nodes: propNodes, edges: propEdges }: { nodes?
             {selectedNodeData.type === 'suspicious' && (
               <div
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
                   background: 'var(--color-critical-light)',
                   borderRadius: 8,
                   padding: '8px 10px',
@@ -225,7 +238,8 @@ export function NetworkEntities({ nodes: propNodes, edges: propEdges }: { nodes?
                   marginBottom: 10,
                 }}
               >
-                ⚠ Threat Active — 3 alerts linked
+                <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                <span>Threat Active — 3 alerts linked</span>
               </div>
             )}
             <button
