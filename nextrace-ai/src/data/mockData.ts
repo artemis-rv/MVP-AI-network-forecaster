@@ -1,7 +1,7 @@
 // NEXTRACE AI — Mock Demo Data
 // All data here is simulated for demonstration purposes.
 
-export const MOCK_LABEL = '⚠ Simulated demo data — not real network traffic';
+export const MOCK_LABEL = 'Simulated demo data — not real network traffic';
 
 // ─── KPI Stats ───────────────────────────────────────────────
 export const kpiData = [
@@ -158,7 +158,7 @@ export const demoQuestions = [
   {
     id: 'q3',
     question: 'Show attack path for this entity?',
-    answer: `[DEMO RESPONSE] Reconstructed attack path for 10.0.0.5:\n\n🔴 Reconnaissance (T1046) → Port scan\n🔴 Initial Access (T1110) → Brute force SSH\n🟡 Lateral Movement (T1021) → Active now\n⚪ Data Exfiltration (T1048) → Predicted next`,
+    answer: `[DEMO RESPONSE] Reconstructed attack path for 10.0.0.5:\n\n• Reconnaissance (T1046) → Port scan\n• Initial Access (T1110) → Brute force SSH\n• Lateral Movement (T1021) → Active now\n• Data Exfiltration (T1048) → Predicted next`,
   },
   {
     id: 'q4',

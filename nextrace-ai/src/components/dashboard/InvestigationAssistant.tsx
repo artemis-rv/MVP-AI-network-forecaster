@@ -16,7 +16,7 @@ export function InvestigationAssistant() {
     {
       id: 'intro',
       role: 'assistant',
-      text: "Hello! I'm the NEXTRACE AI Investigation Assistant. I can help you analyze alerts, investigate entities, and understand predicted attack paths. Select a quick question or type your own below.\n\n⚠ This is a demo assistant with predefined responses. No real LLM is connected.",
+      text: "Hello! I'm the NEXTRACE AI Investigation Assistant. I can help you analyze alerts, investigate entities, and understand predicted attack paths. Select a quick question or type your own below.\n\n[Demo Assistant] Predefined responses for prototype evaluation.",
     },
   ]);
   const [inputValue, setInputValue] = useState('');

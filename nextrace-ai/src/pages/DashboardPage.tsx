@@ -35,7 +35,9 @@ export function DashboardPage() {
   // Chart data: use real temporal history if available, else mock
   const chartData = temporalHistory.length > 0
     ? temporalHistory.map(t => ({
-        time: new Date(t.window_end as string).toLocaleTimeString('en-US', { hour12: false }),
+        time: typeof t.window_end === 'number'
+          ? new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end).toLocaleTimeString('en-US', { hour12: false })
+          : new Date(String(t.window_end)).toLocaleTimeString('en-US', { hour12: false }),
         total: t.packet_count,
         events: t.suspicious_count,
       }))

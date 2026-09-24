@@ -37,7 +37,7 @@ export function DashboardHeader() {
             marginBottom: 6,
           }}
         >
-          {greeting}, SOC Analyst 👋
+          {greeting}, SOC Analyst
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', fontWeight: 400 }}>
           Your network is protected. Here's what's happening right now.

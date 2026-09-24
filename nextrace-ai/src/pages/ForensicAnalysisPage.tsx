@@ -8,7 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Shield, AlertTriangle, CheckCircle, XCircle, Copy,
   ChevronDown, ChevronRight, ArrowLeft, Clock, FileText,
-  Activity, Search, Info,
+  Activity, Search, Info, BarChart2, Globe, Server,
 } from 'lucide-react';
 import { useForensicStore } from '@/store/forensicStore';
 import { useFindingsStore } from '@/store/findingsStore';
@@ -36,14 +36,25 @@ const INTEGRITY_STYLE: Record<string, { color: string; bg: string; border: strin
 };
 
 const STAGE_LABELS: Record<string, string> = {
-  queued:               '⏳ Queued…',
-  building_integrity:   '🔑 Building Evidence Integrity…',
-  evidence_summary:     '📋 Extracting Evidence Summary…',
-  anti_forensic_scan:   '🔍 Scanning Anti-Forensic Indicators…',
-  hypothesis_evaluation:'🧠 Evaluating Hypotheses…',
-  final_assessment:     '📊 Generating Final Assessment…',
-  completed:            '✅ Complete',
-  failed:               '❌ Failed',
+  queued:               'Queued…',
+  building_integrity:   'Building Evidence Integrity…',
+  evidence_summary:     'Extracting Evidence Summary…',
+  anti_forensic_scan:   'Scanning Anti-Forensic Indicators…',
+  hypothesis_evaluation:'Evaluating Hypotheses…',
+  final_assessment:     'Generating Final Assessment…',
+  completed:            'Complete',
+  failed:               'Failed',
+};
+
+const STAGE_ICONS: Record<string, React.ReactNode> = {
+  queued:               <Clock size={16} />,
+  building_integrity:   <Shield size={16} />,
+  evidence_summary:     <FileText size={16} />,
+  anti_forensic_scan:   <Search size={16} />,
+  hypothesis_evaluation:<Activity size={16} />,
+  final_assessment:     <BarChart2 size={16} />,
+  completed:            <CheckCircle size={16} />,
+  failed:               <XCircle size={16} />,
 };
 
 function tsToDateTime(ts: number | null): string {
@@ -203,7 +214,8 @@ export function ForensicAnalysisPage() {
 function ForensicProcessingView({ progress, stage, jobId }: {
   progress: number; stage: string; jobId: string | null;
 }) {
-  const label = STAGE_LABELS[stage] ?? `⚙️ ${stage}…`;
+  const label = STAGE_LABELS[stage] ?? `${stage}…`;
+  const icon = STAGE_ICONS[stage] ?? <Activity size={18} />;
   return (
     <div style={{ maxWidth: 520, margin: '40px auto', display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center', textAlign: 'center' }}>
       <div style={{ position: 'relative', width: 100, height: 100 }}>
@@ -218,7 +230,10 @@ function ForensicProcessingView({ progress, stage, jobId }: {
         </div>
       </div>
       <div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{label}</div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+          <span style={{ color: 'var(--primary)', display: 'inline-flex' }}>{icon}</span>
+          {label}
+        </div>
         {jobId && <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>Historical Job: {jobId}</div>}
       </div>
       <div style={{ width: '100%', background: 'var(--border-subtle)', borderRadius: 999, height: 6, overflow: 'hidden' }}>
@@ -238,7 +253,9 @@ function ForensicProcessingView({ progress, stage, jobId }: {
 function ForensicErrorView({ error, onBack }: { error: string | null; onBack: () => void }) {
   return (
     <div style={{ maxWidth: 520, margin: '48px auto', textAlign: 'center' }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>⚠️</div>
+      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-critical)', margin: '0 auto 16px auto' }}>
+        <AlertTriangle size={32} />
+      </div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-critical)', marginBottom: 10 }}>Forensic Analysis Failed</h2>
       <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 12, padding: '14px 18px', fontSize: 12, color: '#b91c1c', marginBottom: 20, textAlign: 'left', lineHeight: 1.6 }}>
         {error ?? 'Unknown error. Forensic analysis requires a completed historical job.'}
@@ -405,10 +422,10 @@ function EvidenceIntegritySection({ integrity }: { integrity: EvidenceIntegrity 
 // ═══════════════════════════════════════════════════════════════════════════
 
 function EvidenceSummarySection({ summary }: { summary: EvidenceSummary }) {
-  const groups: { title: string; icon: string; items: string[]; color: string }[] = [
-    { title: 'Network Evidence',  icon: '🌐', items: summary.network_evidence,  color: 'var(--primary)' },
-    { title: 'Temporal Evidence', icon: '⏱',  items: summary.temporal_evidence, color: 'var(--secondary)' },
-    { title: 'Entity Evidence',   icon: '🖥',  items: summary.entity_evidence,   color: '#10b981' },
+  const groups: { title: string; icon: React.ReactNode; items: string[]; color: string }[] = [
+    { title: 'Network Evidence',  icon: <Globe size={16} />, items: summary.network_evidence,  color: 'var(--primary)' },
+    { title: 'Temporal Evidence', icon: <Clock size={16} />,  items: summary.temporal_evidence, color: 'var(--secondary)' },
+    { title: 'Entity Evidence',   icon: <Server size={16} />,  items: summary.entity_evidence,   color: '#10b981' },
   ];
 
   return (
@@ -416,7 +433,7 @@ function EvidenceSummarySection({ summary }: { summary: EvidenceSummary }) {
       {groups.map(({ title, icon, items, color }) => (
         <div key={title} style={{ background: 'var(--bg-workspace)', borderRadius: 12, border: '1px solid var(--border-subtle)', padding: '14px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 16 }}>{icon}</span>
+            <span style={{ color, display: 'inline-flex' }}>{icon}</span>
             <span style={{ fontSize: 13, fontWeight: 700, color }}>{title}</span>
           </div>
           {items.length === 0 ? (
@@ -445,7 +462,7 @@ function AntiForensicSection({ indicators }: { indicators: AntiForensicIndicator
   if (indicators.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 12 }}>
-        <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
+        <CheckCircle size={28} color="var(--color-live)" style={{ margin: '0 auto 8px auto', display: 'block' }} />
         No evidence-limitation or anti-forensic indicators detected.
       </div>
     );
@@ -555,8 +572,8 @@ function HypothesesSection({ hypotheses }: { hypotheses: Hypothesis[] }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   {/* Supporting */}
                   <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
-                      ✓ Supporting ({hyp.supporting_evidence.length})
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
+                      <CheckCircle size={12} /> Supporting ({hyp.supporting_evidence.length})
                     </div>
                     {hyp.supporting_evidence.length === 0 ? (
                       <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>No supporting evidence.</div>
@@ -571,8 +588,8 @@ function HypothesesSection({ hypotheses }: { hypotheses: Hypothesis[] }) {
 
                   {/* Contradicting */}
                   <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
-                      ✗ Contradicting ({hyp.contradicting_evidence.length})
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
+                      <XCircle size={12} /> Contradicting ({hyp.contradicting_evidence.length})
                     </div>
                     {hyp.contradicting_evidence.length === 0 ? (
                       <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>No contradicting evidence identified.</div>
@@ -589,8 +606,8 @@ function HypothesesSection({ hypotheses }: { hypotheses: Hypothesis[] }) {
                 {/* Limitations */}
                 {hyp.limitations.length > 0 && (
                   <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
-                      ⚠ Evidence Limitations ({hyp.limitations.length})
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
+                      <AlertTriangle size={12} /> Evidence Limitations ({hyp.limitations.length})
                     </div>
                     <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 5 }}>
                       {hyp.limitations.map((lim, i) => (
@@ -622,7 +639,7 @@ function FinalAssessmentSection({ assessment }: { assessment: FinalAssessment })
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Prototype label */}
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, padding: '4px 12px', borderRadius: 999, background: 'rgba(99,102,241,0.08)', color: 'var(--primary)', border: '1px solid rgba(99,102,241,0.2)', alignSelf: 'flex-start' }}>
-        🧠 {assessment.prototype_label}
+        <Activity size={12} /> {assessment.prototype_label}
       </div>
 
       {/* Assessment text + confidence */}
@@ -672,7 +689,9 @@ function FinalAssessmentSection({ assessment }: { assessment: FinalAssessment })
       {/* Limitations */}
       {assessment.limitations.length > 0 && (
         <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 12, padding: '14px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309', marginBottom: 10 }}>⚠ Limitations</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#b45309', marginBottom: 10 }}>
+            <AlertTriangle size={14} /> Limitations
+          </div>
           <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
             {assessment.limitations.map((lim, i) => (
               <li key={i} style={{ fontSize: 11, color: '#78350f', lineHeight: 1.5 }}>• {lim}</li>
@@ -757,8 +776,8 @@ function IPTag({ label, ip }: { label: string; ip: string }) {
 
 function SimulatedBadge() {
   return (
-    <div style={{ fontSize: 10, fontWeight: 700, padding: '4px 12px', borderRadius: 999, background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1px solid rgba(245,158,11,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
-      ⚠ SIMULATED EVIDENCE
+    <div style={{ fontSize: 10, fontWeight: 700, padding: '4px 12px', borderRadius: 999, background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1px solid rgba(245,158,11,0.4)', display: 'flex', alignItems: 'center', gap: 5 }}>
+      <AlertTriangle size={12} /> SIMULATED EVIDENCE
     </div>
   );
 }

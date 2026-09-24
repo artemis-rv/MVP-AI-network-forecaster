@@ -7,6 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { ReactFlowProvider } from '@xyflow/react';
 import {
   Upload, Play, RefreshCw, AlertTriangle, Info, Search,
+  CheckCircle2, UploadCloud, AlertCircle, Layers, Clock, ShieldAlert,
+  Activity, FileSearch, Link2, BarChart2, Calendar, Settings, XCircle,
 } from 'lucide-react';
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -52,17 +54,29 @@ function formatDuration(s: number): string {
   return `${s.toFixed(1)}s`;
 }
 
-// ── Stage label from current_stage ─────────────────────────────────────────
+// ── Stage labels & icons from current_stage ──────────────────────────────────
 const STAGE_LABELS: Record<string, string> = {
-  queued:              '⏳ Queued…',
-  parsing:             '📂 Parsing PCAP…',
-  building_flows:      '🔗 Building Flows…',
-  feature_engineering: '📊 Feature Engineering…',
-  detection:           '🔍 Heuristic Detection…',
-  timeline:            '📅 Building Timeline…',
-  processing:          '⚙️ Processing…',
-  completed:           '✅ Complete',
-  failed:              '❌ Failed',
+  queued:              'Queued…',
+  parsing:             'Parsing PCAP…',
+  building_flows:      'Building Flows…',
+  feature_engineering: 'Feature Engineering…',
+  detection:           'Heuristic Detection…',
+  timeline:            'Building Timeline…',
+  processing:          'Processing…',
+  completed:           'Complete',
+  failed:              'Failed',
+};
+
+const STAGE_ICONS: Record<string, React.ReactNode> = {
+  queued:              <Clock size={16} color="var(--primary)" />,
+  parsing:             <FileSearch size={16} color="var(--primary)" />,
+  building_flows:      <Link2 size={16} color="var(--primary)" />,
+  feature_engineering: <BarChart2 size={16} color="var(--primary)" />,
+  detection:           <Search size={16} color="var(--primary)" />,
+  timeline:            <Calendar size={16} color="var(--primary)" />,
+  processing:          <Settings size={16} color="var(--primary)" />,
+  completed:           <CheckCircle2 size={16} color="var(--color-live)" />,
+  failed:              <XCircle size={16} color="var(--color-critical)" />,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -155,8 +169,8 @@ function UploadView({ onUpload, onDemo }: { onUpload: (f: File) => void; onDemo:
 
   function validateFile(file: File): string | null {
     const ext = file.name.toLowerCase().split('.').pop();
-    if (!['pcap', 'pcapng', 'cap'].includes(ext ?? ''))
-      return `Unsupported format: .${ext}. Accepted: .pcap, .pcapng, .cap`;
+    if (!['pcap', 'pcapng', 'cap', 'gz', 'dmp'].includes(ext ?? ''))
+      return `Unsupported format: .${ext}. Accepted: .pcap, .pcapng, .cap, .gz, .dmp`;
     if (file.size === 0) return 'File is empty.';
     if (file.size > 50 * 1024 * 1024) return 'File too large (max 50 MB).';
     return null;
@@ -194,11 +208,13 @@ function UploadView({ onUpload, onDemo }: { onUpload: (f: File) => void; onDemo:
         <input
           ref={inputRef}
           type="file"
-          accept=".pcap,.pcapng,.cap"
+          accept=".pcap,.pcapng,.cap,.gz,.dmp"
           style={{ display: 'none' }}
           onChange={e => handleFiles(e.target.files)}
         />
-        <div style={{ fontSize: 40, marginBottom: 12 }}>{selectedFile ? '✅' : '📂'}</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+          {selectedFile ? <CheckCircle2 size={38} color="var(--color-live)" /> : <UploadCloud size={38} color="var(--primary)" />}
+        </div>
         {selectedFile ? (
           <>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-live)', marginBottom: 4 }}>{selectedFile.name}</div>
@@ -209,7 +225,7 @@ function UploadView({ onUpload, onDemo }: { onUpload: (f: File) => void; onDemo:
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
               Drop a PCAP file here or click to browse
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Supported: .pcap, .pcapng, .cap · Max 50 MB</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Supported: .pcap, .pcapng, .cap, .gz, .dmp · Max 50 MB</div>
           </>
         )}
       </div>
@@ -259,7 +275,9 @@ function UploadView({ onUpload, onDemo }: { onUpload: (f: File) => void; onDemo:
         Analysis extracts flows, computes temporal features, and applies lightweight heuristics to detect suspicious patterns.
         <br /><br />
         <strong>"Load Demo PCAP"</strong> generates a synthetic dataset to demonstrate the full analysis workflow without requiring a real capture.
-        ⚠ All demo data is clearly labeled as simulated.
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
+          <AlertTriangle size={12} color="var(--color-warning)" /> All demo data is clearly labeled as simulated.
+        </div>
       </div>
     </div>
   );
@@ -272,7 +290,8 @@ function UploadView({ onUpload, onDemo }: { onUpload: (f: File) => void; onDemo:
 function ProcessingView({ progress, stage, packets, flows, jobId }: {
   progress: number; stage: string; packets: number; flows: number; jobId: string | null;
 }) {
-  const stageLabel = STAGE_LABELS[stage] ?? `⚙️ ${stage}…`;
+  const stageLabel = STAGE_LABELS[stage] ?? `${stage}…`;
+  const stageIcon = STAGE_ICONS[stage] ?? <Settings size={18} />;
 
   return (
     <div style={{ maxWidth: 560, margin: '40px auto', display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center', textAlign: 'center' }}>
@@ -294,7 +313,10 @@ function ProcessingView({ progress, stage, packets, flows, jobId }: {
       </div>
 
       <div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{stageLabel}</div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+          <span style={{ color: 'var(--primary)', display: 'inline-flex' }}>{stageIcon}</span>
+          <span>{stageLabel}</span>
+        </div>
         {jobId && <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{jobId}</div>}
       </div>
 
@@ -333,7 +355,9 @@ function ProcessingView({ progress, stage, packets, flows, jobId }: {
 function ErrorView({ error, onReset }: { error: string | null; onReset: () => void }) {
   return (
     <div style={{ maxWidth: 520, margin: '48px auto', textAlign: 'center' }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>⚠️</div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+        <AlertCircle size={44} color="var(--color-critical)" />
+      </div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-critical)', marginBottom: 10 }}>Analysis Failed</h2>
       <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 12, padding: '14px 18px', fontSize: 12, color: '#b91c1c', marginBottom: 20, textAlign: 'left', lineHeight: 1.6 }}>
         {error ?? 'An unknown error occurred during processing.'}
@@ -372,10 +396,10 @@ function ResultView({ result, jobId, filename, isDemo }: {
 
       {/* ── KPI Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-        <HistKpi label="Packets Analyzed" value={result.packet_count.toLocaleString()} icon="📦" color="var(--primary)" sub={`${result.flow_count} flows`} />
-        <HistKpi label="Capture Duration" value={formatDuration(result.duration_seconds)} icon="⏱" color="var(--secondary)" sub={`${result.temporal_windows.length} windows`} />
-        <HistKpi label="Suspicious Indicators" value={susCount.toString()} icon="⚠️" color={susCount > 0 ? 'var(--color-warning)' : 'var(--color-live)'} sub={`${critCount} critical`} />
-        <HistKpi label="Protocol Mix" value={result.protocol_distribution[0]?.protocol ?? 'N/A'} icon="🔌" color="var(--color-live)" sub={`${result.protocol_distribution.length} protocols`} />
+        <HistKpi label="Packets Analyzed" value={result.packet_count.toLocaleString()} icon={<Layers size={16} />} color="var(--primary)" sub={`${result.flow_count} flows`} />
+        <HistKpi label="Capture Duration" value={formatDuration(result.duration_seconds)} icon={<Clock size={16} />} color="var(--secondary)" sub={`${result.temporal_windows.length} windows`} />
+        <HistKpi label="Suspicious Indicators" value={susCount.toString()} icon={<ShieldAlert size={16} />} color={susCount > 0 ? 'var(--color-warning)' : 'var(--color-live)'} sub={`${critCount} critical`} />
+        <HistKpi label="Protocol Mix" value={result.protocol_distribution[0]?.protocol ?? 'N/A'} icon={<Activity size={16} />} color="var(--color-live)" sub={`${result.protocol_distribution.length} protocols`} />
       </div>
 
       {/* ── Traffic Timeline Chart ── */}
@@ -634,11 +658,11 @@ function MetadataGrid({ result, jobId, filename, isDemo }: {
 // UTILITY COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function HistKpi({ label, value, icon, color, sub }: { label: string; value: string; icon: string; color: string; sub: string }) {
+function HistKpi({ label, value, icon, color, sub }: { label: string; value: string; icon: React.ReactNode; color: string; sub: string }) {
   return (
     <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', padding: '16px', boxShadow: 'var(--shadow-sm)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 18 }}>{icon}</span>
+        <span style={{ color, display: 'flex', alignItems: 'center' }}>{icon}</span>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{label}</span>
       </div>
       <div style={{ fontSize: 24, fontWeight: 900, color, letterSpacing: '-0.5px', marginBottom: 2 }}>{value}</div>
@@ -669,8 +693,8 @@ function SectionCard({ title, subtitle, children, badge }: {
 
 function DemoBadge() {
   return (
-    <div style={{ fontSize: 10, fontWeight: 700, padding: '4px 12px', borderRadius: 999, background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', gap: 4 }}>
-      ⚠ DEMO DATA
+    <div style={{ fontSize: 10, fontWeight: 700, padding: '4px 12px', borderRadius: 999, background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', gap: 5 }}>
+      <AlertTriangle size={11} /> DEMO DATA
     </div>
   );
 }

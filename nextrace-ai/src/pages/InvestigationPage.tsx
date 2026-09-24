@@ -183,7 +183,9 @@ export function InvestigationPage() {
                 <DetailRow label="Predicted Next" value={nextStage} highlight={!currentForecast?.is_benign} />
               </div>
             </div>
-            <div style={{ marginTop: 8, fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>⚠ Demo / simulated entity data</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              <AlertTriangle size={10} /> Demo / simulated entity data
+            </div>
           </div>
 
           {/* Attack Stage Overlay */}
@@ -244,7 +246,9 @@ export function InvestigationPage() {
           {showFindingCard && findings.length > 0 && (
             <div style={{ ...cardStyle, border: '1px solid rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.03)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>📋 Finding</h3>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--primary)', margin: 0 }}>
+                  <FileText size={14} /> Finding
+                </h3>
                 <span style={{ fontSize: 8, fontWeight: 800, padding: '2px 7px', borderRadius: 999, background: 'rgba(99,102,241,0.1)', color: 'var(--primary)', border: '1px solid rgba(99,102,241,0.2)' }}>
                   DEMO ANALYSIS
                 </span>
@@ -264,8 +268,8 @@ export function InvestigationPage() {
                     <span style={{ color: 'var(--text-muted)' }}>Predicted next: </span>
                     <strong style={{ color: 'var(--color-critical)' }}>{findings[0].predictedNext}</strong>
                   </div>
-                  <div style={{ marginTop: 6, fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                    ⚠ Generated: {findings[0].generatedAt} · {findings[0].isDemoFinding ? 'Demo finding — not real threat intelligence' : ''}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    <AlertTriangle size={10} /> Generated: {findings[0].generatedAt} · {findings[0].isDemoFinding ? 'Demo finding — not real threat intelligence' : ''}
                   </div>
                 </>
               )}
@@ -324,12 +328,15 @@ function AttackStageBar({ currentStage, predictedStage, isBenign }: { currentSta
         const isDone  = !isBenign && ATTACK_STAGES.indexOf(s) < ATTACK_STAGES.indexOf(currentStage as typeof ATTACK_STAGES[number]);
         return (
           <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
               background: isCur ? colors.bg : isPred ? colors.bg + '50' : isDone ? '#d1fae5' : 'var(--bg-workspace)',
               color: isCur ? colors.text : isPred ? colors.text : isDone ? 'var(--color-live)' : 'var(--text-muted)',
               border: `1px solid ${isCur ? colors.border : isPred ? colors.border + '60' : isDone ? 'rgba(16,185,129,0.3)' : 'var(--border-subtle)'}`,
             }}>
-              {isDone ? '✓ ' : isCur ? '● ' : isPred ? '○ ' : ''}{s}
+              {isDone ? <CheckCircle size={10} /> : isCur ? <Circle size={8} fill="currentColor" /> : isPred ? <Circle size={8} /> : null}
+              {s}
             </span>
             {i < ATTACK_STAGES.length - 1 && <span style={{ color: 'var(--border-default)', fontSize: 12 }}>→</span>}
           </div>
