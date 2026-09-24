@@ -16,6 +16,7 @@ import { useSimulatorStore, DEFAULT_CONFIG, K_MIN, K_MAX } from '@/store/simulat
 import { useFindingsStore } from '@/store/findingsStore';
 import { useNavigate } from 'react-router-dom';
 import type { SimEvent, ForecastSnapshot, SyntheticFeatureProfile } from '@/types/simulator';
+import { SimulatorLiveTraffic } from '@/components/simulation/SimulatorLiveTraffic';
 
 // ── Stage colours (separate from forecast STAGE_COLORS) ─────────────────────
 const STAGE_META: Record<string, { color: string; bg: string; border: string; icon: (size?: number) => React.ReactNode }> = {
@@ -52,7 +53,7 @@ export function SimulationPage() {
     config, scenarios, setConfig, loadScenarios,
     simulationId, status, currentStep, totalSteps, stageSequence,
     currentStage, currentEvent, currentForecast, currentFeatures,
-    allEvents, allForecasts, selectedStep, error,
+    liveTrafficHistory, allEvents, allForecasts, selectedStep, error,
     startSimulation, pauseSimulation, resumeSimulation,
     stopSimulation, resetSimulation, nextStep, selectStep, hardReset,
   } = useSimulatorStore();
@@ -199,9 +200,23 @@ export function SimulationPage() {
           </div>
         )}
 
+        {/* ── Current live traffic ── */}
+        {isActive && (
+          <SimCard title="Simulator Live Traffic" icon={<Activity size={15}/>} subtitle="Current synthetic event from the active simulation">
+            <SimulatorLiveTraffic
+              event={currentEvent}
+              features={currentFeatures}
+              history={liveTrafficHistory}
+              status={status}
+              currentStep={currentStep}
+              totalSteps={totalSteps}
+            />
+          </SimCard>
+        )}
+
         {/* ── Forecast Panel (only when active) ── */}
         {isActive && selectedForecast && (
-          <SimCard title="Simulator Forecast" icon={<TrendingUp size={15}/>} subtitle="Deterministic rule-based prediction — prototype only">
+          <SimCard title="Simulator Forecast · FUTURE / PREDICTED" icon={<TrendingUp size={15}/>} subtitle="Deterministic rule-based prediction — prototype only">
             <ForecastPanel forecast={selectedForecast}/>
           </SimCard>
         )}
