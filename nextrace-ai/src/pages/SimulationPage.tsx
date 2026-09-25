@@ -1,4 +1,4 @@
-// NEXTRACE AI — Attack Path Forecaster Simulator (Live Operations)
+// NEXTRACE AI — Attack Path Forecaster Simulator (FORECAST SIMULATION)
 // Route: /simulation
 // Multi-Stage Attack Path Forecasting & Forward Simulation on Enterprise Topology
 
@@ -56,6 +56,7 @@ export function SimulationPage() {
     liveTrafficHistory, allEvents, allForecasts, selectedStep, error,
     startSimulation, pauseSimulation, resumeSimulation,
     stopSimulation, resetSimulation, nextStep, selectStep, hardReset,
+    snapshotNodes, snapshotEdges
   } = useSimulatorStore();
 
   const { session } = useLiveStore();
@@ -126,7 +127,7 @@ export function SimulationPage() {
                 Attack Path Forecaster Simulator
               </h1>
               <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 999, background: 'rgba(99,102,241,0.1)', color: 'var(--primary)', border: '1px solid rgba(99,102,241,0.25)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                Live Operations
+                FORECAST SIMULATION
               </span>
               <SimOnlyBadge/>
             </div>
@@ -207,23 +208,27 @@ export function SimulationPage() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>
-                  {isLiveRunning ? 'Live Network Operational Situation' : 'Live Situation Synchronizer'}
+                  {isActive ? 'Forecast Simulation Active' : (isLiveRunning ? 'Live Network Operational Situation' : 'Live Situation Synchronizer')}
                 </span>
                 <span style={{
                   fontSize: 9,
                   fontWeight: 800,
                   padding: '2px 8px',
                   borderRadius: 999,
-                  background: isLiveRunning ? '#d1fae5' : 'var(--bg-workspace)',
-                  color: isLiveRunning ? '#065f46' : 'var(--text-muted)',
-                  border: `1px solid ${isLiveRunning ? '#a7f3d0' : 'var(--border-default)'}`,
+                  background: isActive ? '#f5f3ff' : (isLiveRunning ? '#d1fae5' : 'var(--bg-workspace)'),
+                  color: isActive ? '#6d28d9' : (isLiveRunning ? '#065f46' : 'var(--text-muted)'),
+                  border: `1px solid ${isActive ? '#ddd6fe' : (isLiveRunning ? '#a7f3d0' : 'var(--border-default)')}`,
                   letterSpacing: '0.4px',
                 }}>
-                  {isLiveRunning ? '● LIVE STREAM ACTIVE' : 'STREAM IDLE'}
+                  {isActive ? '● SNAPSHOT CAPTURED' : (isLiveRunning ? '● LIVE STREAM ACTIVE' : 'STREAM IDLE')}
                 </span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>
-                {isLiveRunning ? (
+                {isActive ? (
+                  <span>
+                    Forecast engine operating on immutable snapshot captured from Live Network.
+                  </span>
+                ) : isLiveRunning ? (
                   <span>
                     Current Detected Stage: <strong style={{ color: 'var(--text-primary)' }}>{liveCurrentStage}</strong>
                     {' '}→ Next Stage Prediction: <strong style={{ color: 'var(--primary)' }}>{livePredictedNext}</strong>
@@ -346,6 +351,8 @@ export function SimulationPage() {
               currentForecast={selectedForecast}
               previewStages={previewSequence}
               height={isActive ? 460 : 490}
+              snapshotNodes={snapshotNodes}
+              snapshotEdges={snapshotEdges}
             />
           </div>
         </div>
@@ -443,7 +450,7 @@ function ConfigForm({
       </FormField>
 
       {/* K slider */}
-      <FormField label={`Attack Stages  K = ${config.k}  (range: ${K_MIN}–${K_MAX})`}>
+      <FormField label={`Forecast Horizon: K = ${config.k}  (range: ${K_MIN}–${K_MAX})`}>
         <input
           type="range" min={K_MIN} max={K_MAX} step={1}
           value={config.k}

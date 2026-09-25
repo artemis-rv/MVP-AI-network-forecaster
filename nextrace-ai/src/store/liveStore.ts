@@ -73,7 +73,7 @@ interface LiveStore {
 // ─── Store implementation ─────────────────────────────────────────────────────
 export const useLiveStore = create<LiveStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       wsConnected: false,
       backendAvailable: false,
       session: null,

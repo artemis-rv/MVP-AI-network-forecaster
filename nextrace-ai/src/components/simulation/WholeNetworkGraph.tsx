@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  ShieldAlert, Server, Database, Lock, Laptop, Target,
+  ShieldAlert, Server, Laptop, Target,
 } from 'lucide-react';
 import type { SimEvent, ForecastSnapshot } from '@/types/simulator';
 
@@ -33,166 +33,8 @@ export interface TopologyNodeInfo {
   ports: string;
 }
 
-// ─── 5-Node Clean Enterprise Topology ──────────────────────────────────────
-// Arranged left-to-right in a single horizontal lane for clarity.
-// Attack path flows cleanly L→R. Legitimate traffic is shown as quiet baselines.
-
-export const ENTERPRISE_TOPOLOGY: TopologyNodeInfo[] = [
-  {
-    id: 'ext-attacker',
-    ip: '203.0.113.42',
-    name: 'Threat Actor',
-    role: 'Adversary Ingress',
-    category: 'external',
-    zone: 'External WAN',
-    x: 80,
-    y: 120,
-    os: 'Kali Linux / Automated C2',
-    ports: 'Dynamic / Ephemeral',
-  },
-  {
-    id: 'fw-edge',
-    ip: '192.168.1.1',
-    name: 'Edge Firewall',
-    role: 'Perimeter Gateway',
-    category: 'gateway',
-    zone: 'DMZ Perimeter',
-    x: 380,
-    y: 120,
-    os: 'FortiGate NGFW',
-    ports: '80, 443, 22, 1194',
-  },
-  {
-    id: 'srv-web',
-    ip: '192.168.1.25',
-    name: 'Web App Server',
-    role: 'Public-Facing App',
-    category: 'server',
-    zone: 'DMZ Subnet',
-    x: 380,
-    y: 350,
-    os: 'Ubuntu 22.04 (Nginx)',
-    ports: '80, 443, 22',
-  },
-  {
-    id: 'ws-admin',
-    ip: '192.168.1.20',
-    name: 'Admin Workstation',
-    role: 'Privileged Endpoint',
-    category: 'workstation',
-    zone: 'Admin Subnet',
-    x: 720,
-    y: 120,
-    os: 'Windows 11 Pro (RSAT)',
-    ports: '22, 445, 5985',
-  },
-  {
-    id: 'srv-db',
-    ip: '192.168.1.50',
-    name: 'Crown Jewel DB',
-    role: 'Sensitive Database',
-    category: 'database',
-    zone: 'Isolated Data Tier',
-    x: 720,
-    y: 350,
-    os: 'RHEL 9 (PostgreSQL/MSSQL)',
-    ports: '5432, 1433',
-  },
-];
-
-// Baseline network flows — shown as subtle grey lines when no attack is active
-const BASELINE_CONNECTIONS = [
-  { from: 'ext-attacker', to: 'fw-edge',   label: 'WAN' },
-  { from: 'fw-edge',      to: 'srv-web',   label: 'HTTP/S' },
-  { from: 'srv-web',      to: 'ws-admin',  label: 'Admin API' },
-  { from: 'ws-admin',     to: 'srv-db',    label: 'DB Query' },
-];
-
-// Stage → which edge lights up (only current active step goes red)
-export interface StagePathDefinition {
-  stage: string;
-  sourceId: string;
-  targetId: string;
-  protocol: string;
-  technique: string;
-  description: string;
-  risk: number;
-}
-
-const STAGE_PATH_MAP: Record<string, StagePathDefinition> = {
-  'Reconnaissance': {
-    stage: 'Reconnaissance',
-    sourceId: 'ext-attacker',
-    targetId: 'fw-edge',
-    protocol: 'TCP SYN Scan (80/443)',
-    technique: 'T1046: Network Service Scanning',
-    description: 'External threat actor scanning the perimeter firewall for open ports and services.',
-    risk: 35,
-  },
-  'Initial Access': {
-    stage: 'Initial Access',
-    sourceId: 'ext-attacker',
-    targetId: 'srv-web',
-    protocol: 'TCP SSH (22)',
-    technique: 'T1190: Exploit Public-Facing Application',
-    description: 'Exploiting a web vulnerability to gain foothold on the Web App Server.',
-    risk: 65,
-  },
-  'Internal Discovery': {
-    stage: 'Internal Discovery',
-    sourceId: 'srv-web',
-    targetId: 'ws-admin',
-    protocol: 'SMB / LDAP (389)',
-    technique: 'T1087: Account & Domain Enumeration',
-    description: 'Compromised web server probing internal hosts to locate privileged workstations.',
-    risk: 75,
-  },
-  'Lateral Movement': {
-    stage: 'Lateral Movement',
-    sourceId: 'srv-web',
-    targetId: 'ws-admin',
-    protocol: 'WinRM (5985)',
-    technique: 'T1021.002: Windows Admin Shares',
-    description: 'Pivoting from web server into the privileged Admin Workstation.',
-    risk: 88,
-  },
-  'Command & Control': {
-    stage: 'Command & Control',
-    sourceId: 'ws-admin',
-    targetId: 'srv-db',
-    protocol: 'HTTPS (443) Beacon',
-    technique: 'T1071.001: Web Protocols — C2 Beaconing',
-    description: 'Compromised admin station establishing C2 channel through DB egress route.',
-    risk: 92,
-  },
-  'Data Exfiltration': {
-    stage: 'Data Exfiltration',
-    sourceId: 'srv-db',
-    targetId: 'ext-attacker',
-    protocol: 'TCP Encrypted (443)',
-    technique: 'T1048.002: Exfiltration to Cloud Storage',
-    description: 'Mass export of database records exfiltrated out to adversary external endpoint.',
-    risk: 98,
-  },
-  'Persistence': {
-    stage: 'Persistence',
-    sourceId: 'ws-admin',
-    targetId: 'srv-web',
-    protocol: 'TCP Reverse Shell (4444)',
-    technique: 'T1053: Scheduled Task / Persistence Hook',
-    description: 'Secondary persistence backdoor planted on web server for resilience.',
-    risk: 90,
-  },
-  'Impact': {
-    stage: 'Impact',
-    sourceId: 'ext-attacker',
-    targetId: 'srv-db',
-    protocol: 'Multi-stream Crypto',
-    technique: 'T1486: Data Encrypted for Impact',
-    description: 'Ransomware payload deploying across database and network shares.',
-    risk: 100,
-  },
-};
+// Removed fixed STAGE_PATH_MAP and ENTERPRISE_TOPOLOGY.
+// The graph will now operate entirely on the captured live network snapshot.
 
 // ─── Custom Node Component ─────────────────────────────────────────────────
 
@@ -252,10 +94,7 @@ function EnterpriseNodeComponent({ data }: NodeProps) {
   const getIcon = () => {
     switch (node.category) {
       case 'external': return <ShieldAlert size={17} color={status === 'active' ? '#ef4444' : '#94a3b8'} />;
-      case 'gateway':  return <Lock size={17} color={status === 'active' ? '#ef4444' : 'var(--primary)'} />;
-      case 'database': return <Database size={17} color={status === 'active' ? '#ef4444' : '#a855f7'} />;
       case 'server':   return <Server size={17} color={status === 'active' ? '#ef4444' : '#3b82f6'} />;
-      case 'workstation':
       default: return <Laptop size={17} color={status === 'active' ? '#ef4444' : '#10b981'} />;
     }
   };
@@ -298,7 +137,7 @@ function EnterpriseNodeComponent({ data }: NodeProps) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: 3 }}>
         {getIcon()}
-        <span style={{ fontSize: 11, fontWeight: 700, color: theme.text }}>{node.name}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: theme.text }}>{node.role || node.name}</span>
       </div>
 
       <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', fontWeight: 600 }}>
@@ -325,71 +164,63 @@ interface WholeNetworkGraphProps {
   totalSteps?: number;
   selectedStep: number | null;
   currentForecast?: ForecastSnapshot | null;
+  snapshotNodes?: any[];
+  snapshotEdges?: any[];
   previewStages?: string[];
   height?: number;
 }
 
 export function WholeNetworkGraph({
-  currentStage: _currentStage,
   currentEvent: _currentEvent,
   stageSequence,
   currentStep,
-  totalSteps: _totalSteps,
   selectedStep,
-  currentForecast: _currentForecast,
   previewStages = [],
   height = 450,
+  snapshotNodes = [],
+  snapshotEdges = [],
 }: WholeNetworkGraphProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const activeStepIdx = selectedStep !== null ? selectedStep : currentStep;
 
-  const { traversedStages, activeStageName, forecastedStages } = useMemo(() => {
-    if (stageSequence.length === 0) {
-      return { traversedStages: [], activeStageName: null, forecastedStages: previewStages };
-    }
-    if (activeStepIdx < 0) {
-      return { traversedStages: [], activeStageName: null, forecastedStages: stageSequence };
-    }
-    const traversed = stageSequence.slice(0, activeStepIdx);
+  // Derive layout from snapshotNodes if they don't have x/y
+  const layoutNodes = useMemo(() => {
+    let xOffset = 50;
+    let yOffset = 100;
+    return snapshotNodes.map((n, i) => {
+      const type = n.type || 'internal';
+      return {
+        id: n.id,
+        ip: n.ip,
+        name: n.ip,
+        role: n.label || type,
+        category: type,
+        zone: type === 'external' ? 'WAN' : 'LAN',
+        x: n.x ?? (xOffset + (i % 4) * 200),
+        y: n.y ?? (yOffset + Math.floor(i / 4) * 150),
+        os: 'Unknown',
+        ports: 'Dynamic',
+      } as TopologyNodeInfo;
+    });
+  }, [snapshotNodes]);
+
+  const { activeStageName, activeEvent } = useMemo(() => {
     const active = stageSequence[activeStepIdx] || null;
-    const forecasted = stageSequence.slice(activeStepIdx + 1);
-    return { traversedStages: traversed, activeStageName: active, forecastedStages: forecasted };
-  }, [stageSequence, activeStepIdx, previewStages]);
+    return { activeStageName: active, activeEvent: _currentEvent };
+  }, [stageSequence, activeStepIdx, previewStages, _currentEvent]);
 
-  // Build nodes — only CURRENT active step makes nodes red, traversed are dimmed
+  // Build nodes
   const nodes: Node[] = useMemo(() => {
-    const activeSourceId = activeStageName ? STAGE_PATH_MAP[activeStageName]?.sourceId ?? '' : '';
-    const activeTargetId = activeStageName ? STAGE_PATH_MAP[activeStageName]?.targetId ?? '' : '';
+    const activeSourceId = activeEvent ? activeEvent.source : '';
+    const activeTargetId = activeEvent ? activeEvent.destination : '';
 
-    const traversedNodeIds = new Set<string>();
-    traversedStages.forEach(st => {
-      const def = STAGE_PATH_MAP[st];
-      if (def) {
-        traversedNodeIds.add(def.sourceId);
-        traversedNodeIds.add(def.targetId);
-      }
-    });
-
-    const projectedNodeMap = new Map<string, string>();
-    forecastedStages.forEach((st, idx) => {
-      const def = STAGE_PATH_MAP[st];
-      if (def && !projectedNodeMap.has(def.targetId)) {
-        projectedNodeMap.set(def.targetId, `K+${idx + 1}: ${st}`);
-      }
-    });
-
-    return ENTERPRISE_TOPOLOGY.map(n => {
+    return layoutNodes.map(n => {
       let threatStatus: 'active' | 'traversed' | 'projected' | 'benign' = 'benign';
       let forecastTag = '';
 
-      if (n.id === activeTargetId || n.id === activeSourceId) {
+      if (n.ip === activeTargetId || n.ip === activeSourceId || n.id === activeTargetId || n.id === activeSourceId) {
         threatStatus = 'active';
-      } else if (projectedNodeMap.has(n.id)) {
-        threatStatus = 'projected';
-        forecastTag = projectedNodeMap.get(n.id)!;
-      } else if (traversedNodeIds.has(n.id)) {
-        threatStatus = 'traversed';
       }
 
       return {
@@ -399,23 +230,24 @@ export function WholeNetworkGraph({
         data: { node: n, threatStatus, forecastTag, isSelected: selectedNodeId === n.id },
       };
     });
-  }, [traversedStages, activeStageName, forecastedStages, selectedNodeId]);
+  }, [layoutNodes, activeEvent, selectedNodeId]);
 
-  // Build edges — ONLY the current active step edge is red, traversed are faded
+  // Build edges
   const edges: Edge[] = useMemo(() => {
     const edgeList: Edge[] = [];
     const highlightedLinks = new Set<string>();
 
-    // 1. Current active step — bold glowing red (THE malicious path)
-    if (activeStageName) {
-      const def = STAGE_PATH_MAP[activeStageName];
-      if (def) {
-        const key = `${def.sourceId}-${def.targetId}`;
+    if (activeEvent && activeStageName) {
+      const sourceId = layoutNodes.find(n => n.ip === activeEvent.source || n.id === activeEvent.source)?.id;
+      const targetId = layoutNodes.find(n => n.ip === activeEvent.destination || n.id === activeEvent.destination)?.id;
+      
+      if (sourceId && targetId) {
+        const key = `${sourceId}-${targetId}`;
         highlightedLinks.add(key);
         edgeList.push({
           id: `active-${key}`,
-          source: def.sourceId,
-          target: def.targetId,
+          source: sourceId,
+          target: targetId,
           animated: true,
           style: { stroke: '#dc2626', strokeWidth: 4, filter: 'drop-shadow(0 0 8px rgba(220,38,38,0.7))' },
           label: `⚡ ${activeStageName}`,
@@ -425,48 +257,8 @@ export function WholeNetworkGraph({
       }
     }
 
-    // 2. Traversed steps — subtle faded pink (not distracting red)
-    traversedStages.forEach((st, i) => {
-      const def = STAGE_PATH_MAP[st];
-      if (!def) return;
-      const key = `${def.sourceId}-${def.targetId}`;
-      if (!highlightedLinks.has(key)) {
-        highlightedLinks.add(key);
-        edgeList.push({
-          id: `traversed-${i}-${key}`,
-          source: def.sourceId,
-          target: def.targetId,
-          animated: false,
-          style: { stroke: '#fca5a5', strokeWidth: 2, opacity: 0.8 },
-          label: `✓ ${st}`,
-          labelStyle: { fontSize: 8, fontWeight: 700, fill: '#9f1239' },
-          labelBgStyle: { fill: '#fff1f2', fillOpacity: 0.85, rx: 4, ry: 4 },
-        });
-      }
-    });
-
-    // 3. Forecasted K-steps — glowing purple dashed
-    forecastedStages.forEach((st, idx) => {
-      const def = STAGE_PATH_MAP[st];
-      if (!def) return;
-      const key = `${def.sourceId}-${def.targetId}`;
-      if (!highlightedLinks.has(key)) {
-        highlightedLinks.add(key);
-        edgeList.push({
-          id: `forecast-${idx}-${key}`,
-          source: def.sourceId,
-          target: def.targetId,
-          animated: true,
-          style: { stroke: '#8b5cf6', strokeWidth: 2.5, strokeDasharray: '7,5', filter: 'drop-shadow(0 0 5px rgba(139,92,246,0.5))' },
-          label: `🔮 K+${idx + 1}: ${st}`,
-          labelStyle: { fontSize: 9, fontWeight: 700, fill: '#6d28d9' },
-          labelBgStyle: { fill: '#f5f3ff', fillOpacity: 0.95, rx: 4, ry: 4 },
-        });
-      }
-    });
-
-    // 4. Baseline topology — quiet grey substrate flows
-    BASELINE_CONNECTIONS.forEach((bc, idx) => {
+    // Baseline flows from snapshotEdges
+    snapshotEdges.forEach((bc, idx) => {
       const key = `${bc.from}-${bc.to}`;
       if (!highlightedLinks.has(key)) {
         edgeList.push({
@@ -475,7 +267,7 @@ export function WholeNetworkGraph({
           target: bc.to,
           animated: false,
           style: { stroke: 'var(--border-default)', strokeWidth: 1.5, opacity: 0.45 },
-          label: bc.label,
+          label: bc.label || 'Flow',
           labelStyle: { fontSize: 8, fill: 'var(--text-muted)' },
           labelBgStyle: { fill: 'var(--bg-card)', fillOpacity: 0.75, rx: 3, ry: 3 },
         });
@@ -483,12 +275,11 @@ export function WholeNetworkGraph({
     });
 
     return edgeList;
-  }, [traversedStages, activeStageName, forecastedStages]);
+  }, [activeEvent, activeStageName, snapshotEdges, layoutNodes]);
 
   const nodeTypes = useMemo(() => ({ enterpriseNode: EnterpriseNodeComponent }), []);
-
-  const selectedNode = ENTERPRISE_TOPOLOGY.find(n => n.id === selectedNodeId);
-  const activeDef = activeStageName ? STAGE_PATH_MAP[activeStageName] : null;
+  const selectedNode = layoutNodes.find(n => n.id === selectedNodeId);
+  const activeDef = activeStageName ? { stage: activeStageName, technique: activeEvent?.protocol || 'Unknown', description: 'Forecasted event based on live network state.', risk: 85 } : null;
 
   return (
     <div style={{ position: 'relative', width: '100%', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border-default)', background: 'var(--bg-workspace)' }}>

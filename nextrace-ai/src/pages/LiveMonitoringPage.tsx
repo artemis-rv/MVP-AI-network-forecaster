@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
-  Play, Square, WifiOff, Pause, RotateCcw, Trash2,
+  Play, Square, WifiOff, RotateCcw, Trash2,
   Radio, Filter, RefreshCw, AlertTriangle, ShieldAlert, CheckCircle2, ShieldCheck, Clock,
+  Maximize2, X,
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -20,7 +21,7 @@ export function LiveMonitoringPage() {
   const { addToast } = useAppStore();
   const {
     wsConnected, session, backendAvailable, setBackendAvailable,
-    displayEvents, isPaused, setPaused, clearEvents,
+    displayEvents, isPaused, clearEvents,
     temporalHistory, currentTemporal,
     liveNodes, liveEdges,
     searchQuery, setSearchQuery,
@@ -30,13 +31,25 @@ export function LiveMonitoringPage() {
   const isRunning = session?.running ?? false;
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [isGraphModalOpen, setIsGraphModalOpen] = useState(false);
 
-  // Check backend health on mount
+  // Check backend health and sync running session status on mount / route switch
   useEffect(() => {
     apiService.checkHealth()
-      .then(() => setBackendAvailable(true))
+      .then(async () => {
+        setBackendAvailable(true);
+        try {
+          const status = await apiService.getLiveStatus();
+          useLiveStore.getState().setSession(status);
+          if (status.running && !wsConnected) {
+            wsService.connect();
+          }
+        } catch (e) {
+          console.error('Failed to sync live status:', e);
+        }
+      })
       .catch(() => setBackendAvailable(false));
-  }, [setBackendAvailable]);
+  }, [setBackendAvailable, wsConnected]);
 
   // ── Filtered events ──────────────────────────────────────────
   const filteredEvents = useMemo(() => {
@@ -91,6 +104,26 @@ export function LiveMonitoringPage() {
     }
   }
 
+  async function handleReset() {
+    try {
+      wsService.disconnect();
+      const res = await apiService.resetLive().catch(() => null);
+      useLiveStore.getState().clearEvents();
+      if (res?.status) {
+        useLiveStore.getState().setSession(res.status);
+      } else {
+        const status = await apiService.getLiveStatus().catch(() => null);
+        if (status) {
+          useLiveStore.getState().setSession(status);
+        }
+      }
+      addToast('Session and live entities reset.', 'info');
+    } catch {
+      useLiveStore.getState().clearEvents();
+      addToast('Reset completed.', 'info');
+    }
+  }
+
   async function handleRetry() {
     try {
       await apiService.checkHealth();
@@ -123,255 +156,273 @@ export function LiveMonitoringPage() {
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20, paddingTop: 16, paddingBottom: 40 }}>
         {/* ── Backend unavailable warning ── */}
-      {!backendAvailable && (
-        <div style={{ background: 'var(--color-critical-light)', border: '1px solid var(--color-critical)', borderRadius: 12, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <WifiOff size={18} color="var(--color-critical)" />
-            <div>
-              <div style={{ fontWeight: 700, color: 'var(--color-critical)', fontSize: 13 }}>Backend unavailable</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                Unable to connect to live demo backend at port 8000. Start uvicorn: <code style={{ fontFamily: 'var(--font-mono)', background: 'rgba(0,0,0,0.06)', padding: '1px 5px', borderRadius: 4 }}>python -m uvicorn backend.main:app --port 8000</code>
+        {!backendAvailable && (
+          <div style={{ background: 'var(--color-critical-light)', border: '1px solid var(--color-critical)', borderRadius: 12, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <WifiOff size={18} color="var(--color-critical)" />
+              <div>
+                <div style={{ fontWeight: 700, color: 'var(--color-critical)', fontSize: 13 }}>Backend unavailable</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  Unable to connect to live demo backend at port 8000. Start uvicorn: <code style={{ fontFamily: 'var(--font-mono)', background: 'rgba(0,0,0,0.06)', padding: '1px 5px', borderRadius: 4 }}>python -m uvicorn backend.main:app --port 8000</code>
+                </div>
               </div>
             </div>
+            <button onClick={handleRetry} style={btnStyle('primary')}>
+              <RefreshCw size={13} /> Retry
+            </button>
           </div>
-          <button onClick={handleRetry} style={btnStyle('primary')}>
-            <RefreshCw size={13} /> Retry
-          </button>
+        )}
+
+        {/* ── Control Panel ── */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: '18px 20px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-end' }}>
+
+            {/* Traffic Mode */}
+            <div>
+              <div style={labelStyle}>Traffic Mode</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['benign', 'suspicious'] as DemoMode[]).map(m => (
+                  <button
+                    key={m}
+                    disabled={isRunning}
+                    onClick={() => setMode(m)}
+                    style={{
+                      padding: '8px 16px', borderRadius: 8, border: '1px solid',
+                      fontSize: 13, fontWeight: 600, cursor: isRunning ? 'not-allowed' : 'pointer',
+                      borderColor: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--border-default)',
+                      background: mode === m ? (m === 'suspicious' ? 'var(--color-critical-light)' : 'var(--color-live-light)') : 'white',
+                      color: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--text-secondary)',
+                      opacity: isRunning ? 0.6 : 1,
+                      transition: 'all var(--transition-fast)',
+                    }}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      {m === 'suspicious' ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
+                      {m === 'suspicious' ? 'Suspicious Demo' : 'Benign Traffic'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Temporal Window */}
+            <div>
+              <div style={labelStyle}>Temporal Window</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {WINDOW_OPTIONS.map(w => (
+                  <button
+                    key={w}
+                    disabled={isRunning}
+                    onClick={() => setWindowSeconds(w)}
+                    style={{
+                      padding: '6px 10px', borderRadius: 6, border: '1px solid', fontSize: 12, fontWeight: 600,
+                      cursor: isRunning ? 'not-allowed' : 'pointer',
+                      borderColor: windowSeconds === w ? 'var(--primary)' : 'var(--border-default)',
+                      background: windowSeconds === w ? 'var(--primary-light)' : 'white',
+                      color: windowSeconds === w ? 'var(--primary)' : 'var(--text-muted)',
+                      opacity: isRunning ? 0.6 : 1,
+                      transition: 'all var(--transition-fast)',
+                    }}
+                  >
+                    {w}s
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ flex: 1 }} />
+
+            {/* Start / Stop */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              {!isRunning ? (
+                <button
+                  onClick={handleStart}
+                  disabled={starting || !backendAvailable}
+                  style={{
+                    ...btnStyle('live'),
+                    opacity: (starting || !backendAvailable) ? 0.5 : 1,
+                    cursor: (starting || !backendAvailable) ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {starting
+                    ? <><Spinner /> Starting…</>
+                    : <><Play size={14} /> Start Live Demo</>
+                  }
+                </button>
+              ) : (
+                <button
+                  onClick={handleStop}
+                  disabled={stopping}
+                  style={{ ...btnStyle('critical'), opacity: stopping ? 0.5 : 1 }}
+                >
+                  {stopping ? <><Spinner /> Stopping…</> : <><Square size={14} /> Stop</>}
+                </button>
+              )}
+              <button onClick={handleReset} style={btnStyle('ghost-sm')} title="Reset Entities & Session">
+                <RotateCcw size={14} /> Reset
+              </button>
+            </div>
+          </div>
+
+          {/* Session stats */}
+          {session && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              <StatChip label="Session ID" value={session.session_id} mono />
+              <StatChip label="Packets" value={session.packet_count.toLocaleString()} />
+              <StatChip label="Benign" value={session.benign_count.toLocaleString()} color="var(--color-live)" />
+              <StatChip label="Suspicious" value={session.suspicious_count.toLocaleString()} color="var(--color-critical)" />
+              <StatChip label="Entities" value={session.active_entities.length.toString()} />
+              <StatChip label="Window" value={`${session.window_seconds}s`} />
+            </div>
+          )}
         </div>
-      )}
 
-      {/* ── Control Panel ── */}
-      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: '18px 20px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-end' }}>
-
-          {/* Traffic Mode */}
-          <div>
-            <div style={labelStyle}>Traffic Mode</div>
+        {/* ── Filters + Packet Table ── */}
+        <div style={{ flexShrink: 0, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+          {/* Table header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Packet Events</h3>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                {filteredEvents.length} / {displayEvents.length}
+              </span>
+              {isRunning && !isPaused && <PulseDot color="var(--color-live)" label="LIVE" />}
+              {isPaused && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-warning)', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning)', borderRadius: 999, padding: '2px 8px' }}>PAUSED</span>}
+            </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              {(['benign', 'suspicious'] as DemoMode[]).map(m => (
-                <button
-                  key={m}
-                  disabled={isRunning}
-                  onClick={() => setMode(m)}
-                  style={{
-                    padding: '8px 16px', borderRadius: 8, border: '1px solid',
-                    fontSize: 13, fontWeight: 600, cursor: isRunning ? 'not-allowed' : 'pointer',
-                    borderColor: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--border-default)',
-                    background: mode === m ? (m === 'suspicious' ? 'var(--color-critical-light)' : 'var(--color-live-light)') : 'white',
-                    color: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--text-secondary)',
-                    opacity: isRunning ? 0.6 : 1,
-                    transition: 'all var(--transition-fast)',
-                  }}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    {m === 'suspicious' ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
-                    {m === 'suspicious' ? 'Suspicious Demo' : 'Benign Traffic'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Temporal Window */}
-          <div>
-            <div style={labelStyle}>Temporal Window</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {WINDOW_OPTIONS.map(w => (
-                <button
-                  key={w}
-                  disabled={isRunning}
-                  onClick={() => setWindowSeconds(w)}
-                  style={{
-                    padding: '6px 10px', borderRadius: 6, border: '1px solid', fontSize: 12, fontWeight: 600,
-                    cursor: isRunning ? 'not-allowed' : 'pointer',
-                    borderColor: windowSeconds === w ? 'var(--primary)' : 'var(--border-default)',
-                    background: windowSeconds === w ? 'var(--primary-light)' : 'white',
-                    color: windowSeconds === w ? 'var(--primary)' : 'var(--text-muted)',
-                    opacity: isRunning ? 0.6 : 1,
-                    transition: 'all var(--transition-fast)',
-                  }}
-                >
-                  {w}s
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ flex: 1 }} />
-
-          {/* Start / Stop */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            {!isRunning ? (
-              <button
-                onClick={handleStart}
-                disabled={starting || !backendAvailable}
-                style={{
-                  ...btnStyle('live'),
-                  opacity: (starting || !backendAvailable) ? 0.5 : 1,
-                  cursor: (starting || !backendAvailable) ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {starting
-                  ? <><Spinner /> Starting…</>
-                  : <><Play size={14} /> Start Live Demo</>
-                }
+              <button onClick={clearEvents} style={btnStyle('ghost-sm')}>
+                <Trash2 size={12} /> Clear
               </button>
+            </div>
+          </div>
+
+          {/* Filter Row */}
+          <div style={{ display: 'flex', gap: 10, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center', background: 'var(--bg-workspace)' }}>
+            <Filter size={14} color="var(--text-muted)" />
+            <input
+              type="text"
+              placeholder="Apply a display filter (e.g. 192.168.1.1, tcp, .exe)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ flex: 1, padding: '6px 12px', fontSize: 13, border: '1px solid var(--border-default)', borderRadius: 6, outline: 'none', fontFamily: 'var(--font-mono)' }}
+            />
+          </div>
+
+          {/* Packet Table */}
+          <div style={{ overflowX: 'auto', maxHeight: 340, overflowY: 'auto' }}>
+            {filteredEvents.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {isRunning ? (
+                  <>
+                    <Clock size={15} color="var(--primary)" />
+                    <span>Waiting for events…</span>
+                  </>
+                ) : (
+                  <>
+                    <Play size={15} color="var(--color-live)" />
+                    <span>Start a live demo session to see packet events.</span>
+                  </>
+                )}
+              </div>
             ) : (
-              <button
-                onClick={handleStop}
-                disabled={stopping}
-                style={{ ...btnStyle('critical'), opacity: stopping ? 0.5 : 1 }}
-              >
-                {stopping ? <><Spinner /> Stopping…</> : <><Square size={14} /> Stop</>}
-              </button>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                  <tr style={{ background: 'var(--bg-workspace)' }}>
+                    {['Timestamp', 'Protocol', 'Source IP', 'Dest IP', 'Size', 'Info', 'Class'].map(col => (
+                      <th key={col} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-default)' }}>{col}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEvents.map((ev, i) => (
+                    <PacketRow key={ev.id ?? i} event={ev} />
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </div>
 
-        {/* Session stats */}
-        {session && (
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            <StatChip label="Session ID" value={session.session_id} mono />
-            <StatChip label="Packets" value={session.packet_count.toLocaleString()} />
-            <StatChip label="Benign" value={session.benign_count.toLocaleString()} color="var(--color-live)" />
-            <StatChip label="Suspicious" value={session.suspicious_count.toLocaleString()} color="var(--color-critical)" />
-            <StatChip label="Entities" value={session.active_entities.length.toString()} />
-            <StatChip label="Window" value={`${session.window_seconds}s`} />
-          </div>
-        )}
-      </div>
-
-      {/* ── Filters + Packet Table ── */}
-      <div style={{ flexShrink: 0, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
-        {/* Table header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Packet Events</h3>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              {filteredEvents.length} / {displayEvents.length}
-            </span>
-            {isRunning && !isPaused && <PulseDot color="var(--color-live)" label="LIVE" />}
-            {isPaused && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-warning)', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning)', borderRadius: 999, padding: '2px 8px' }}>PAUSED</span>}
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => setPaused(!isPaused)} style={btnStyle('secondary-sm')}>
-              {isPaused ? <><Play size={12} /> Resume</> : <><Pause size={12} /> Pause</>}
-            </button>
-            <button onClick={clearEvents} style={btnStyle('ghost-sm')}>
-              <Trash2 size={12} /> Clear
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Row */}
-        <div style={{ display: 'flex', gap: 10, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center', background: 'var(--bg-workspace)' }}>
-          <Filter size={14} color="var(--text-muted)" />
-          <input 
-            type="text" 
-            placeholder="Apply a display filter (e.g. 192.168.1.1, tcp, .exe)..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ flex: 1, padding: '6px 12px', fontSize: 13, border: '1px solid var(--border-default)', borderRadius: 6, outline: 'none', fontFamily: 'var(--font-mono)' }}
-          />
-        </div>
-
-        {/* Packet Table */}
-        <div style={{ overflowX: 'auto', maxHeight: 340, overflowY: 'auto' }}>
-          {filteredEvents.length === 0 ? (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              {isRunning ? (
-                <>
-                  <Clock size={15} color="var(--primary)" />
-                  <span>Waiting for events…</span>
-                </>
-              ) : (
-                <>
-                  <Play size={15} color="var(--color-live)" />
-                  <span>Start a live demo session to see packet events.</span>
-                </>
-              )}
+        {/* ── Two-column: Chart + Temporal State ── */}
+        <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+          {/* Live Chart */}
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Activity</h3>
+                {isRunning && <PulseDot color="var(--color-live)" label="LIVE" />}
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>packets per temporal window</span>
             </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                <tr style={{ background: 'var(--bg-workspace)' }}>
-                  {['Timestamp', 'Protocol', 'Source IP', 'Dest IP', 'Size', 'Info', 'Class'].map(col => (
-                    <th key={col} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-default)' }}>{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEvents.map((ev, i) => (
-                  <PacketRow key={ev.id ?? i} event={ev} />
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+            {chartData.length === 0 ? (
+              <EmptyChartState running={isRunning} />
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gLiveTotal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gLiveBenign" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gLiveSuspicious" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)' }} />
+                  <Area type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} fill="url(#gLiveTotal)" dot={false} isAnimationActive={false} />
+                  <Area type="monotone" dataKey="benign" name="Benign" stroke="#10b981" strokeWidth={1.5} fill="url(#gLiveBenign)" dot={false} isAnimationActive={false} />
+                  <Area type="monotone" dataKey="suspicious" name="Suspicious" stroke="#ef4444" strokeWidth={1.5} fill="url(#gLiveSuspicious)" dot={false} isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
 
-      {/* ── Two-column: Chart + Temporal State ── */}
-      <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
-        {/* Live Chart */}
-        <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Activity</h3>
-              {isRunning && <PulseDot color="var(--color-live)" label="LIVE" />}
+          {/* Temporal State Panel */}
+          <TemporalStatePanel state={currentTemporal} windowSeconds={windowSeconds} />
+        </div>
+
+        {/* ── Live Network Entity Graph ── */}
+        <div style={{ flexShrink: 0, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Entities</h3>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{liveNodes.length} entities · {liveEdges.length} relationships observed</p>
             </div>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>packets per temporal window</span>
-          </div>
-          {chartData.length === 0 ? (
-            <EmptyChartState running={isRunning} />
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gLiveTotal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gLiveBenign" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gLiveSuspicious" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                <XAxis dataKey="time" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)' }} />
-                <Area type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} fill="url(#gLiveTotal)" dot={false} isAnimationActive={false} />
-                <Area type="monotone" dataKey="benign" name="Benign" stroke="#10b981" strokeWidth={1.5} fill="url(#gLiveBenign)" dot={false} isAnimationActive={false} />
-                <Area type="monotone" dataKey="suspicious" name="Suspicious" stroke="#ef4444" strokeWidth={1.5} fill="url(#gLiveSuspicious)" dot={false} isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* Temporal State Panel */}
-        <TemporalStatePanel state={currentTemporal} windowSeconds={windowSeconds} />
-      </div>
-
-      {/* ── Live Network Entity Graph ── */}
-      <div style={{ flexShrink: 0, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Entities</h3>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{liveNodes.length} entities · {liveEdges.length} relationships observed</p>
-          </div>
-          {liveNodes.length > 0 && (
-            <button onClick={() => useLiveStore.getState().resetEntities()} style={btnStyle('ghost-sm')}>
-              <RotateCcw size={12} /> Reset
+            <button onClick={() => setIsGraphModalOpen(true)} style={btnStyle('ghost-sm')}>
+              <Maximize2 size={12} /> Enlarge
             </button>
-          )}
+          </div>
+          <LiveEntityGraph nodes={liveNodes} edges={liveEdges} running={isRunning} />
         </div>
-        <LiveEntityGraph nodes={liveNodes} edges={liveEdges} running={isRunning} />
       </div>
-      </div>
+
+      {/* ── Enlarge Graph Modal ── */}
+      {isGraphModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ width: '90vw', height: '90vh', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-xl)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Entities</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{liveNodes.length} entities · {liveEdges.length} relationships observed</p>
+              </div>
+              <button onClick={() => setIsGraphModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ flex: 1, padding: 20, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <LiveEntityGraph nodes={liveNodes} edges={liveEdges} running={isRunning} isExpanded />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -458,8 +509,8 @@ function PacketRow({ event }: { event: import('@/types/live').PacketEvent & { id
           {event.protocol}
         </span>
       </td>
-      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{event.src_ip} <span style={{color:'var(--text-muted)', fontSize: 10}}>:{event.src_port}</span></td>
-      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{event.dst_ip} <span style={{color:'var(--text-muted)', fontSize: 10}}>:{event.dst_port}</span></td>
+      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{event.src_ip} <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>:{event.src_port}</span></td>
+      <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{event.dst_ip} <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>:{event.dst_port}</span></td>
       <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{event.packet_size}B</td>
       <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', fontSize: 11, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={event.payload_info}>
         {event.payload_info || '-'}
@@ -479,20 +530,66 @@ function PacketRow({ event }: { event: import('@/types/live').PacketEvent & { id
   );
 }
 
-function LiveEntityGraph({ nodes, edges, running }: { nodes: import('@/types/live').LiveNode[]; edges: import('@/types/live').LiveEdge[]; running: boolean }) {
+function LiveEntityGraph({ nodes, edges, running, isExpanded }: { nodes: import('@/types/live').LiveNode[]; edges: import('@/types/live').LiveEdge[]; running: boolean; isExpanded?: boolean }) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
   const NODE_COLORS: Record<string, { bg: string; border: string; shadow: string }> = {
     suspicious: { bg: '#fee2e2', border: '#ef4444', shadow: 'rgba(239,68,68,0.3)' },
-    server:     { bg: '#f0fdf4', border: '#10b981', shadow: 'rgba(16,185,129,0.2)' },
-    external:   { bg: '#f5f3ff', border: '#8b5cf6', shadow: 'rgba(139,92,246,0.2)' },
-    internal:   { bg: '#eff6ff', border: '#3b82f6', shadow: 'rgba(59,130,246,0.2)' },
+    server: { bg: '#f0fdf4', border: '#10b981', shadow: 'rgba(16,185,129,0.2)' },
+    external: { bg: '#f5f3ff', border: '#8b5cf6', shadow: 'rgba(139,92,246,0.2)' },
+    internal: { bg: '#eff6ff', border: '#3b82f6', shadow: 'rgba(59,130,246,0.2)' },
   };
+
+  // Group nodes by category to lay them out with balanced columns and rows
+  const categorized = useMemo(() => {
+    const suspicious = nodes.filter(n => n.type === 'suspicious');
+    const internal = nodes.filter(n => n.type === 'internal');
+    const server = nodes.filter(n => n.type === 'server');
+    const external = nodes.filter(n => n.type === 'external');
+    return { suspicious, internal, server, external };
+  }, [nodes]);
+
+  // Compute responsive layout
+  // Column positions: suspicious (left), internal (center-left), server (center-right), external (far right if any)
+  const layoutNodes = useMemo(() => {
+    const colSpacing = isExpanded ? 340 : 230;
+    const baseColX = isExpanded ? 180 : 120;
+    const rowSpacing = isExpanded ? 80 : 70;
+    const startY = 80;
+
+    const positioned: Array<import('@/types/live').LiveNode & { renderX: number; renderY: number }> = [];
+
+    const placeCol = (list: import('@/types/live').LiveNode[], colIndex: number) => {
+      // Split into sub-columns if there are many nodes (e.g. > 10)
+      const subCols = isExpanded && list.length > 8 ? 2 : 1;
+      const subColWidth = 140;
+
+      list.forEach((node, idx) => {
+        const subCol = idx % subCols;
+        const row = Math.floor(idx / subCols);
+        const x = baseColX + colIndex * colSpacing + subCol * subColWidth;
+        const y = startY + row * rowSpacing;
+        positioned.push({ ...node, renderX: x, renderY: y });
+      });
+    };
+
+    placeCol(categorized.suspicious, 0);
+    placeCol(categorized.internal, 1);
+    placeCol(categorized.server, 2);
+    if (categorized.external.length > 0) {
+      placeCol(categorized.external, 3);
+    }
+
+    return positioned;
+  }, [categorized, isExpanded]);
+
+  const maxNodeY = Math.max(260, ...layoutNodes.map(n => n.renderY + 100));
+  const maxNodeX = Math.max(isExpanded ? 1100 : 750, ...layoutNodes.map(n => n.renderX + 160));
 
   if (nodes.length === 0) {
     return (
-      <div style={{ height: 240, background: 'var(--bg-workspace)', borderRadius: 12, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
+      <div style={{ height: isExpanded ? '100%' : 240, flex: isExpanded ? 1 : undefined, background: 'var(--bg-workspace)', borderRadius: 12, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
         <Radio size={28} color="var(--text-muted)" />
         <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
           {running ? 'Entities will appear as traffic is observed…' : 'Start a session to discover network entities.'}
@@ -501,11 +598,24 @@ function LiveEntityGraph({ nodes, edges, running }: { nodes: import('@/types/liv
     );
   }
 
-  const maxY = Math.max(260, ...nodes.map(n => n.y + 70));
-
   return (
-    <div style={{ position: 'relative', height: 260, background: 'var(--bg-workspace)', borderRadius: 12, border: '1px solid var(--border-subtle)', overflowY: 'auto', overflowX: 'hidden' }}>
-      <svg width="100%" height={maxY}>
+    <div style={{
+      position: 'relative',
+      height: isExpanded ? '100%' : 260,
+      flex: isExpanded ? 1 : undefined,
+      minHeight: 0,
+      background: 'var(--bg-workspace)',
+      borderRadius: 12,
+      border: '1px solid var(--border-subtle)',
+      overflowY: 'auto',
+      overflowX: 'auto',
+    }}>
+      <svg
+        width={isExpanded ? '100%' : Math.max(750, maxNodeX)}
+        height={maxNodeY}
+        viewBox={isExpanded ? `0 0 ${Math.max(1200, maxNodeX)} ${Math.max(700, maxNodeY)}` : undefined}
+        style={{ minHeight: isExpanded ? '100%' : undefined, display: 'block', minWidth: isExpanded ? '100%' : 750 }}
+      >
         <defs>
           <pattern id="lgrid" width="30" height="30" patternUnits="userSpaceOnUse">
             <path d="M 30 0 L 0 0 0 30" fill="none" stroke="var(--border-subtle)" strokeWidth="0.5" />
@@ -513,21 +623,34 @@ function LiveEntityGraph({ nodes, edges, running }: { nodes: import('@/types/liv
         </defs>
         <rect width="100%" height="100%" fill="url(#lgrid)" />
 
+        {/* Column Header Titles */}
+        <g opacity={0.6}>
+          <text x={isExpanded ? 180 : 120} y={35} fontSize={12} fontWeight={700} fill="var(--color-critical)" textAnchor="middle">
+            SUSPICIOUS ({categorized.suspicious.length})
+          </text>
+          <text x={isExpanded ? 180 + (isExpanded ? 340 : 230) : 120 + 230} y={35} fontSize={12} fontWeight={700} fill="var(--primary)" textAnchor="middle">
+            WORKSTATIONS ({categorized.internal.length})
+          </text>
+          <text x={isExpanded ? 180 + (isExpanded ? 340 : 230) * 2 : 120 + 460} y={35} fontSize={12} fontWeight={700} fill="var(--color-live)" textAnchor="middle">
+            SERVERS ({categorized.server.length})
+          </text>
+        </g>
+
         {edges.map((edge, i) => {
-          const from = nodes.find(n => n.id === edge.from);
-          const to   = nodes.find(n => n.id === edge.to);
+          const from = layoutNodes.find(n => n.id === edge.from);
+          const to = layoutNodes.find(n => n.id === edge.to);
           if (!from || !to) return null;
           const active = hoveredNode === from.id || hoveredNode === to.id;
           const isAttack = edge.suspicious;
-          
-          const midX = (from.x + to.x) / 2;
-          const midY = (from.y + to.y) / 2;
-          
+
+          const midX = (from.renderX + to.renderX) / 2;
+          const midY = (from.renderY + to.renderY) / 2;
+
           return (
             <g key={i}>
               <title>{edge.label} ({isAttack ? 'Suspicious' : 'Normal'})</title>
               <line
-                x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                x1={from.renderX} y1={from.renderY} x2={to.renderX} y2={to.renderY}
                 stroke={isAttack ? '#ef4444' : (active ? '#6366f1' : '#cbd5e1')}
                 strokeWidth={isAttack ? (active ? 3 : 2) : (active ? 2 : 1)}
                 strokeDasharray={isAttack ? '5,5' : undefined}
@@ -543,11 +666,11 @@ function LiveEntityGraph({ nodes, edges, running }: { nodes: import('@/types/liv
           );
         })}
 
-        {nodes.map(node => {
+        {layoutNodes.map(node => {
           const c = NODE_COLORS[node.type] ?? NODE_COLORS.internal;
           const active = hoveredNode === node.id || selectedNode === node.id;
           return (
-            <g key={node.id} transform={`translate(${node.x},${node.y})`}
+            <g key={node.id} transform={`translate(${node.renderX},${node.renderY})`}
               style={{ cursor: 'pointer' }}
               onMouseEnter={() => setHoveredNode(node.id)}
               onMouseLeave={() => setHoveredNode(null)}
@@ -659,11 +782,11 @@ const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: 
 
 function btnStyle(variant: string): React.CSSProperties {
   const base: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1px solid', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all var(--transition-fast)', fontFamily: 'var(--font-sans)' };
-  if (variant === 'live')       return { ...base, background: 'var(--color-live)',     color: 'white',               borderColor: 'transparent' };
-  if (variant === 'critical')   return { ...base, background: 'var(--color-critical)', color: 'white',               borderColor: 'transparent' };
-  if (variant === 'primary')    return { ...base, background: 'var(--primary)',         color: 'white',               borderColor: 'transparent' };
+  if (variant === 'live') return { ...base, background: 'var(--color-live)', color: 'white', borderColor: 'transparent' };
+  if (variant === 'critical') return { ...base, background: 'var(--color-critical)', color: 'white', borderColor: 'transparent' };
+  if (variant === 'primary') return { ...base, background: 'var(--primary)', color: 'white', borderColor: 'transparent' };
   if (variant === 'secondary-sm') return { ...base, padding: '5px 12px', fontSize: 12, background: 'var(--primary-light)', color: 'var(--primary)', borderColor: 'var(--primary)' };
-  if (variant === 'ghost-sm')   return { ...base, padding: '5px 12px', fontSize: 12, background: 'white', color: 'var(--text-secondary)', borderColor: 'var(--border-default)' };
+  if (variant === 'ghost-sm') return { ...base, padding: '5px 12px', fontSize: 12, background: 'white', color: 'var(--text-secondary)', borderColor: 'var(--border-default)' };
   return base;
 }
 

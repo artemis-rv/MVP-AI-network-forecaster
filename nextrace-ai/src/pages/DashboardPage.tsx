@@ -52,7 +52,7 @@ export function DashboardPage() {
     : trafficData;
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
       <DashboardHeader />
 
@@ -62,8 +62,6 @@ export function DashboardPage() {
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           gap: 16,
-          marginBottom: 16,
-          flexShrink: 0,
         }}
       >
         {kpiData.map((kpi, i) => {
@@ -94,41 +92,35 @@ export function DashboardPage() {
         })}
       </div>
 
-      {/* Main Content Area - Split into top and bottom rows that share remaining space */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, overflowY: 'auto', paddingRight: 8 }}>
-        
-        {/* Top Row: Charts */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 16,
-            minHeight: 300,
-            flexShrink: 0,
-          }}
-        >
-          <LiveNetworkChart data={chartData} isLive={isLive} />
-          <AttackForecast />
-        </div>
+      {/* Top Row: Charts */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 16,
+          minHeight: 300,
+        }}
+      >
+        <LiveNetworkChart data={chartData} isLive={isLive} />
+        <AttackForecast />
+      </div>
 
-        {/* Bottom Row: Entities and Alerts */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 16,
-            minHeight: 350,
-            flexShrink: 0,
-          }}
-        >
-          <NetworkEntities nodes={liveNodes.length > 0 ? liveNodes : undefined} edges={liveEdges.length > 0 ? liveEdges : undefined} />
-          <RecentAlerts />
-        </div>
-        
-        {/* Bottom Area */}
-        <div style={{ paddingBottom: 16, flexShrink: 0 }}>
-          <LatestReports />
-        </div>
+      {/* Bottom Row: Entities and Alerts */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 16,
+          minHeight: 350,
+        }}
+      >
+        <NetworkEntities nodes={liveNodes.length > 0 ? liveNodes : undefined} edges={liveEdges.length > 0 ? liveEdges : undefined} />
+        <RecentAlerts />
+      </div>
+      
+      {/* Bottom Area */}
+      <div style={{ paddingBottom: 16 }}>
+        <LatestReports />
       </div>
 
       {/* Footer */}

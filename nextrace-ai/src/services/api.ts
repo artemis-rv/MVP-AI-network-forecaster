@@ -49,6 +49,10 @@ export const apiService = {
     return request('/api/live/stop', { method: 'POST' });
   },
 
+  async resetLive(): Promise<{ message: string; status: SessionStatus }> {
+    return request('/api/live/reset', { method: 'POST' });
+  },
+
   async getLiveSummary(): Promise<SessionStatus> {
     return request('/api/live/summary');
   },

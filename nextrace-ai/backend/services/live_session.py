@@ -105,6 +105,12 @@ class LiveSession:
             self._window_task.cancel()
         self._gen_task = None
         self._window_task = None
+        # Reset counters and entities for clean slate
+        self.packet_count = 0
+        self.benign_count = 0
+        self.suspicious_count = 0
+        self._entity_set = set()
+        self._window_events = []
         # Reset forecasting state for next session
         self._forecast_engine.reset()
         self._current_forecast = self._default_forecast()

@@ -1,12 +1,9 @@
-// NEXTRACE AI — Simulator Store (Step 7)
-// Completely isolated from liveStore, historicalStore, forensicStore, investigationStore.
-// No cross-store imports. Manages all simulation state independently.
-
 import { create } from 'zustand';
 import { apiService } from '@/services/api';
+import { useLiveStore } from './liveStore';
+import { generateProbabilisticForecast } from '@/lib/forecastEngine';
 import type {
   SimulatorStatus,
-  SimulatorStateResponse,
   SimulatorResult,
   SimEvent,
   ForecastSnapshot,
@@ -15,7 +12,6 @@ import type {
   ScenarioDescriptor,
 } from '@/types/simulator';
 
-const POLL_MS = 800;
 
 // ── Config defaults (mirrors backend defaults) ─────────────────────────────────
 export const DEFAULT_CONFIG = {
@@ -60,6 +56,10 @@ interface SimulatorStore {
   error: string | null;
   isLoading: boolean;
 
+  // ── Snapshot state ────────────────────────────────────────────────────────
+  snapshotNodes: any[];
+  snapshotEdges: any[];
+
   // ── Actions ────────────────────────────────────────────────────────────────
   loadScenarios: () => Promise<void>;
   setConfig: (patch: Partial<typeof DEFAULT_CONFIG>) => void;
@@ -86,9 +86,7 @@ function _stopPolling() {
 function _stopAutoAdvance() {
   if (_autoAdvanceInterval) { clearInterval(_autoAdvanceInterval); _autoAdvanceInterval = null; }
 }
-function _startPolling(get: () => SimulatorStore) {
-  _pollInterval = setInterval(() => { get().refreshStatus(); }, POLL_MS);
-}
+
 function _startAutoAdvance(get: () => SimulatorStore) {
   _stopAutoAdvance();
   // Fixed interval for auto-advance (since speed config was removed)
@@ -101,7 +99,8 @@ function _startAutoAdvance(get: () => SimulatorStore) {
 const _initial: Pick<SimulatorStore,
   'simulationId' | 'status' | 'currentStep' | 'totalSteps' | 'stageSequence' |
   'currentStage' | 'currentEvent' | 'currentForecast' | 'currentFeatures' |
-  'liveTrafficHistory' | 'allEvents' | 'allForecasts' | 'stageProfiles' | 'result' | 'selectedStep' | 'error' | 'isLoading'
+  'liveTrafficHistory' | 'allEvents' | 'allForecasts' | 'stageProfiles' | 'result' | 'selectedStep' | 'error' | 'isLoading' |
+  'snapshotNodes' | 'snapshotEdges'
 > = {
   simulationId: null,
   status: 'idle',
@@ -120,33 +119,11 @@ const _initial: Pick<SimulatorStore,
   selectedStep: null,
   error: null,
   isLoading: false,
+  snapshotNodes: [],
+  snapshotEdges: [],
 };
 
-function _applyState(
-  state: SimulatorStateResponse,
-  extra?: Partial<Pick<SimulatorStore, 'allEvents' | 'allForecasts' | 'stageProfiles' | 'result' | 'selectedStep'>>,
-  history: SimEvent[] = [],
-): Partial<SimulatorStore> {
-  const liveEvent = state.current_event;
-  const liveTrafficHistory = liveEvent && !history.some(event => event.step === liveEvent.step)
-    ? [...history, liveEvent]
-    : history;
-  return {
-    simulationId:   state.simulation_id,
-    status:         state.status,
-    currentStep:    state.current_step,
-    totalSteps:     state.total_steps,
-    stageSequence:  state.stage_sequence,
-    currentStage:   state.current_stage,
-    currentEvent:   state.current_event,
-    currentForecast:state.current_forecast,
-    currentFeatures:state.current_event?.synthetic_feature_profile ?? null,
-    liveTrafficHistory,
-    error:          null,
-    isLoading:      false,
-    ...extra,
-  };
-}
+
 
 export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
   ..._initial,
@@ -162,18 +139,37 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
   },
 
   // ── Config ──────────────────────────────────────────────────────────────────
-  setConfig: (patch) => set(s => ({ config: { ...s.config, ...patch } })),
+  setConfig: (patch: Partial<typeof DEFAULT_CONFIG>) => set((s: any) => ({ config: { ...s.config, ...patch } })),
 
   // ── Start ───────────────────────────────────────────────────────────────────
   startSimulation: async () => {
     _stopPolling();
     _stopAutoAdvance();
     const { config } = get();
-    set({ ..._initial, isLoading: true, status: 'running', config });
+    
+    // Capture snapshot from Live Store
+    const liveStore = useLiveStore.getState();
+    const snapshotNodes = [...liveStore.liveNodes];
+    const snapshotEdges = [...liveStore.liveEdges];
+
+    set({ ..._initial, isLoading: true, status: 'running', config, snapshotNodes, snapshotEdges });
     try {
-      const data = await apiService.startSimulation(config);
-      set(_applyState(data, undefined, []));
-      _startPolling(get);
+      const forecast = generateProbabilisticForecast(snapshotNodes, snapshotEdges, config.k, config.window_seconds);
+      
+      const simulationId = `FORECAST-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+      set({
+        simulationId,
+        status: 'running',
+        currentStep: -1,
+        totalSteps: forecast.stageSequence.length,
+        stageSequence: forecast.stageSequence,
+        allEvents: forecast.allEvents,
+        allForecasts: forecast.allForecasts,
+        stageProfiles: forecast.stageProfiles,
+        liveTrafficHistory: [],
+      });
+
       _startAutoAdvance(get);
     } catch (err) {
       set({ status: 'idle', error: String(err), isLoading: false });
@@ -185,10 +181,9 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
     const { simulationId } = get();
     if (!simulationId) return;
     try {
-      const data = await apiService.pauseSimulation(simulationId);
       _stopPolling();
       _stopAutoAdvance();
-      set(_applyState(data, undefined, get().liveTrafficHistory));
+      set({ status: 'paused' });
     } catch (err) { set({ error: String(err) }); }
   },
 
@@ -197,9 +192,7 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
     const { simulationId } = get();
     if (!simulationId) return;
     try {
-      const data = await apiService.resumeSimulation(simulationId);
-      set(_applyState(data, undefined, get().liveTrafficHistory));
-      _startPolling(get);
+      set({ status: 'running' });
       _startAutoAdvance(get);
     } catch (err) { set({ error: String(err) }); }
   },
@@ -211,8 +204,7 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
     _stopPolling();
     _stopAutoAdvance();
     try {
-      const data = await apiService.stopSimulation(simulationId);
-      set(_applyState(data, undefined, get().liveTrafficHistory));
+      set({ status: 'stopped' });
     } catch (err) { set({ error: String(err) }); }
   },
 
@@ -223,24 +215,51 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
     _stopPolling();
     _stopAutoAdvance();
     try {
-      const data = await apiService.resetSimulation(simulationId);
-      set(_applyState(data, { allEvents: [], allForecasts: [], stageProfiles: [], result: null, selectedStep: null }, []));
-      _startPolling(get);
+      set({
+        currentStep: -1,
+        currentStage: null,
+        currentEvent: null,
+        currentForecast: null,
+        currentFeatures: null,
+        liveTrafficHistory: [],
+        status: 'running',
+        selectedStep: null,
+      });
       _startAutoAdvance(get);
     } catch (err) { set({ error: String(err) }); }
   },
 
   // ── Next Step ───────────────────────────────────────────────────────────────
   nextStep: async () => {
-    const { simulationId } = get();
-    if (!simulationId || _stepInFlight) return;
+    const state = get();
+    if (!state.simulationId || _stepInFlight) return;
     _stepInFlight = true;
     try {
-      const data = await apiService.nextStep(simulationId);
-      set(_applyState(data, undefined, get().liveTrafficHistory));
-      // If completed, load full result
-      if (data.status === 'completed') {
-        _stopPolling();
+      const nextIdx = state.currentStep + 1;
+      if (nextIdx >= state.totalSteps) {
+        set({ status: 'completed' });
+        _stopAutoAdvance();
+        await get().loadResult();
+        return;
+      }
+
+      const currentEvent = state.allEvents[nextIdx];
+      const currentForecast = state.allForecasts[nextIdx];
+      const currentStage = state.stageSequence[nextIdx];
+      const currentFeatures = currentEvent?.synthetic_feature_profile ?? null;
+      const liveTrafficHistory = [...state.liveTrafficHistory, currentEvent].filter(Boolean) as SimEvent[];
+
+      set({
+        currentStep: nextIdx,
+        currentStage,
+        currentEvent,
+        currentForecast,
+        currentFeatures,
+        liveTrafficHistory,
+      });
+
+      if (nextIdx === state.totalSteps - 1) {
+        set({ status: 'completed' });
         _stopAutoAdvance();
         await get().loadResult();
       }
@@ -250,41 +269,19 @@ export const useSimulatorStore = create<SimulatorStore>((set, get) => ({
 
   // ── Refresh status ──────────────────────────────────────────────────────────
   refreshStatus: async () => {
-    const { simulationId } = get();
-    if (!simulationId) return;
-    try {
-      const data = await apiService.getSimulatorStatus(simulationId);
-      set(_applyState(data, undefined, get().liveTrafficHistory));
-      if (data.status === 'completed' || data.status === 'stopped') {
-        _stopPolling();
-        _stopAutoAdvance();
-        if (data.status === 'completed') await get().loadResult();
-      }
-    } catch { /* network hiccup */ }
+    // Local simulation does not need polling the backend.
   },
 
   // ── Load full result ─────────────────────────────────────────────────────────
   loadResult: async () => {
-    const { simulationId } = get();
-    if (!simulationId) return;
-    try {
-      const result = await apiService.getSimulatorResult(simulationId);
-      set({
-        result,
-        allEvents:     result.generated_events,
-        allForecasts:  result.forecast_snapshots,
-        stageProfiles: result.stage_profiles,
-        liveTrafficHistory: result.generated_events,
-      });
-    } catch (err) { set({ error: String(err) }); }
+    // Local simulation already has everything in memory.
   },
 
   // ── Select step ─────────────────────────────────────────────────────────────
-  selectStep: (step) => set({ selectedStep: step }),
+  selectStep: (step: number | null) => set({ selectedStep: step }),
 
   // ── Hard reset (clears everything) ─────────────────────────────────────────
   hardReset: () => {
-    _stopPolling();
     _stopAutoAdvance();
     _stepInFlight = false;
     set({ ..._initial, config: { ...DEFAULT_CONFIG }, scenarios: get().scenarios });

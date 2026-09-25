@@ -43,6 +43,13 @@ async def live_stop() -> dict:
     return {"message": "Live demo session stopped", "status": live_session.get_status()}
 
 
+@router.post("/live/reset")
+async def live_reset() -> dict:
+    """Reset the live demo session and all accumulated statistics."""
+    live_session.stop()
+    return {"message": "Live demo session reset", "status": live_session.get_status()}
+
+
 @router.get("/live/summary")
 async def live_summary() -> dict:
     """Return current aggregated traffic information for the session."""
