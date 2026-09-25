@@ -653,8 +653,9 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
   if (entries.length === 0) {
     return <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '24px 0' }}>No activity timeline data.</div>;
   }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 12px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 4px 8px 12px', maxHeight: 420, overflowY: 'auto', overflowX: 'hidden' }}>
       {entries.map((entry, i) => {
         const isLast = i === entries.length - 1;
         const stageC = STAGE_COLORS_MAP[entry.stage] ?? STAGE_COLORS_MAP['Normal Activity'];
@@ -663,7 +664,7 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
         return (
           <div key={i} className="animate-fade-in-up" style={{ 
             display: 'flex', gap: 20, alignItems: 'stretch',
-            position: 'relative', animationDelay: `${i * 0.05}s`
+            position: 'relative', animationDelay: `${i * 0.04}s`
           }}>
             {/* Timeline Line */}
             {!isLast && <div style={{ 
