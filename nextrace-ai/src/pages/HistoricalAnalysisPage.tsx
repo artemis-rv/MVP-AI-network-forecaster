@@ -8,7 +8,7 @@ import { ReactFlowProvider } from '@xyflow/react';
 import {
   Upload, Play, RefreshCw, AlertTriangle, Info, Search,
   CheckCircle2, UploadCloud, AlertCircle, Layers, Clock, ShieldAlert,
-  Activity, FileSearch, Link2, BarChart2, Calendar, Settings, XCircle,
+  Activity, FileSearch, Link2, BarChart2, Calendar, Settings, XCircle, ArrowLeft
 } from 'lucide-react';
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -34,11 +34,11 @@ const PROTO_COLORS: Record<string, string> = {
 const PIE_COLORS = ['#6366f1', '#06b6d4', '#f59e0b', '#10b981', '#f97316', '#94a3b8'];
 
 const STAGE_COLORS_MAP: Record<string, { bg: string; text: string; border: string }> = {
-  'Reconnaissance':    { bg: '#fef3c7', text: '#92400e', border: '#f59e0b' },
-  'Initial Access':    { bg: '#ffedd5', text: '#9a3412', border: '#f97316' },
-  'Lateral Movement':  { bg: '#fee2e2', text: '#991b1b', border: '#ef4444' },
+  'Reconnaissance': { bg: '#fef3c7', text: '#92400e', border: '#f59e0b' },
+  'Initial Access': { bg: '#ffedd5', text: '#9a3412', border: '#f97316' },
+  'Lateral Movement': { bg: '#fee2e2', text: '#991b1b', border: '#ef4444' },
   'Data Exfiltration': { bg: '#fee2e2', text: '#7f1d1d', border: '#dc2626' },
-  'Normal Activity':   { bg: '#d1fae5', text: '#065f46', border: '#10b981' },
+  'Normal Activity': { bg: '#d1fae5', text: '#065f46', border: '#10b981' },
 };
 
 function tsToTime(ts: number): string {
@@ -46,7 +46,7 @@ function tsToTime(ts: number): string {
 }
 function formatBytes(b: number): string {
   if (b >= 1_048_576) return `${(b / 1_048_576).toFixed(1)} MB`;
-  if (b >= 1024)      return `${(b / 1024).toFixed(1)} KB`;
+  if (b >= 1024) return `${(b / 1024).toFixed(1)} KB`;
   return `${b} B`;
 }
 function formatDuration(s: number): string {
@@ -56,27 +56,27 @@ function formatDuration(s: number): string {
 
 // ── Stage labels & icons from current_stage ──────────────────────────────────
 const STAGE_LABELS: Record<string, string> = {
-  queued:              'Queued…',
-  parsing:             'Parsing PCAP…',
-  building_flows:      'Building Flows…',
+  queued: 'Queued…',
+  parsing: 'Parsing PCAP…',
+  building_flows: 'Building Flows…',
   feature_engineering: 'Feature Engineering…',
-  detection:           'Heuristic Detection…',
-  timeline:            'Building Timeline…',
-  processing:          'Processing…',
-  completed:           'Complete',
-  failed:              'Failed',
+  detection: 'Heuristic Detection…',
+  timeline: 'Building Timeline…',
+  processing: 'Processing…',
+  completed: 'Complete',
+  failed: 'Failed',
 };
 
 const STAGE_ICONS: Record<string, React.ReactNode> = {
-  queued:              <Clock size={16} color="var(--primary)" />,
-  parsing:             <FileSearch size={16} color="var(--primary)" />,
-  building_flows:      <Link2 size={16} color="var(--primary)" />,
+  queued: <Clock size={16} color="var(--primary)" />,
+  parsing: <FileSearch size={16} color="var(--primary)" />,
+  building_flows: <Link2 size={16} color="var(--primary)" />,
   feature_engineering: <BarChart2 size={16} color="var(--primary)" />,
-  detection:           <Search size={16} color="var(--primary)" />,
-  timeline:            <Calendar size={16} color="var(--primary)" />,
-  processing:          <Settings size={16} color="var(--primary)" />,
-  completed:           <CheckCircle2 size={16} color="var(--color-live)" />,
-  failed:              <XCircle size={16} color="var(--color-critical)" />,
+  detection: <Search size={16} color="var(--primary)" />,
+  timeline: <Calendar size={16} color="var(--primary)" />,
+  processing: <Settings size={16} color="var(--primary)" />,
+  completed: <CheckCircle2 size={16} color="var(--color-live)" />,
+  failed: <XCircle size={16} color="var(--color-critical)" />,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -93,8 +93,8 @@ export function HistoricalAnalysisPage() {
 
   const view =
     status === 'idle' ? 'upload' :
-    status === 'completed' ? 'result' :
-    status === 'failed' ? 'error' : 'processing';
+      status === 'completed' ? 'result' :
+        status === 'failed' ? 'error' : 'processing';
 
   function handleOpenForensic() {
     if (currentJobId) navigate(`/forensic/${currentJobId}`);
@@ -105,13 +105,28 @@ export function HistoricalAnalysisPage() {
       {/* ── Header ── */}
       <div style={{ paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px', marginBottom: 4 }}>
-              Historical PCAP Analysis
-            </h1>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Upload a PCAP capture for offline traffic analysis and activity timeline reconstruction.
-            </p>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            {view !== 'upload' && (
+              <button 
+                onClick={clearJob} 
+                style={{ 
+                  marginTop: 2, padding: 6, borderRadius: 8, background: 'var(--bg-card)', 
+                  border: '1px solid var(--border-default)', color: 'var(--text-secondary)',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                title="Back to Upload"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px', marginBottom: 4 }}>
+                Historical PCAP Analysis
+              </h1>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Upload a PCAP capture for offline traffic analysis and activity timeline reconstruction.
+              </p>
+            </div>
           </div>
           {view !== 'upload' && (
             <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
@@ -136,7 +151,18 @@ export function HistoricalAnalysisPage() {
                   >
                     <Search size={12} /> Open Forensic Analysis
                   </button>
-                  <button onClick={clearJob} style={ghostBtnStyle}>
+                  <button 
+                    onClick={clearJob} 
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      fontSize: 12, fontWeight: 600, padding: '7px 16px', borderRadius: 8,
+                      background: 'var(--bg-card)', color: 'var(--text-primary)', 
+                      border: '1px solid var(--border-default)', cursor: 'pointer', 
+                      transition: 'all 0.15s', boxShadow: 'var(--shadow-sm)'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-workspace)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-card)'}
+                  >
                     <RefreshCw size={12} /> New Analysis
                   </button>
                 </>
@@ -148,10 +174,10 @@ export function HistoricalAnalysisPage() {
 
       {/* ── Content ── */}
       <div style={{ flex: 1, paddingTop: 20, overflowY: 'auto' }}>
-        {view === 'upload'     && <UploadView onUpload={uploadPcap} onDemo={loadDemoJob} />}
+        {view === 'upload' && <UploadView onUpload={uploadPcap} onDemo={loadDemoJob} />}
         {view === 'processing' && <ProcessingView progress={progress} stage={currentStage} packets={packetsProcessed} flows={flowsDetected} jobId={currentJobId} />}
-        {view === 'error'      && <ErrorView error={error} onReset={clearJob} />}
-        {view === 'result'     && result && <ResultView result={result} jobId={currentJobId} filename={jobMeta?.filename ?? ''} isDemo={isDemo} />}
+        {view === 'error' && <ErrorView error={error} onReset={clearJob} />}
+        {view === 'result' && result && <ResultView result={result} jobId={currentJobId} filename={jobMeta?.filename ?? ''} isDemo={isDemo} />}
       </div>
     </div>
   );
@@ -381,8 +407,8 @@ function ErrorView({ error, onReset }: { error: string | null; onReset: () => vo
 function ResultView({ result, jobId, filename, isDemo }: {
   result: HistoricalResult; jobId: string | null; filename: string; isDemo: boolean;
 }) {
-  const susCount   = result.suspicious_events.length;
-  const critCount  = result.suspicious_events.filter(e => e.severity === 'critical').length;
+  const susCount = result.suspicious_events.length;
+  const critCount = result.suspicious_events.filter(e => e.severity === 'critical').length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 32 }}>
@@ -454,9 +480,9 @@ function ResultView({ result, jobId, filename, isDemo }: {
 
 function TrafficTimelineChart({ windows, events }: { windows: TemporalWindow[]; events: SuspiciousEvent[] }) {
   const data = windows.map(w => ({
-    t:       tsToTime(w.window_start),
+    t: tsToTime(w.window_start),
     packets: w.packet_count,
-    flows:   w.flow_count,
+    flows: w.flow_count,
     suspicious: events.filter(e => e.timestamp >= w.window_start && e.timestamp < w.window_end).length,
   }));
 
@@ -481,7 +507,7 @@ function TrafficTimelineChart({ windows, events }: { windows: TemporalWindow[]; 
           formatter={((value: unknown, name: unknown) => [value ?? 0, name === 'packets' ? 'Packets' : name === 'flows' ? 'Flows' : 'Suspicious']) as any}
         />
         <Area type="monotone" dataKey="packets" stroke="#6366f1" fill="url(#grad-pkt)" strokeWidth={2} name="packets" />
-        <Area type="monotone" dataKey="flows"   stroke="#06b6d4" fill="url(#grad-flow)" strokeWidth={2} name="flows" />
+        <Area type="monotone" dataKey="flows" stroke="#06b6d4" fill="url(#grad-flow)" strokeWidth={2} name="flows" />
         <Area type="monotone" dataKey="suspicious" stroke="#f97316" fill="none" strokeWidth={2} strokeDasharray="4 2" name="suspicious" />
         <Legend formatter={v => v === 'packets' ? 'Packets' : v === 'flows' ? 'Flows' : 'Suspicious'} wrapperStyle={{ fontSize: 11 }} />
       </AreaChart>
@@ -502,9 +528,9 @@ function ProtocolDistChart({ data }: { data: { protocol: string; count: number }
               ))}
             </Pie>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <Tooltip 
-              formatter={((v: unknown) => [`${v ?? 0} pkt`, '']) as any} 
-              contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-md)', padding: '6px 12px' }} 
+            <Tooltip
+              formatter={((v: unknown) => [`${v ?? 0} pkt`, '']) as any}
+              contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-md)', padding: '6px 12px' }}
               itemStyle={{ color: 'var(--text-primary)', fontWeight: 700 }}
             />
           </PieChart>
@@ -512,15 +538,15 @@ function ProtocolDistChart({ data }: { data: { protocol: string; count: number }
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
         {data.map((d, i) => (
-          <div key={d.protocol} style={{ 
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+          <div key={d.protocol} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             background: 'var(--bg-workspace)', padding: '8px 14px', borderRadius: 8,
             border: '1px solid var(--border-subtle)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ 
-                width: 10, height: 10, borderRadius: '50%', 
-                background: PIE_COLORS[i % PIE_COLORS.length], 
+              <div style={{
+                width: 10, height: 10, borderRadius: '50%',
+                background: PIE_COLORS[i % PIE_COLORS.length],
                 boxShadow: `0 0 8px ${PIE_COLORS[i % PIE_COLORS.length]}60`
               }} />
               <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{d.protocol}</span>
@@ -588,31 +614,31 @@ function SuspiciousTable({ events }: { events: SuspiciousEvent[] }) {
         <thead>
           <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--border-subtle)' }}>
             {['Time', 'Indicator Type', 'Source', 'Destination', 'Proto', 'Severity', 'Reason'].map(col => (
-              <th key={col} style={{ 
-                padding: '12px 16px', textAlign: 'left', fontWeight: 800, color: 'var(--text-muted)', 
-                fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap' 
+              <th key={col} style={{
+                padding: '12px 16px', textAlign: 'left', fontWeight: 800, color: 'var(--text-muted)',
+                fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap'
               }}>{col}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {events.map((ev, i) => (
-            <tr key={ev.event_id} style={{ 
-              background: i % 2 === 0 ? 'transparent' : '#fafafa', 
+            <tr key={ev.event_id} style={{
+              background: i % 2 === 0 ? 'transparent' : '#fafafa',
               borderBottom: i === events.length - 1 ? 'none' : '1px solid var(--border-subtle)',
               transition: 'background 0.2s',
               cursor: 'default'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-workspace)'}
-            onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#fafafa'}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-workspace)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#fafafa'}
             >
               <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 11 }}>
-                <Clock size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }}/>
+                <Clock size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }} />
                 {tsToTime(ev.timestamp)}
               </td>
               <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                <span style={{ 
-                  fontSize: 10, fontWeight: 700, color: 'var(--primary)', 
+                <span style={{
+                  fontSize: 10, fontWeight: 700, color: 'var(--primary)',
                   background: 'var(--bg-workspace)', padding: '4px 8px', borderRadius: 6,
                   border: '1px solid var(--border-subtle)'
                 }}>
@@ -629,13 +655,13 @@ function SuspiciousTable({ events }: { events: SuspiciousEvent[] }) {
                 {ev.protocol}
               </td>
               <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                <span style={{ 
-                  fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 999, 
-                  background: SEV_BG[ev.severity] ?? '#f1f5f9', color: SEV_COLOR[ev.severity] ?? '#64748b', 
+                <span style={{
+                  fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 999,
+                  background: SEV_BG[ev.severity] ?? '#f1f5f9', color: SEV_COLOR[ev.severity] ?? '#64748b',
                   textTransform: 'uppercase', letterSpacing: '0.4px', display: 'inline-flex', alignItems: 'center', gap: 4,
                   border: `1px solid ${SEV_COLOR[ev.severity] ?? '#64748b'}30`
                 }}>
-                  <AlertTriangle size={11}/> {ev.severity}
+                  <AlertTriangle size={11} /> {ev.severity}
                 </span>
               </td>
               <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', maxWidth: 360, lineHeight: 1.5, fontSize: 11.5 }}>
@@ -653,27 +679,26 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
   if (entries.length === 0) {
     return <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '24px 0' }}>No activity timeline data.</div>;
   }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 4px 8px 12px', maxHeight: 420, overflowY: 'auto', overflowX: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 12px' }}>
       {entries.map((entry, i) => {
         const isLast = i === entries.length - 1;
         const stageC = STAGE_COLORS_MAP[entry.stage] ?? STAGE_COLORS_MAP['Normal Activity'];
-        const isSus  = entry.entry_type === 'suspicious';
+        const isSus = entry.entry_type === 'suspicious';
 
         return (
-          <div key={i} className="animate-fade-in-up" style={{ 
+          <div key={i} className="animate-fade-in-up" style={{
             display: 'flex', gap: 20, alignItems: 'stretch',
-            position: 'relative', animationDelay: `${i * 0.04}s`
+            position: 'relative', animationDelay: `${i * 0.05}s`
           }}>
             {/* Timeline Line */}
-            {!isLast && <div style={{ 
-              position: 'absolute', left: 15, top: 32, bottom: -20, width: 2, 
+            {!isLast && <div style={{
+              position: 'absolute', left: 15, top: 32, bottom: -20, width: 2,
               background: 'linear-gradient(to bottom, var(--border-default), transparent)', zIndex: 0
             }} />}
 
             {/* Icon / Dot */}
-            <div style={{ 
+            <div style={{
               width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
               background: isSus ? SEV_BG[entry.severity] : '#f1f5f9',
               border: `2px solid ${isSus ? SEV_COLOR[entry.severity] : '#94a3b8'}`,
@@ -681,14 +706,14 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
               zIndex: 1, boxShadow: isSus ? `0 4px 12px ${SEV_COLOR[entry.severity]}40` : 'none',
               marginTop: 6
             }}>
-               <div style={{ 
-                 width: 8, height: 8, borderRadius: '50%', 
-                 background: isSus ? SEV_COLOR[entry.severity] : '#94a3b8' 
-               }} />
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: isSus ? SEV_COLOR[entry.severity] : '#94a3b8'
+              }} />
             </div>
 
             {/* Content Card */}
-            <div style={{ 
+            <div style={{
               flex: 1, background: isSus ? 'var(--bg-card)' : 'transparent',
               border: isSus ? `1px solid ${SEV_COLOR[entry.severity]}40` : '1px solid transparent',
               borderLeft: isSus ? `4px solid ${SEV_COLOR[entry.severity]}` : '4px solid transparent',
@@ -700,30 +725,30 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Clock size={13}/>
+                  <Clock size={13} />
                   {tsToTime(entry.timestamp)}
                 </span>
-                <span style={{ 
-                  fontSize: 10, fontWeight: 800, padding: '3px 12px', borderRadius: 999, 
+                <span style={{
+                  fontSize: 10, fontWeight: 800, padding: '3px 12px', borderRadius: 999,
                   background: stageC.bg, color: stageC.text, border: `1px solid ${stageC.border}40`,
-                  letterSpacing: '0.4px', textTransform: 'uppercase' 
+                  letterSpacing: '0.4px', textTransform: 'uppercase'
                 }}>
                   {entry.stage}
                 </span>
                 {isSus && (
-                  <span style={{ 
-                    fontSize: 9, fontWeight: 800, padding: '3px 10px', borderRadius: 6, 
-                    background: SEV_BG[entry.severity], color: SEV_COLOR[entry.severity], 
+                  <span style={{
+                    fontSize: 9, fontWeight: 800, padding: '3px 10px', borderRadius: 6,
+                    background: SEV_BG[entry.severity], color: SEV_COLOR[entry.severity],
                     textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5,
                     border: `1px solid ${SEV_COLOR[entry.severity]}30`
                   }}>
-                    <AlertTriangle size={11}/> {entry.severity}
+                    <AlertTriangle size={11} /> {entry.severity}
                   </span>
                 )}
               </div>
-              <div style={{ 
-                fontSize: 13, color: isSus ? 'var(--text-primary)' : 'var(--text-secondary)', 
-                lineHeight: 1.6, fontWeight: isSus ? 600 : 400 
+              <div style={{
+                fontSize: 13, color: isSus ? 'var(--text-primary)' : 'var(--text-secondary)',
+                lineHeight: 1.6, fontWeight: isSus ? 600 : 400
               }}>
                 {entry.description.split('(Demo')[0].trim()}
               </div>
@@ -738,10 +763,7 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
 function MetadataGrid({ result, jobId, filename, isDemo }: {
   result: HistoricalResult; jobId: string | null; filename: string; isDemo: boolean;
 }) {
-  const groups: Array<{
-    title: string;
-    items: Array<{ label: string; value: string; isMono?: boolean; highlight?: boolean }>;
-  }> = [
+  const groups = [
     {
       title: "Job Identity",
       items: [
@@ -779,8 +801,8 @@ function MetadataGrid({ result, jobId, filename, isDemo }: {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
       {groups.map((group, i) => (
-        <div key={i} style={{ 
-          background: 'var(--bg-workspace)', border: '1px solid var(--border-subtle)', 
+        <div key={i} style={{
+          background: 'var(--bg-workspace)', border: '1px solid var(--border-subtle)',
           borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 8,
           boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
         }}>
@@ -790,9 +812,9 @@ function MetadataGrid({ result, jobId, filename, isDemo }: {
           {group.items.map(item => (
             <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{item.label}</span>
-              <span style={{ 
-                fontSize: 11, fontWeight: item.highlight ? 800 : 700, 
-                color: item.highlight ? 'var(--color-critical)' : 'var(--text-primary)', 
+              <span style={{
+                fontSize: 11, fontWeight: item.highlight ? 800 : 700,
+                color: item.highlight ? 'var(--color-critical)' : 'var(--text-primary)',
                 fontFamily: item.isMono ? 'var(--font-mono)' : 'inherit',
                 maxWidth: 130, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
               }} title={item.value as string}>

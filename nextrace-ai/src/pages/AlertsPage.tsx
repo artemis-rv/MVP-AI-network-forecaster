@@ -6,9 +6,9 @@ import { AlertTable } from '@/components/alerts/AlertTable';
 import { AlertDetailsDrawer } from '@/components/alerts/AlertDetailsDrawer';
 
 export function AlertsPage() {
-  const { 
-    alerts, stats, filters, loading, error, 
-    fetchAlerts, fetchStats, setFilter, resetFilters, selectAlert, selectedAlertId 
+  const {
+    alerts, stats, filters, loading, error,
+    fetchAlerts, fetchStats, setFilter, resetFilters, selectAlert, selectedAlertId
   } = useAlertStore();
 
   const { session } = useLiveStore();
@@ -38,7 +38,7 @@ export function AlertsPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button 
+          <button
             onClick={() => { fetchAlerts(); fetchStats(); }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
           >
@@ -58,22 +58,22 @@ export function AlertsPage() {
 
       {/* Filters & Table */}
       <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', flex: 1 }}>
-        
+
         {/* Filter Bar */}
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200, background: 'var(--bg-input)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-default)' }}>
             <SearchIcon size={16} color="var(--text-muted)" />
-            <input 
-              type="text" 
-              placeholder="Search alerts..." 
+            <input
+              type="text"
+              placeholder="Search alerts..."
               value={filters.search}
               onChange={(e) => setFilter('search', e.target.value)}
               style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 13, width: '100%', color: 'var(--text-primary)' }}
             />
           </div>
-          
-          <select 
-            value={filters.severity} 
+
+          <select
+            value={filters.severity}
             onChange={(e) => setFilter('severity', e.target.value)}
             style={{ padding: '8px 12px', fontSize: 12, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-card)', outline: 'none', cursor: 'pointer' }}
           >
@@ -84,8 +84,8 @@ export function AlertsPage() {
             <option value="LOW">Low</option>
           </select>
 
-          <select 
-            value={filters.status} 
+          <select
+            value={filters.status}
             onChange={(e) => setFilter('status', e.target.value)}
             style={{ padding: '8px 12px', fontSize: 12, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-card)', outline: 'none', cursor: 'pointer' }}
           >
@@ -96,8 +96,8 @@ export function AlertsPage() {
             <option value="RESOLVED">Resolved</option>
           </select>
 
-          <select 
-            value={filters.category} 
+          <select
+            value={filters.category}
             onChange={(e) => setFilter('category', e.target.value)}
             style={{ padding: '8px 12px', fontSize: 12, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-card)', outline: 'none', cursor: 'pointer' }}
           >
@@ -112,7 +112,7 @@ export function AlertsPage() {
           </select>
 
           {activeFiltersCount > 0 && (
-            <button 
+            <button
               onClick={resetFilters}
               style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
             >
@@ -140,11 +140,11 @@ export function AlertsPage() {
 
 function KpiCard({ title, count, icon, color, onClick, active }: { title: string, count: number, icon: React.ReactNode, color: string, onClick: () => void, active: boolean }) {
   return (
-    <div 
+    <div
       onClick={onClick}
       style={{
-        background: 'var(--bg-card)', padding: '16px 20px', borderRadius: 'var(--radius-lg)', 
-        border: `1px solid ${active ? color : 'var(--border-default)'}`, 
+        background: 'var(--bg-card)', padding: '16px 20px', borderRadius: 'var(--radius-lg)',
+        border: `1px solid ${active ? color : 'var(--border-default)'}`,
         boxShadow: active ? `0 0 0 1px ${color}, var(--shadow-sm)` : 'var(--shadow-sm)',
         display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer',
         transition: 'all 0.2s'
