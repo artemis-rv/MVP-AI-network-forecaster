@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Play, Square, WifiOff, RotateCcw, Trash2,
   Radio, Filter, RefreshCw, AlertTriangle, ShieldAlert, CheckCircle2, ShieldCheck, Clock,
-  Maximize2, X,
+  Maximize2, X, Activity,
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -15,6 +15,55 @@ import { wsService } from '@/services/websocket';
 import type { DemoMode, WindowSecs } from '@/types/live';
 
 const WINDOW_OPTIONS: WindowSecs[] = [5, 10, 15, 30, 60];
+
+function seededRandom(seed: number) {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
+function generateSyntheticChartData(rangeMinutes: number, running: boolean) {
+  const data = [];
+  const now = Date.now();
+  const timeStep = rangeMinutes === 1 ? 2000 : rangeMinutes === 5 ? 10000 : 30000; // ms per point
+  const points = 30; // Number of points on the graph
+  
+  // Base seed on current time quantized to timeStep, so it only updates periodically
+  // If not running, we should freeze the time. We can just use a fixed "now" or current time if we want it to freeze? 
+  // We'll handle freezing by caching the data when stopped.
+  const currentQuantizedTime = Math.floor(now / timeStep) * timeStep;
+
+  let baseTraffic = 500;
+  let baseFlows = 50;
+  
+  for (let i = points - 1; i >= 0; i--) {
+    const t = currentQuantizedTime - (i * timeStep);
+    const seed = t / 1000;
+    
+    // Correlated noise
+    const noise1 = seededRandom(seed) - 0.5;
+    const noise2 = seededRandom(seed + 1) - 0.5;
+    
+    // Traffic spikes
+    const isSpike = seededRandom(seed + 2) > 0.9;
+    const spikeMult = isSpike ? 2 + seededRandom(seed + 3) : 1;
+    
+    const packets = Math.max(0, Math.floor((baseTraffic + noise1 * 100) * spikeMult));
+    const flows = Math.max(0, Math.floor((baseFlows + noise2 * 10 + noise1 * 5) * spikeMult));
+    
+    // Suspicious events correlated with spikes but rare
+    const suspBase = isSpike ? seededRandom(seed + 4) * 15 : seededRandom(seed + 5) * 2;
+    const suspicious = Math.max(0, Math.floor(suspBase));
+    
+    data.push({
+      timestamp: t,
+      time: new Date(t).toLocaleTimeString('en-US', { hour12: false }),
+      packets,
+      flows,
+      suspicious
+    });
+  }
+  return data;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 export function LiveMonitoringPage() {
@@ -32,6 +81,28 @@ export function LiveMonitoringPage() {
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [isGraphModalOpen, setIsGraphModalOpen] = useState(false);
+
+  const [chartTimeRange, setChartTimeRange] = useState<1 | 5 | 15>(1);
+  const [syntheticChartData, setSyntheticChartData] = useState<any[]>([]);
+  const [frozenChartData, setFrozenChartData] = useState<any[] | null>(null);
+  const [activeChartIndex, setActiveChartIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isRunning) {
+      setFrozenChartData(null);
+      const interval = setInterval(() => {
+        setSyntheticChartData(generateSyntheticChartData(chartTimeRange, isRunning));
+      }, 1000);
+      setSyntheticChartData(generateSyntheticChartData(chartTimeRange, isRunning));
+      return () => clearInterval(interval);
+    } else {
+      if (!frozenChartData) {
+        setFrozenChartData(generateSyntheticChartData(chartTimeRange, isRunning));
+      }
+    }
+  }, [isRunning, chartTimeRange]);
+
+  const currentChartData = frozenChartData || syntheticChartData;
 
   // Check backend health and sync running session status on mount / route switch
   useEffect(() => {
@@ -65,15 +136,8 @@ export function LiveMonitoringPage() {
   }, [displayEvents, searchQuery]);
 
   // ── Chart data from temporal history ────────────────────────
-  const chartData = useMemo(() =>
-    temporalHistory.slice(-20).map(t => ({
-      time: new Date((t.window_end as unknown as number) * 1000).toLocaleTimeString('en-US', { hour12: false }),
-      total: t.packet_count,
-      benign: t.benign_count,
-      suspicious: t.suspicious_count,
-    })),
-    [temporalHistory]
-  );
+  // Replaced by synthetic data generation
+  const chartData = currentChartData;
 
   // ── Start / Stop handlers ────────────────────────────────────
   async function handleStart() {
@@ -347,41 +411,77 @@ export function LiveMonitoringPage() {
         <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
           {/* Live Chart */}
           <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Activity</h3>
                 {isRunning && <PulseDot color="var(--color-live)" label="LIVE" />}
+                {!isRunning && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', border: '1px solid var(--border-default)', padding: '2px 6px', borderRadius: 4 }}>STOPPED</span>}
+                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-light)', padding: '2px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Activity size={10} /> Synthetic data
+                </span>
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>packets per temporal window</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Synthetic telemetry · rolling temporal windows</span>
+                <div style={{ display: 'flex', gap: 4, background: 'var(--bg-workspace)', padding: 2, borderRadius: 6 }}>
+                  {[1, 5, 15].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setChartTimeRange(m as 1|5|15)}
+                      style={{
+                        padding: '4px 8px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer',
+                        background: chartTimeRange === m ? 'white' : 'transparent',
+                        color: chartTimeRange === m ? 'var(--text-primary)' : 'var(--text-muted)',
+                        boxShadow: chartTimeRange === m ? 'var(--shadow-sm)' : 'none'
+                      }}
+                    >
+                      Last {m}m
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            {chartData.length === 0 ? (
-              <EmptyChartState running={isRunning} />
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gLiveTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gLiveBenign" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gLiveSuspicious" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)' }} />
-                  <Area type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} fill="url(#gLiveTotal)" dot={false} isAnimationActive={false} />
-                  <Area type="monotone" dataKey="benign" name="Benign" stroke="#10b981" strokeWidth={1.5} fill="url(#gLiveBenign)" dot={false} isAnimationActive={false} />
-                  <Area type="monotone" dataKey="suspicious" name="Suspicious" stroke="#ef4444" strokeWidth={1.5} fill="url(#gLiveSuspicious)" dot={false} isAnimationActive={false} />
-                </AreaChart>
-              </ResponsiveContainer>
+            
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }} onClick={(e) => { if(e && e.activeTooltipIndex !== undefined) setActiveChartIndex(e.activeTooltipIndex); }}>
+                <defs>
+                  <linearGradient id="gLivePackets" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gLiveFlows" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gLiveSusp" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                <XAxis dataKey="time" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} minTickGap={20} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} hide />
+                <Tooltip 
+                  contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)', background: 'var(--bg-card)' }}
+                  labelStyle={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}
+                  cursor={{ stroke: 'var(--border-default)', strokeWidth: 1, strokeDasharray: '4 4' }}
+                />
+                <Area yAxisId="left" type="monotone" dataKey="packets" name="Packet Rate" stroke="#6366f1" strokeWidth={2} fill="url(#gLivePackets)" dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#6366f1' }} isAnimationActive={false} />
+                <Area yAxisId="left" type="monotone" dataKey="flows" name="Flow Count" stroke="#10b981" strokeWidth={1.5} fill="url(#gLiveFlows)" dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#10b981' }} isAnimationActive={false} />
+                <Area yAxisId="right" type="stepAfter" dataKey="suspicious" name="Suspicious Events" stroke="#ef4444" strokeWidth={1.5} fill="url(#gLiveSusp)" dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#ef4444' }} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+            
+            {activeChartIndex !== null && chartData[activeChartIndex] && (
+              <div style={{ marginTop: 12, padding: '8px 12px', background: 'var(--bg-workspace)', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, animation: 'fade-in 0.2s' }}>
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{chartData[activeChartIndex].time}</span>
+                <div style={{ display: 'flex', gap: 12, color: 'var(--text-secondary)' }}>
+                  <span><span style={{ color: '#6366f1', fontWeight: 600 }}>Packets:</span> {chartData[activeChartIndex].packets}</span>
+                  <span><span style={{ color: '#10b981', fontWeight: 600 }}>Flows:</span> {chartData[activeChartIndex].flows}</span>
+                  <span><span style={{ color: '#ef4444', fontWeight: 600 }}>Suspicious:</span> {chartData[activeChartIndex].suspicious}</span>
+                </div>
+                <button onClick={() => setActiveChartIndex(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={14} /></button>
+              </div>
             )}
           </div>
 
