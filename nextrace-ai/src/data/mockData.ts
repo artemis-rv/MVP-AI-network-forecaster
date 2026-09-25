@@ -3,6 +3,17 @@
 
 export const MOCK_LABEL = 'Simulated demo data — not real network traffic';
 
+export interface KpiHoverDetailItem {
+  label: string;
+  value: string | number;
+  highlight?: 'critical' | 'warning' | 'live' | 'primary' | 'muted';
+}
+
+export interface KpiHoverDetails {
+  title: string;
+  items: KpiHoverDetailItem[];
+}
+
 // ─── KPI Stats ───────────────────────────────────────────────
 export const kpiData = [
   {
@@ -14,6 +25,16 @@ export const kpiData = [
     comparison: 'unresolved threats',
     color: 'critical',
     sparkline: [3, 4, 3, 5, 4, 6, 7],
+    hoverDetails: {
+      title: 'Total Alerts',
+      items: [
+        { label: 'Total Alerts', value: 7 },
+        { label: 'Unresolved', value: 6, highlight: 'warning' as const },
+        { label: 'Critical', value: 2, highlight: 'critical' as const },
+        { label: 'High', value: 3, highlight: 'warning' as const },
+        { label: 'Latest', value: 'Suspicious lateral movement' },
+      ],
+    },
   },
   {
     id: 'entities',
@@ -24,16 +45,36 @@ export const kpiData = [
     comparison: 'vs. last hour',
     color: 'warning',
     sparkline: [8, 9, 10, 11, 10, 11, 12],
+    hoverDetails: {
+      title: 'High-Risk Entities',
+      items: [
+        { label: 'High-Risk Entities', value: 12 },
+        { label: 'Critical', value: 4, highlight: 'critical' as const },
+        { label: 'High Risk', value: 8, highlight: 'warning' as const },
+        { label: 'Target', value: '192.168.1.25', highlight: 'primary' as const },
+        { label: 'Reason', value: 'Lateral movement activity' },
+      ],
+    },
   },
   {
     id: 'predictions',
     label: 'Active Attack Paths',
     value: 3,
-    change: null,
+    change: 'Active',
     changeType: 'neutral' as const,
     comparison: 'predicted progressions',
     color: 'primary',
     sparkline: [1, 2, 1, 3, 2, 3, 3],
+    hoverDetails: {
+      title: 'Active Attack Paths',
+      items: [
+        { label: 'Active Paths', value: 3 },
+        { label: 'Current', value: 'Lateral Movement', highlight: 'warning' as const },
+        { label: 'Next', value: 'Data Exfiltration', highlight: 'critical' as const },
+        { label: 'Confidence', value: '68%', highlight: 'live' as const },
+        { label: 'Target', value: '192.168.1.25' },
+      ],
+    },
   },
   {
     id: 'resolutions',
@@ -44,6 +85,16 @@ export const kpiData = [
     comparison: 'alerts mitigated',
     color: 'secondary',
     sparkline: [30, 32, 35, 40, 38, 42, 45],
+    hoverDetails: {
+      title: 'Recent Resolutions',
+      items: [
+        { label: 'Resolutions', value: 45 },
+        { label: 'Resolved Today', value: 12 },
+        { label: 'Rate', value: '86%', highlight: 'live' as const },
+        { label: 'Latest', value: 'Suspicious authentication activity blocked' },
+        { label: 'Avg Time', value: '4m 32s' },
+      ],
+    },
   },
 ];
 

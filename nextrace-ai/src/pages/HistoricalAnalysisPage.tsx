@@ -737,7 +737,10 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
 function MetadataGrid({ result, jobId, filename, isDemo }: {
   result: HistoricalResult; jobId: string | null; filename: string; isDemo: boolean;
 }) {
-  const groups = [
+  const groups: Array<{
+    title: string;
+    items: Array<{ label: string; value: string; isMono?: boolean; highlight?: boolean }>;
+  }> = [
     {
       title: "Job Identity",
       items: [
