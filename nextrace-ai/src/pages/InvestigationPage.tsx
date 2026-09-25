@@ -4,7 +4,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ReactFlowProvider } from '@xyflow/react';
+
 import {
   ArrowLeft, RefreshCw, Sparkles, FileText,
   AlertTriangle,
@@ -14,7 +14,7 @@ import { useInvestigationStore } from '@/store/investigationStore';
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
 import { useAppStore } from '@/store/appStore';
-import { AttackPathGraph } from '@/components/investigation/AttackPathGraph';
+import { LiveEntityGraph } from '@/components/investigation/LiveEntityGraph';
 import { TimelinePanel } from '@/components/investigation/TimelinePanel';
 import { RelatedActivityTable } from '@/components/investigation/RelatedActivityTable';
 import { ATTACK_STAGES, STAGE_COLORS } from '@/types/forecast';
@@ -53,7 +53,7 @@ export function InvestigationPage() {
           openInvestigation, closeInvestigation, generateFindings,
           openReportModal, closeReportModal, refreshTimeline } = useInvestigationStore();
   const { currentForecast } = useForecastStore();
-  const { session, currentTemporal } = useLiveStore();
+  const { session, currentTemporal, liveNodes, liveEdges } = useLiveStore();
   const { addToast } = useAppStore();
   const isLive = session?.running ?? false;
 
@@ -112,7 +112,7 @@ export function InvestigationPage() {
   const suspCount = currentTemporal?.suspicious_count ?? 12;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
       {/* ── Page Header ── */}
       <div style={{ padding: '14px 0 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
@@ -156,10 +156,10 @@ export function InvestigationPage() {
       </div>
 
       {/* ── 3-column workspace ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 300px', gap: 12, flex: 1, overflow: 'hidden', paddingTop: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 300px', gap: 12, paddingTop: 12 }}>
 
         {/* ── LEFT PANEL ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', paddingRight: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4 }}>
 
           {/* Entity Details */}
           <div style={cardStyle}>
@@ -283,13 +283,15 @@ export function InvestigationPage() {
           <AttackStageBar currentStage={stage} predictedStage={nextStage} isBenign={currentForecast?.is_benign ?? true} />
 
           {/* Graph */}
-          <div style={{ flex: 1, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', overflow: 'hidden', position: 'relative' }}>
-            <ReactFlowProvider>
-              <AttackPathGraph
-                focusIp={entityIp}
-                onNodeSelect={(ip) => useInvestigationStore.getState().setSelectedNodeIp(ip)}
-              />
-            </ReactFlowProvider>
+          <div style={{ flex: 1, minHeight: 500, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', overflow: 'hidden', position: 'relative' }}>
+            <LiveEntityGraph
+              nodes={liveNodes}
+              edges={liveEdges}
+              running={isLive}
+              focusIp={entityIp}
+              isExpanded
+              onNodeSelect={(ip) => useInvestigationStore.getState().setSelectedNodeIp(ip)}
+            />
           </div>
 
           {/* Attack Path Summary */}
@@ -297,7 +299,7 @@ export function InvestigationPage() {
         </div>
 
         {/* ── RIGHT PANEL ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', paddingLeft: 4, paddingBottom: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingLeft: 4, paddingBottom: 20 }}>
           <TimelinePanel />
           <RelatedActivityTable />
         </div>

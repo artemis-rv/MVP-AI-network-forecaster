@@ -3,6 +3,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend,
 } from 'recharts';
+
 import { trafficData } from '@/data/mockData';
 import { AlertTriangle } from 'lucide-react';
 

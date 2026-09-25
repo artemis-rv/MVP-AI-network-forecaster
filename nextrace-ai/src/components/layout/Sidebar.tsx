@@ -51,6 +51,7 @@ export function Sidebar() {
           items: [
             { id: 'overview', label: 'Overview', icon: LayoutDashboard, path: '/' },
             { id: 'live-monitoring', label: 'Live Monitoring', icon: Radio, path: '/live-monitoring' },
+            { id: 'investigation', label: 'Investigation', icon: Search, path: '/investigation' },
             { id: 'attack-prediction', label: 'Attack Prediction', icon: TrendingUp, path: '/attack-prediction' },
             { id: 'path-forecaster', label: 'Attack Path Forecaster', icon: Target, path: '/simulation' },
             { id: 'alerts', label: 'Alerts', icon: Bell, path: '/alerts', badge: activeAlertsBadge > 0 ? activeAlertsBadge : undefined },
@@ -60,7 +61,6 @@ export function Sidebar() {
           id: 'historical',
           title: 'Forensic & Historical',
           items: [
-            { id: 'investigation', label: 'Investigation', icon: Search, path: '/investigation' },
             { id: 'historical-pcap', label: 'Historical PCAP', icon: FileSearch, path: '/historical-pcap' },
             { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
           ]

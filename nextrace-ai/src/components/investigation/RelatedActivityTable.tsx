@@ -2,34 +2,26 @@
 
 import { useState } from 'react';
 import { useLiveStore } from '@/store/liveStore';
-import { recentAlerts } from '@/data/mockData';
+import { useInvestigationStore } from '@/store/investigationStore';
 
 type ClassFilter = 'All' | 'benign' | 'suspicious';
 type ProtoFilter = 'All' | 'TCP' | 'UDP' | 'ICMP' | 'DNS' | 'HTTP';
 
-// Demo fallback rows derived from mock alerts
-const DEMO_ROWS = recentAlerts.map((a, i) => ({
-  id: `demo-${i}`,
-  timestamp: a.time,
-  protocol: ['TCP', 'UDP', 'TCP', 'ICMP', 'TCP', 'TCP'][i % 6],
-  src: a.source,
-  dst: a.destination,
-  port: [443, 53, 445, 0, 5432, 443][i % 6],
-  packets: [12, 5, 27, 8, 7, 3][i % 6],
-  classification: (a.severity === 'Low' ? 'benign' : 'suspicious') as 'benign' | 'suspicious',
-}));
 
 export function RelatedActivityTable() {
-  const { displayEvents, session } = useLiveStore();
+  const { displayEvents } = useLiveStore();
   const [classFilter, setClassFilter] = useState<ClassFilter>('All');
   const [protoFilter, setProtoFilter] = useState<ProtoFilter>('All');
 
-  const isLive = session?.running ?? false;
+  const { investigation } = useInvestigationStore();
+  const entityIp = investigation?.selectedEntityIp;
 
-  // Build rows
+  // Build rows based on the selected entity
   type Row = { id: string; timestamp: string; protocol: string; src: string; dst: string; port: number; packets: number; classification: 'benign' | 'suspicious' };
-  const rows: Row[] = isLive
-    ? displayEvents.slice(0, 50).map((e, i) => ({
+  const allRows: Row[] = displayEvents
+    .filter(e => !entityIp || e.src_ip === entityIp || e.dst_ip === entityIp)
+    .slice(0, 100)
+    .map((e, i) => ({
         id: `live-${i}`,
         timestamp: e.timestamp.slice(11, 19) || e.timestamp,
         protocol: e.protocol,
@@ -38,8 +30,9 @@ export function RelatedActivityTable() {
         port: e.dst_port,
         packets: 1,
         classification: e.classification,
-      }))
-    : DEMO_ROWS;
+    }));
+
+  const rows = allRows;
 
   const filtered = rows.filter(r =>
     (classFilter === 'All' || r.classification === classFilter) &&
@@ -57,7 +50,6 @@ export function RelatedActivityTable() {
           <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>Related Network Activity</h3>
           <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
             {susCount} suspicious · {benCount} benign · {rows.length} total
-            {!isLive && ' · Demo fallback data'}
           </div>
         </div>
 

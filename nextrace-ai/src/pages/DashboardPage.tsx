@@ -7,7 +7,7 @@ import { AttackForecast } from '@/components/dashboard/AttackForecast';
 import { NetworkEntities } from '@/components/dashboard/NetworkEntities';
 import { RecentAlerts } from '@/components/dashboard/RecentAlerts';
 import { LatestReports } from '@/components/dashboard/LatestReports';
-import { kpiData, trafficData } from '@/data/mockData';
+import { kpiData } from '@/data/mockData';
 import { useLiveStore } from '@/store/liveStore';
 import { useAlertStore } from '@/store/alertStore';
 import {
@@ -41,15 +41,24 @@ export function DashboardPage() {
   ] : null;
 
   // Chart data: use real temporal history if available, else mock
-  const chartData = temporalHistory.length > 0
-    ? temporalHistory.map(t => ({
-        time: typeof t.window_end === 'number'
-          ? new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end).toLocaleTimeString('en-US', { hour12: false })
-          : new Date(String(t.window_end)).toLocaleTimeString('en-US', { hour12: false }),
-        total: t.packet_count,
-        events: t.suspicious_count,
-      }))
-    : trafficData;
+  const chartData = (isLive && temporalHistory.length > 0)
+    ? temporalHistory.map(t => {
+        let dateObj = new Date();
+        if (t.window_end) {
+           if (typeof t.window_end === 'number') {
+             dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
+           } else {
+             const str = String(t.window_end);
+             dateObj = new Date(!isNaN(Number(str)) ? Number(str) * 1000 : str);
+           }
+        }
+        return {
+          time: dateObj.toLocaleTimeString('en-US', { hour12: false }),
+          total: t.packet_count,
+          events: t.suspicious_count,
+        };
+      })
+    : undefined;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
