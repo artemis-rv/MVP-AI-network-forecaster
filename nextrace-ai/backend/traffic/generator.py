@@ -26,11 +26,11 @@ except Exception:
 
 
 # ── IP Pools (private / documentation ranges only) ───────────────────────────
-_INTERNAL_HOSTS  = [f"192.168.1.{i}" for i in range(10, 55)]
-_INTERNAL_SERVERS= [f"192.168.1.{i}" for i in range(100, 115)]
-_INTERNAL_DB     = ["192.168.1.50", "192.168.1.51"]
-_EXTERNAL_DNS    = ["8.8.8.8", "1.1.1.1", "208.67.222.222"]
-_EXTERNAL_WEB    = ["203.0.113.10", "203.0.113.25", "198.51.100.5"]  # RFC 5737
+_INTERNAL_HOSTS  = [f"192.168.1.{i}" for i in range(10, 17)]  # 7 workstations
+_INTERNAL_SERVERS= [f"192.168.1.{i}" for i in range(100, 105)] # 5 servers
+_INTERNAL_DB     = ["192.168.1.104"]
+_EXTERNAL_DNS    = ["192.168.1.100"]
+_EXTERNAL_WEB    = ["192.168.1.101", "192.168.1.102"]
 _SUSPICIOUS_SRC  = ["10.0.0.5", "10.0.0.6"]
 
 _COMMON_PORTS_TCP  = [80, 443, 22, 25, 587, 8080, 3389, 3306, 5432]

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { demoQuestions } from '@/data/mockData';
-import { Send, Bot, User } from 'lucide-react';
-
-import { MessageCircle, X } from 'lucide-react';
+import { Send, Bot, User, MessageCircle, X } from 'lucide-react';
+import { useLiveStore } from '@/store/liveStore';
+import { useForecastStore } from '@/store/forecastStore';
+import { useInvestigationStore } from '@/store/investigationStore';
 
 interface Message {
   id: string;
@@ -42,10 +43,77 @@ export function InvestigationAssistant() {
 
   const handleSend = () => {
     if (!inputValue.trim()) return;
-    const q = demoQuestions.find(dq =>
-      dq.question.toLowerCase().includes(inputValue.toLowerCase().split(' ')[0])
-    );
-    const answer = q?.answer ?? '[DEMO RESPONSE] I can only answer predefined questions in this demo. Please select one of the quick questions below.';
+    
+    let answer = '';
+    const qLower = inputValue.toLowerCase();
+    
+    const { currentTemporal, displayEvents, session, liveNodes, liveEdges } = useLiveStore.getState();
+    const { currentForecast } = useForecastStore.getState();
+    const { findings } = useInvestigationStore.getState();
+    
+    // Simple regex for IP extraction
+    const ipMatch = inputValue.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
+    const portMatch = inputValue.match(/\b(?:port\s)?(\d{1,5})\b/i);
+    const queriedIp = ipMatch ? ipMatch[0] : null;
+    const queriedPort = portMatch ? portMatch[1] : null;
+
+    if (queriedIp) {
+       const node = liveNodes.find(n => n.ip === queriedIp);
+       const nodeEvents = displayEvents.filter(e => e.src_ip === queriedIp || e.dst_ip === queriedIp);
+       const edges = liveEdges.filter(e => e.from === node?.id || e.to === node?.id);
+       
+       if (node) {
+         answer = `Entity ${queriedIp} is categorized as a ${node.type?.toUpperCase() || 'UNKNOWN'}. It currently has ${edges.length} active relationships. We have observed ${nodeEvents.length} recent events involving this IP.`;
+         const suspEvents = nodeEvents.filter(e => e.classification === 'suspicious');
+         if (suspEvents.length > 0) {
+           answer += `\n\nAlert: This IP is involved in ${suspEvents.length} suspicious events!`;
+         }
+       } else {
+         answer = `I don't have detailed node information for ${queriedIp}, but there are ${nodeEvents.length} packets involving it in the recent event log.`;
+       }
+    } else if (queriedPort) {
+       const portEvents = displayEvents.filter(e => String(e.src_port) === queriedPort || String(e.dst_port) === queriedPort);
+       answer = `I found ${portEvents.length} recent network events involving port ${queriedPort}.`;
+       if (portEvents.length > 0) {
+         const protos = Array.from(new Set(portEvents.map(e => e.protocol))).join(', ');
+         answer += ` The protocols used on this port include: ${protos}.`;
+       }
+    } else if (qLower.includes('finding') || qLower.includes('evidence')) {
+       if (findings && findings.length > 0) {
+         answer = `I have ${findings.length} findings available for the current investigation:\n\n` +
+                  findings.map((f, i) => `${i + 1}. [Confidence: ${f.confidence}] ${f.summary}`).join('\n\n');
+       } else {
+         answer = `There are no specific findings generated for the current investigation yet. Try clicking "Generate AI Findings" on the Investigation page first.`;
+       }
+    } else if (qLower.includes('pcap')) {
+       answer = `Based on the ingested PCAP data and our live analysis, we observed a total of ${displayEvents.length} network packets. You can drill down into specific IPs or ask about suspicious traffic to investigate further.`;
+    } else if (!session?.running && displayEvents.length === 0) {
+      answer = 'Please start a live session or upload a PCAP first to analyze the traffic data.';
+    } else if (qLower.includes('traffic') || qLower.includes('packet') || qLower.includes('connection')) {
+      if (currentTemporal) {
+        answer = `Currently observing ${currentTemporal.packet_count} packets (${(currentTemporal.byte_count / 1024).toFixed(1)} KB) across ${currentTemporal.flow_count} active flows. Connection rate is ${currentTemporal.connection_rate.toFixed(1)} pkt/s. Suspicious ratio is ${(currentTemporal.suspicious_ratio * 100).toFixed(1)}%.`;
+      } else {
+        answer = `I see ${displayEvents.length} recent events in the traffic log. Start the Live Demo to see aggregated temporal stats!`;
+      }
+    } else if (qLower.includes('suspicious') || qLower.includes('alert') || qLower.includes('attack')) {
+      const suspCount = currentTemporal?.suspicious_count ?? displayEvents.filter(e => e.classification === 'suspicious').length;
+      answer = `There are currently ${suspCount} suspicious events in the analyzed data.`;
+      if (currentForecast && !currentForecast.is_benign) {
+         answer += `\n\nForecast indicates an active attack progression at stage: ${currentForecast.current_stage}. Predicted next stage is ${currentForecast.predicted_next_stage} (Confidence: ${(currentForecast.confidence * 100).toFixed(0)}%).`;
+      } else if (currentForecast) {
+         answer += `\n\nThe forecast model currently considers the overall traffic state to be benign.`;
+      }
+    } else if (qLower.includes('entity') || qLower.includes('host') || qLower.includes('doing')) {
+       answer = `I am monitoring ${liveNodes.length} active network entities.`;
+       const susp = displayEvents.find(e => e.classification === 'suspicious');
+       if (susp) {
+         answer += `\nFor instance, ${susp.src_ip} has recently exhibited suspicious behavior toward ${susp.dst_ip}.`;
+       }
+    } else {
+       const q = demoQuestions.find(dq => dq.question.toLowerCase().includes(qLower.split(' ')[0]));
+       answer = q?.answer ?? `I am dynamically analyzing the live traffic stream and any uploaded PCAPs. I can answer questions about specific IPs, ports, "traffic" volume, "suspicious" findings, or "evidence". Try asking something specific!`;
+    }
+
     handleQuestion(inputValue, answer);
     setInputValue('');
   };

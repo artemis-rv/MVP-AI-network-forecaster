@@ -69,12 +69,12 @@ function buildDemoTimeline(entityIp: string): TimelineEntry[] {
 }
 
 // ── Build timeline from live state ────────────────────────────────────────────
-function buildLiveTimeline(): TimelineEntry[] {
+function buildLiveTimeline(entityIp?: string): TimelineEntry[] {
   const { displayEvents } = useLiveStore.getState();
   const { currentForecast } = useForecastStore.getState();
 
   const entries: TimelineEntry[] = displayEvents
-    .filter(e => e.classification === 'suspicious')
+    .filter(e => e.classification === 'suspicious' && (!entityIp || e.src_ip === entityIp || e.dst_ip === entityIp))
     .slice(0, 12)
     .reverse()
     .map((e, i) => ({
@@ -163,7 +163,7 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
       sourceType: ctx.sourceType,
     };
 
-    const timeline = isLive ? buildLiveTimeline() : buildDemoTimeline(ctx.ip);
+    const timeline = isLive ? buildLiveTimeline(ctx.ip) : buildDemoTimeline(ctx.ip);
 
     set({
       investigation: inv,
@@ -219,7 +219,7 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
 
   refreshTimeline: () => {
     const { session } = useLiveStore.getState();
-    const timeline = (session?.running) ? buildLiveTimeline() : buildDemoTimeline(get().context?.ip ?? 'unknown');
+    const timeline = (session?.running) ? buildLiveTimeline(get().context?.ip) : buildDemoTimeline(get().context?.ip ?? 'unknown');
     set({ timeline });
   },
 }));
