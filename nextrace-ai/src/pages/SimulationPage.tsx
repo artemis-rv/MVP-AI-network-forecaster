@@ -116,7 +116,7 @@ export function SimulationPage() {
   const previewSequence = (K_MAP[config.k] ?? K_MAP[5]).map(i => ALL_STAGES[i]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0 }}>
 
       {/* ── Header ── */}
       <div style={{ paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
@@ -175,7 +175,7 @@ export function SimulationPage() {
         </span>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingBottom: 40, overflowY: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingBottom: 40 }}>
 
         {/* ── Live Network Situation Context Card ── */}
         <div style={{

@@ -23,7 +23,7 @@ import { HistoricalNetworkGraph } from '@/components/historical/HistoricalNetwor
 
 // ── Colour constants ────────────────────────────────────────────────────────
 const SEV_COLOR: Record<string, string> = {
-  critical: '#dc2626', high: '#f97316', medium: '#f59e0b', low: '#10b981',
+  critical: '#b91c1c', high: '#c2410c', medium: '#b45309', low: '#047857',
 };
 const SEV_BG: Record<string, string> = {
   critical: '#fee2e2', high: '#ffedd5', medium: '#fef3c7', low: '#d1fae5',
@@ -492,25 +492,47 @@ function TrafficTimelineChart({ windows, events }: { windows: TemporalWindow[]; 
 function ProtocolDistChart({ data }: { data: { protocol: string; count: number }[] }) {
   const total = data.reduce((s, d) => s + d.count, 0);
   return (
-    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-      <ResponsiveContainer width="50%" height={160}>
-        <PieChart>
-          <Pie data={data} dataKey="count" nameKey="protocol" cx="50%" cy="50%" outerRadius={60} strokeWidth={1.5}>
-            {data.map((_, i) => (
-              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-            ))}
-          </Pie>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <Tooltip formatter={((v: unknown) => [`${v ?? 0} (${(((v as number ?? 0) / total) * 100).toFixed(1)}%)`, '']) as any} contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--border-default)' }} />
-        </PieChart>
-      </ResponsiveContainer>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', gap: 24, alignItems: 'center', padding: '10px 16px' }}>
+      <div style={{ width: 140, height: 140, flexShrink: 0 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={data} dataKey="count" nameKey="protocol" cx="50%" cy="50%" innerRadius={42} outerRadius={60} strokeWidth={2} stroke="var(--bg-card)">
+              {data.map((_, i) => (
+                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+              ))}
+            </Pie>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <Tooltip 
+              formatter={((v: unknown) => [`${v ?? 0} pkt`, '']) as any} 
+              contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-md)', padding: '6px 12px' }} 
+              itemStyle={{ color: 'var(--text-primary)', fontWeight: 700 }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
         {data.map((d, i) => (
-          <div key={d.protocol} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 3, background: PIE_COLORS[i % PIE_COLORS.length], flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 50 }}>{d.protocol}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>{d.count.toLocaleString()}</span>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{((d.count / total) * 100).toFixed(0)}%</span>
+          <div key={d.protocol} style={{ 
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+            background: 'var(--bg-workspace)', padding: '8px 14px', borderRadius: 8,
+            border: '1px solid var(--border-subtle)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ 
+                width: 10, height: 10, borderRadius: '50%', 
+                background: PIE_COLORS[i % PIE_COLORS.length], 
+                boxShadow: `0 0 8px ${PIE_COLORS[i % PIE_COLORS.length]}60`
+              }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{d.protocol}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                {d.count.toLocaleString()}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, width: 34, textAlign: 'right' }}>
+                {((d.count / total) * 100).toFixed(0)}%
+              </span>
+            </div>
           </div>
         ))}
       </div>
@@ -553,32 +575,72 @@ function TopEntitiesTable({ srcIps, dstIps }: { srcIps: { ip: string; count: num
 
 function SuspiciousTable({ events }: { events: SuspiciousEvent[] }) {
   if (events.length === 0) {
-    return <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '24px 0' }}>No suspicious indicators detected.</div>;
+    return (
+      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '32px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <CheckCircle2 size={24} color="#059669" />
+        No suspicious indicators detected in this PCAP.
+      </div>
+    );
   }
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+    <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 10, background: 'var(--bg-card)' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ background: 'var(--bg-workspace)' }}>
-            {['Time', 'Type', 'Source', 'Destination', 'Protocol', 'Severity', 'Reason'].map(col => (
-              <th key={col} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.4px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{col}</th>
+          <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--border-subtle)' }}>
+            {['Time', 'Indicator Type', 'Source', 'Destination', 'Proto', 'Severity', 'Reason'].map(col => (
+              <th key={col} style={{ 
+                padding: '12px 16px', textAlign: 'left', fontWeight: 800, color: 'var(--text-muted)', 
+                fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap' 
+              }}>{col}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {events.map((ev, i) => (
-            <tr key={ev.event_id} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--bg-workspace)', borderTop: '1px solid var(--border-subtle)' }}>
-              <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{tsToTime(ev.timestamp)}</td>
-              <td style={{ padding: '7px 10px', fontWeight: 600, color: 'var(--primary)', whiteSpace: 'nowrap', fontSize: 10 }}>{ev.type.replace(/_/g, ' ').toUpperCase()}</td>
-              <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{ev.src_ip}</td>
-              <td style={{ padding: '7px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{ev.dst_ip}</td>
-              <td style={{ padding: '7px 10px', fontWeight: 700, color: PROTO_COLORS[ev.protocol] ?? 'var(--text-muted)' }}>{ev.protocol}</td>
-              <td style={{ padding: '7px 10px' }}>
-                <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 8px', borderRadius: 999, background: SEV_BG[ev.severity] ?? '#f1f5f9', color: SEV_COLOR[ev.severity] ?? '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                  {ev.severity}
+            <tr key={ev.event_id} style={{ 
+              background: i % 2 === 0 ? 'transparent' : '#fafafa', 
+              borderBottom: i === events.length - 1 ? 'none' : '1px solid var(--border-subtle)',
+              transition: 'background 0.2s',
+              cursor: 'default'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-workspace)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#fafafa'}
+            >
+              <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 11 }}>
+                <Clock size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }}/>
+                {tsToTime(ev.timestamp)}
+              </td>
+              <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                <span style={{ 
+                  fontSize: 10, fontWeight: 700, color: 'var(--primary)', 
+                  background: 'var(--bg-workspace)', padding: '4px 8px', borderRadius: 6,
+                  border: '1px solid var(--border-subtle)'
+                }}>
+                  {ev.type.replace(/_/g, ' ').toUpperCase()}
                 </span>
               </td>
-              <td style={{ padding: '7px 10px', color: 'var(--text-secondary)', maxWidth: 320, lineHeight: 1.4 }}>{ev.reason.split('(Demo')[0].trim()}</td>
+              <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', whiteSpace: 'nowrap', fontWeight: 500 }}>
+                {ev.src_ip}
+              </td>
+              <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                {ev.dst_ip}
+              </td>
+              <td style={{ padding: '12px 16px', fontWeight: 800, color: PROTO_COLORS[ev.protocol] ?? 'var(--text-muted)', fontSize: 11 }}>
+                {ev.protocol}
+              </td>
+              <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                <span style={{ 
+                  fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 999, 
+                  background: SEV_BG[ev.severity] ?? '#f1f5f9', color: SEV_COLOR[ev.severity] ?? '#64748b', 
+                  textTransform: 'uppercase', letterSpacing: '0.4px', display: 'inline-flex', alignItems: 'center', gap: 4,
+                  border: `1px solid ${SEV_COLOR[ev.severity] ?? '#64748b'}30`
+                }}>
+                  <AlertTriangle size={11}/> {ev.severity}
+                </span>
+              </td>
+              <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', maxWidth: 360, lineHeight: 1.5, fontSize: 11.5 }}>
+                {ev.reason.split('(Demo')[0].trim()}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -592,29 +654,76 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
     return <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '24px 0' }}>No activity timeline data.</div>;
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, maxHeight: 400, overflowY: 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 12px' }}>
       {entries.map((entry, i) => {
         const isLast = i === entries.length - 1;
         const stageC = STAGE_COLORS_MAP[entry.stage] ?? STAGE_COLORS_MAP['Normal Activity'];
         const isSus  = entry.entry_type === 'suspicious';
 
         return (
-          <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', paddingBottom: isLast ? 0 : 4 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, paddingTop: 3 }}>
-              <div style={{
-                width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-                background: isSus ? SEV_COLOR[entry.severity] ?? '#f59e0b' : 'var(--color-live)',
-                boxShadow: isSus ? `0 0 6px ${SEV_COLOR[entry.severity] ?? '#f59e0b'}50` : 'none',
-              }} />
-              {!isLast && <div style={{ width: 2, flex: 1, background: 'var(--border-subtle)', minHeight: 18, marginTop: 3 }} />}
+          <div key={i} className="animate-fade-in-up" style={{ 
+            display: 'flex', gap: 20, alignItems: 'stretch',
+            position: 'relative', animationDelay: `${i * 0.05}s`
+          }}>
+            {/* Timeline Line */}
+            {!isLast && <div style={{ 
+              position: 'absolute', left: 15, top: 32, bottom: -20, width: 2, 
+              background: 'linear-gradient(to bottom, var(--border-default), transparent)', zIndex: 0
+            }} />}
+
+            {/* Icon / Dot */}
+            <div style={{ 
+              width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+              background: isSus ? SEV_BG[entry.severity] : '#f1f5f9',
+              border: `2px solid ${isSus ? SEV_COLOR[entry.severity] : '#94a3b8'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 1, boxShadow: isSus ? `0 4px 12px ${SEV_COLOR[entry.severity]}40` : 'none',
+              marginTop: 6
+            }}>
+               <div style={{ 
+                 width: 8, height: 8, borderRadius: '50%', 
+                 background: isSus ? SEV_COLOR[entry.severity] : '#94a3b8' 
+               }} />
             </div>
-            <div style={{ paddingBottom: isLast ? 0 : 10, flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{tsToTime(entry.timestamp)}</span>
-                <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 999, background: stageC.bg, color: stageC.text, border: `1px solid ${stageC.border}30`, letterSpacing: '0.3px' }}>{entry.stage}</span>
-                {isSus && <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 6px', borderRadius: 999, background: SEV_BG[entry.severity], color: SEV_COLOR[entry.severity], textTransform: 'uppercase' }}>{entry.severity}</span>}
+
+            {/* Content Card */}
+            <div style={{ 
+              flex: 1, background: isSus ? 'var(--bg-card)' : 'transparent',
+              border: isSus ? `1px solid ${SEV_COLOR[entry.severity]}40` : '1px solid transparent',
+              borderLeft: isSus ? `4px solid ${SEV_COLOR[entry.severity]}` : '4px solid transparent',
+              borderRadius: 10, padding: isSus ? '14px 20px' : '6px 20px',
+              boxShadow: isSus ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
+              transition: 'all 0.2s ease-in-out',
+              display: 'flex', flexDirection: 'column', gap: 6,
+              marginBottom: isLast ? 0 : 8
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Clock size={13}/>
+                  {tsToTime(entry.timestamp)}
+                </span>
+                <span style={{ 
+                  fontSize: 10, fontWeight: 800, padding: '3px 12px', borderRadius: 999, 
+                  background: stageC.bg, color: stageC.text, border: `1px solid ${stageC.border}40`,
+                  letterSpacing: '0.4px', textTransform: 'uppercase' 
+                }}>
+                  {entry.stage}
+                </span>
+                {isSus && (
+                  <span style={{ 
+                    fontSize: 9, fontWeight: 800, padding: '3px 10px', borderRadius: 6, 
+                    background: SEV_BG[entry.severity], color: SEV_COLOR[entry.severity], 
+                    textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5,
+                    border: `1px solid ${SEV_COLOR[entry.severity]}30`
+                  }}>
+                    <AlertTriangle size={11}/> {entry.severity}
+                  </span>
+                )}
               </div>
-              <div style={{ fontSize: 12, color: isSus ? 'var(--text-primary)' : 'var(--text-muted)', lineHeight: 1.4, fontWeight: isSus ? 500 : 400 }}>
+              <div style={{ 
+                fontSize: 13, color: isSus ? 'var(--text-primary)' : 'var(--text-secondary)', 
+                lineHeight: 1.6, fontWeight: isSus ? 600 : 400 
+              }}>
                 {entry.description.split('(Demo')[0].trim()}
               </div>
             </div>
@@ -628,26 +737,65 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
 function MetadataGrid({ result, jobId, filename, isDemo }: {
   result: HistoricalResult; jobId: string | null; filename: string; isDemo: boolean;
 }) {
-  const rows = [
-    ['Job ID',          jobId ?? '—'],
-    ['Filename',        filename],
-    ['Data Source',     isDemo ? 'Demo (Synthetic)' : 'Uploaded PCAP'],
-    ['Packets',         result.packet_count.toLocaleString()],
-    ['Flows',           result.flow_count.toLocaleString()],
-    ['Duration',        formatDuration(result.duration_seconds)],
-    ['Temporal Window', `${result.window_seconds}s`],
-    ['Windows',         result.temporal_windows.length.toString()],
-    ['Suspicious',      result.suspicious_events.length.toString()],
-    ['Start',           tsToTime(result.start_timestamp)],
-    ['End',             tsToTime(result.end_timestamp)],
-    ['Isolation',       'Isolated historical job — live state unmodified'],
+  const groups = [
+    {
+      title: "Job Identity",
+      items: [
+        { label: 'Job ID', value: jobId ?? '—', isMono: true },
+        { label: 'Filename', value: filename, isMono: true },
+        { label: 'Data Source', value: isDemo ? 'Demo (Synthetic)' : 'Uploaded PCAP' },
+      ]
+    },
+    {
+      title: "Volume Metrics",
+      items: [
+        { label: 'Packets', value: result.packet_count.toLocaleString() },
+        { label: 'Flows', value: result.flow_count.toLocaleString() },
+        { label: 'Suspicious', value: result.suspicious_events.length.toString(), highlight: result.suspicious_events.length > 0 },
+      ]
+    },
+    {
+      title: "Temporal Bounds",
+      items: [
+        { label: 'Duration', value: formatDuration(result.duration_seconds) },
+        { label: 'Start Time', value: tsToTime(result.start_timestamp) },
+        { label: 'End Time', value: tsToTime(result.end_timestamp) },
+      ]
+    },
+    {
+      title: "Analysis Context",
+      items: [
+        { label: 'Temporal Window', value: `${result.window_seconds}s` },
+        { label: 'Total Windows', value: result.temporal_windows.length.toString() },
+        { label: 'State Isolation', value: 'Live state unmodified' },
+      ]
+    }
   ];
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
-      {rows.map(([k, v]) => (
-        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k}</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', fontFamily: k === 'Job ID' || k === 'Filename' ? 'var(--font-mono)' : 'inherit', maxWidth: 160, textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+      {groups.map((group, i) => (
+        <div key={i} style={{ 
+          background: 'var(--bg-workspace)', border: '1px solid var(--border-subtle)', 
+          borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 8,
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)'
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 2 }}>
+            {group.title}
+          </div>
+          {group.items.map(item => (
+            <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{item.label}</span>
+              <span style={{ 
+                fontSize: 11, fontWeight: item.highlight ? 800 : 700, 
+                color: item.highlight ? 'var(--color-critical)' : 'var(--text-primary)', 
+                fontFamily: item.isMono ? 'var(--font-mono)' : 'inherit',
+                maxWidth: 130, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+              }} title={item.value as string}>
+                {item.value}
+              </span>
+            </div>
+          ))}
         </div>
       ))}
     </div>
