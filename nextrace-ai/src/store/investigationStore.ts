@@ -44,29 +44,6 @@ function priorityFromForecast(stage: string): Investigation['priority'] {
   }
 }
 
-// ── Demo fallback timeline ─────────────────────────────────────────────────────
-function buildDemoTimeline(entityIp: string): TimelineEntry[] {
-  const base = new Date();
-  const entries: Array<[number, string, TimelineEntry['type'], string?]> = [
-    [0,  `Reconnaissance activity detected from ${entityIp}`, 'observed', 'Reconnaissance'],
-    [15, 'Multiple destination ports observed (scan pattern)', 'observed', 'Reconnaissance'],
-    [30, `Suspicious connection established to ${entityIp}`, 'observed', 'Reconnaissance'],
-    [45, 'Internal host relationship increased — multiple new edges', 'observed', 'Initial Access'],
-    [60, 'Lateral movement pattern observed — cross-segment traffic', 'observed', 'Lateral Movement'],
-    [75, 'Potential next stage: Data Exfiltration', 'predicted', 'Data Exfiltration'],
-  ];
-
-  return entries.map(([offsetSec, event, type, stage], i) => {
-    const t = new Date(base.getTime() - (75 - offsetSec) * 1000);
-    return {
-      id: `tl-${i}`,
-      timestamp: t.toLocaleTimeString('en-US', { hour12: false }),
-      event,
-      type,
-      stage,
-    };
-  });
-}
 
 // ── Build timeline from live state ────────────────────────────────────────────
 function buildLiveTimeline(entityIp?: string): TimelineEntry[] {
@@ -111,7 +88,6 @@ function buildLiveTimeline(entityIp?: string): TimelineEntry[] {
     });
   }
 
-  if (entries.length === 0) return buildDemoTimeline('unknown');
   return entries;
 }
 
@@ -163,7 +139,7 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
       sourceType: ctx.sourceType,
     };
 
-    const timeline = isLive ? buildLiveTimeline(ctx.ip) : buildDemoTimeline(ctx.ip);
+    const timeline = isLive ? buildLiveTimeline(ctx.ip) : [];
 
     set({
       investigation: inv,
@@ -219,7 +195,7 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
 
   refreshTimeline: () => {
     const { session } = useLiveStore.getState();
-    const timeline = (session?.running) ? buildLiveTimeline(get().context?.ip) : buildDemoTimeline(get().context?.ip ?? 'unknown');
+    const timeline = (session?.running) ? buildLiveTimeline(get().context?.ip) : [];
     set({ timeline });
   },
 }));

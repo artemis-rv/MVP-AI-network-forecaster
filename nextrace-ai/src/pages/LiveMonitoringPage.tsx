@@ -17,50 +17,22 @@ import type { DemoMode, WindowSecs } from '@/types/live';
 
 const WINDOW_OPTIONS: WindowSecs[] = [5, 10, 15, 30, 60];
 
-function seededRandom(seed: number) {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x);
-}
-
-function generateSyntheticChartData(rangeMinutes: number) {
+function generateZeroChartData(rangeMinutes: number) {
   const data = [];
   const now = Date.now();
-  const timeStep = rangeMinutes === 1 ? 2000 : rangeMinutes === 5 ? 10000 : 30000; // ms per point
-  const points = 30; // Number of points on the graph
+  const timeStep = rangeMinutes === 1 ? 2000 : rangeMinutes === 5 ? 10000 : 30000;
+  const points = 30;
   
-  // Base seed on current time quantized to timeStep, so it only updates periodically
-  // If not running, we should freeze the time. We can just use a fixed "now" or current time if we want it to freeze? 
-  // We'll handle freezing by caching the data when stopped.
   const currentQuantizedTime = Math.floor(now / timeStep) * timeStep;
 
-  let baseTraffic = 500;
-  let baseFlows = 50;
-  
   for (let i = points - 1; i >= 0; i--) {
     const t = currentQuantizedTime - (i * timeStep);
-    const seed = t / 1000;
-    
-    // Correlated noise
-    const noise1 = seededRandom(seed) - 0.5;
-    const noise2 = seededRandom(seed + 1) - 0.5;
-    
-    // Traffic spikes
-    const isSpike = seededRandom(seed + 2) > 0.9;
-    const spikeMult = isSpike ? 2 + seededRandom(seed + 3) : 1;
-    
-    const packets = Math.max(0, Math.floor((baseTraffic + noise1 * 100) * spikeMult));
-    const flows = Math.max(0, Math.floor((baseFlows + noise2 * 10 + noise1 * 5) * spikeMult));
-    
-    // Suspicious events correlated with spikes but rare
-    const suspBase = isSpike ? seededRandom(seed + 4) * 15 : seededRandom(seed + 5) * 2;
-    const suspicious = Math.max(0, Math.floor(suspBase));
-    
     data.push({
       timestamp: t,
       time: new Date(t).toLocaleTimeString('en-US', { hour12: false }),
-      packets,
-      flows,
-      suspicious
+      packets: 0,
+      flows: 0,
+      suspicious: 0
     });
   }
   return data;
@@ -72,7 +44,7 @@ export function LiveMonitoringPage() {
   const {
     wsConnected, session, backendAvailable, setBackendAvailable,
     displayEvents, clearEvents,
-    currentTemporal,
+    currentTemporal, temporalHistory,
     searchQuery, setSearchQuery,
     windowSeconds, mode, setWindowSeconds, setMode,
   } = useLiveStore();
@@ -82,26 +54,32 @@ export function LiveMonitoringPage() {
   const [stopping, setStopping] = useState(false);
 
   const [chartTimeRange, setChartTimeRange] = useState<1 | 5 | 15>(1);
-  const [syntheticChartData, setSyntheticChartData] = useState<any[]>([]);
-  const [frozenChartData, setFrozenChartData] = useState<any[] | null>(null);
   const [activeChartIndex, setActiveChartIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (isRunning) {
-      setFrozenChartData(null);
-      const interval = setInterval(() => {
-        setSyntheticChartData(generateSyntheticChartData(chartTimeRange));
-      }, 1000);
-      setSyntheticChartData(generateSyntheticChartData(chartTimeRange));
-      return () => clearInterval(interval);
-    } else {
-      if (!frozenChartData) {
-        setFrozenChartData(generateSyntheticChartData(chartTimeRange));
+  const realChartData = useMemo(() => {
+    return temporalHistory.map(t => {
+      let dateObj = new Date();
+      if (t.window_end) {
+        if (typeof t.window_end === 'number') {
+          dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
+        } else {
+          const str = String(t.window_end);
+          dateObj = new Date(!isNaN(Number(str)) ? Number(str) * 1000 : str);
+        }
       }
-    }
-  }, [isRunning, chartTimeRange]);
+      return {
+        timestamp: dateObj.getTime(),
+        time: dateObj.toLocaleTimeString('en-US', { hour12: false }),
+        packets: t.packet_count,
+        flows: t.flow_count || Math.floor(t.packet_count / 10) || 0,
+        suspicious: t.suspicious_count,
+      };
+    });
+  }, [temporalHistory]);
 
-  const currentChartData = frozenChartData || syntheticChartData;
+  const chartData = isRunning && realChartData.length > 0 
+    ? realChartData 
+    : generateZeroChartData(chartTimeRange);
 
   // Check backend health and sync running session status on mount / route switch
   useEffect(() => {
@@ -134,9 +112,7 @@ export function LiveMonitoringPage() {
     });
   }, [displayEvents, searchQuery]);
 
-  // ── Chart data from temporal history ────────────────────────
-  // Replaced by synthetic data generation
-  const chartData = currentChartData;
+
 
   // ── Start / Stop handlers ────────────────────────────────────
   async function handleStart() {

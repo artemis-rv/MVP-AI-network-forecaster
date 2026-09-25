@@ -41,19 +41,20 @@ function getRiskFromStage(stage: string): { label: string; color: string; bg: st
     'Initial Access':    { label: 'HIGH',     color: '#f97316', bg: '#ffedd5' },
     'Reconnaissance':    { label: 'MEDIUM',   color: '#f59e0b', bg: '#fef3c7' },
     'Normal Activity':   { label: 'LOW',      color: '#10b981', bg: '#d1fae5' },
+    'No Active Session': { label: 'NONE',     color: '#94a3b8', bg: '#f1f5f9' },
   };
-  return map[stage] ?? { label: 'MEDIUM', color: '#f59e0b', bg: '#fef3c7' };
+  return map[stage] ?? { label: 'NONE', color: '#94a3b8', bg: '#f1f5f9' };
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export function InvestigationPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { investigation, context, findings, showFindingCard, showReportModal,
           openInvestigation, closeInvestigation, generateFindings,
           openReportModal, closeReportModal, refreshTimeline } = useInvestigationStore();
   const { currentForecast } = useForecastStore();
-  const { session, currentTemporal, liveNodes, liveEdges } = useLiveStore();
+  const { session, liveNodes, liveEdges, displayEvents } = useLiveStore();
   const { addToast } = useAppStore();
   const isLive = session?.running ?? false;
 
@@ -64,7 +65,7 @@ export function InvestigationPage() {
     const alertId = searchParams.get('alertId') ?? undefined;
     const alertEvent = searchParams.get('event') ?? undefined;
 
-    const targetIp = ip ?? '192.168.1.25';
+    const targetIp = ip ?? '192.168.1.10';
     const ctx: InvestigationContext = {
       ip: targetIp,
       entityType: '',   // auto-detected in store
@@ -73,8 +74,7 @@ export function InvestigationPage() {
       alertEvent,
     };
     openInvestigation(ctx);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams, openInvestigation]);
 
   const handleBack = useCallback(() => {
     const src = context?.sourceType;
@@ -101,15 +101,25 @@ export function InvestigationPage() {
     return <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>Loading investigation…</div>;
   }
 
-  const stage     = currentForecast?.current_stage ?? 'Reconnaissance';
-  const nextStage = currentForecast?.predicted_next_stage ?? 'Initial Access';
+  const stage     = isLive ? (currentForecast?.current_stage ?? 'Normal Activity') : 'No Active Session';
+  const nextStage = isLive ? (currentForecast?.predicted_next_stage ?? 'N/A') : 'N/A';
   const risk      = getRiskFromStage(stage);
   const entityIp  = investigation.selectedEntityIp;
   const hostname  = getHostname(entityIp);
 
-  // Connection counts from live data
-  const connCount = currentTemporal?.packet_count ?? 27;
-  const suspCount = currentTemporal?.suspicious_count ?? 12;
+  // Connection counts from live events (in current display window)
+  const nodeEvents = displayEvents.filter(e => e.src_ip === entityIp || e.dst_ip === entityIp);
+  const connCount = nodeEvents.length;
+  const suspCount = nodeEvents.filter(e => e.classification === 'suspicious').length;
+
+  let firstSeen = '-';
+  let lastSeen = '-';
+  if (nodeEvents.length > 0) {
+    const firstEv = nodeEvents[nodeEvents.length - 1];
+    const lastEv = nodeEvents[0];
+    firstSeen = firstEv.timestamp.slice(11, 19) || new Date(firstEv.timestamp).toLocaleTimeString('en-US', { hour12: false });
+    lastSeen = lastEv.timestamp.slice(11, 19) || new Date(lastEv.timestamp).toLocaleTimeString('en-US', { hour12: false });
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -174,8 +184,8 @@ export function InvestigationPage() {
               <DetailRow label="IP Address"    value={entityIp}                     mono />
               <DetailRow label="Hostname"      value={hostname}                     mono />
               <DetailRow label="Entity Type"   value={investigation.entityType} />
-              <DetailRow label="First Seen"    value={new Date(investigation.openedAt).toLocaleTimeString('en-US', { hour12: false })} mono />
-              <DetailRow label="Last Seen"     value={new Date().toLocaleTimeString('en-US', { hour12: false })} mono />
+              <DetailRow label="First Seen"    value={firstSeen}                    mono />
+              <DetailRow label="Last Seen"     value={lastSeen}                     mono />
               <DetailRow label="Connections"   value={connCount.toString()} highlight={false} />
               <DetailRow label="Suspicious"    value={suspCount.toString()} highlight={suspCount > 5} />
               <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 8, marginTop: 2 }}>
@@ -194,9 +204,9 @@ export function InvestigationPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {ATTACK_STAGES.map(s => {
                 const colors = STAGE_COLORS[s];
-                const isCurrent   = s === stage && !currentForecast?.is_benign;
-                const isPredicted = s === nextStage && !isCurrent && !currentForecast?.is_benign;
-                const isObserved  = !currentForecast?.is_benign && ATTACK_STAGES.indexOf(s) < ATTACK_STAGES.indexOf(stage as typeof ATTACK_STAGES[number]);
+                const isCurrent   = isLive && s === stage && !currentForecast?.is_benign;
+                const isPredicted = isLive && s === nextStage && !isCurrent && !currentForecast?.is_benign;
+                const isObserved  = isLive && !currentForecast?.is_benign && ATTACK_STAGES.indexOf(s) < ATTACK_STAGES.indexOf(stage as typeof ATTACK_STAGES[number]);
 
                 let icon = <Circle size={10} color="var(--border-default)" />;
                 let labelText = 'Not observed';
@@ -234,12 +244,16 @@ export function InvestigationPage() {
             <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 8 }}>
               Supports the current demo hypothesis. Not confirmed attack evidence.
             </div>
-            {(currentForecast?.supporting_features ?? DEMO_INDICATORS).map((f, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: i < 3 ? '1px solid var(--border-subtle)' : 'none', alignItems: 'flex-start' }}>
-                <CheckCircle size={12} color={currentForecast?.is_benign ? 'var(--color-live)' : 'var(--color-warning)'} style={{ flexShrink: 0, marginTop: 1 }} />
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{f}</span>
-              </div>
-            ))}
+            {isLive && (currentForecast?.supporting_features?.length ? currentForecast.supporting_features : []).length > 0 ? (
+              (currentForecast?.supporting_features ?? []).map((f, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: i < 3 ? '1px solid var(--border-subtle)' : 'none', alignItems: 'flex-start' }}>
+                  <CheckCircle size={12} color={currentForecast?.is_benign ? 'var(--color-live)' : 'var(--color-warning)'} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{f}</span>
+                </div>
+              ))
+            ) : (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No supporting indicators. Start session to analyze.</div>
+            )}
           </div>
 
           {/* Finding Card */}
@@ -290,12 +304,18 @@ export function InvestigationPage() {
               running={isLive}
               focusIp={entityIp}
               isExpanded
-              onNodeSelect={(ip) => useInvestigationStore.getState().setSelectedNodeIp(ip)}
+              onNodeSelect={(ip) => {
+                setSearchParams(prev => { 
+                  const next = new URLSearchParams(prev);
+                  next.set('ip', ip);
+                  return next;
+                });
+              }}
             />
           </div>
 
           {/* Attack Path Summary */}
-          <AttackPathSummary isBenign={currentForecast?.is_benign ?? true} currentStage={stage} />
+          <AttackPathSummary isBenign={!isLive || (currentForecast?.is_benign ?? true)} currentStage={stage} />
         </div>
 
         {/* ── RIGHT PANEL ── */}
@@ -493,14 +513,6 @@ function DetailRow({ label, value, mono, highlight }: { label: string; value: st
     </div>
   );
 }
-
-const DEMO_INDICATORS = [
-  'Increased internal connection rate',
-  'Multiple destination hosts observed',
-  'Elevated suspicious traffic ratio',
-  'Repeated connection attempts detected',
-  'Destination port diversity increased',
-];
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',

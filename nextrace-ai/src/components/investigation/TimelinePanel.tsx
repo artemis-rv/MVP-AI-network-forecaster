@@ -4,6 +4,8 @@ import { useForecastStore } from '@/store/forecastStore';
 import { useInvestigationStore } from '@/store/investigationStore';
 import { STAGE_COLORS } from '@/types/forecast';
 import { AlertTriangle } from 'lucide-react';
+import { useEffect } from 'react';
+import { useLiveStore } from '@/store/liveStore';
 
 const TYPE_CONFIG = {
   observed: { dot: 'var(--color-live)',     label: 'OBSERVED',  labelColor: 'var(--color-live)'     },
@@ -12,8 +14,13 @@ const TYPE_CONFIG = {
 };
 
 export function TimelinePanel() {
-  const { timeline } = useInvestigationStore();
+  const { timeline, refreshTimeline } = useInvestigationStore();
   const { currentForecast } = useForecastStore();
+  const { displayEvents } = useLiveStore();
+
+  useEffect(() => {
+    refreshTimeline();
+  }, [displayEvents, refreshTimeline]);
 
   return (
     <div style={panelStyle}>
