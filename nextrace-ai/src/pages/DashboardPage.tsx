@@ -93,7 +93,6 @@ export function DashboardPage() {
               comparison={comp}
               color={kpi.color as 'critical' | 'warning' | 'primary' | 'secondary'}
               icon={kpiIcons[i]}
-              sparkline={kpi.sparkline}
               delay={i * 80}
               onClick={() => navigate(links[i])}
             />
