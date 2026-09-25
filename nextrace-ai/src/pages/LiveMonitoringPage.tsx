@@ -66,7 +66,8 @@ export function LiveMonitoringPage() {
   async function handleStart() {
     setStarting(true);
     try {
-      await apiService.startLive({ mode, window_seconds: windowSeconds });
+      const res = await apiService.startLive({ mode, window_seconds: windowSeconds });
+      useLiveStore.getState().setSession(res.status);
       wsService.connect();
       addToast('Live demo started — streaming events.', 'success');
     } catch {
@@ -79,7 +80,8 @@ export function LiveMonitoringPage() {
   async function handleStop() {
     setStopping(true);
     try {
-      await apiService.stopLive();
+      const res = await apiService.stopLive();
+      useLiveStore.getState().setSession(res.status);
       wsService.disconnect();
       addToast('Live demo stopped.', 'info');
     } catch {
@@ -100,9 +102,9 @@ export function LiveMonitoringPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* ── Page Header ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
@@ -119,7 +121,8 @@ export function LiveMonitoringPage() {
         </div>
       </div>
 
-      {/* ── Backend unavailable warning ── */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20, paddingTop: 16, paddingBottom: 40 }}>
+        {/* ── Backend unavailable warning ── */}
       {!backendAvailable && (
         <div style={{ background: 'var(--color-critical-light)', border: '1px solid var(--color-critical)', borderRadius: 12, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -238,54 +241,8 @@ export function LiveMonitoringPage() {
         )}
       </div>
 
-      {/* ── Two-column: Chart + Temporal State ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
-        {/* Live Chart */}
-        <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Activity</h3>
-              {isRunning && <PulseDot color="var(--color-live)" label="LIVE" />}
-            </div>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>packets per temporal window</span>
-          </div>
-          {chartData.length === 0 ? (
-            <EmptyChartState running={isRunning} />
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gLiveTotal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gLiveBenign" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gLiveSuspicious" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                <XAxis dataKey="time" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)' }} />
-                <Area type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} fill="url(#gLiveTotal)" dot={false} isAnimationActive={false} />
-                <Area type="monotone" dataKey="benign" name="Benign" stroke="#10b981" strokeWidth={1.5} fill="url(#gLiveBenign)" dot={false} isAnimationActive={false} />
-                <Area type="monotone" dataKey="suspicious" name="Suspicious" stroke="#ef4444" strokeWidth={1.5} fill="url(#gLiveSuspicious)" dot={false} isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* Temporal State Panel */}
-        <TemporalStatePanel state={currentTemporal} windowSeconds={windowSeconds} />
-      </div>
-
       {/* ── Filters + Packet Table ── */}
-      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+      <div style={{ flexShrink: 0, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
         {/* Table header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -353,8 +310,54 @@ export function LiveMonitoringPage() {
         </div>
       </div>
 
+      {/* ── Two-column: Chart + Temporal State ── */}
+      <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+        {/* Live Chart */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Activity</h3>
+              {isRunning && <PulseDot color="var(--color-live)" label="LIVE" />}
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>packets per temporal window</span>
+          </div>
+          {chartData.length === 0 ? (
+            <EmptyChartState running={isRunning} />
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gLiveTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gLiveBenign" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gLiveSuspicious" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                <XAxis dataKey="time" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-md)' }} />
+                <Area type="monotone" dataKey="total" name="Total" stroke="#6366f1" strokeWidth={2} fill="url(#gLiveTotal)" dot={false} isAnimationActive={false} />
+                <Area type="monotone" dataKey="benign" name="Benign" stroke="#10b981" strokeWidth={1.5} fill="url(#gLiveBenign)" dot={false} isAnimationActive={false} />
+                <Area type="monotone" dataKey="suspicious" name="Suspicious" stroke="#ef4444" strokeWidth={1.5} fill="url(#gLiveSuspicious)" dot={false} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Temporal State Panel */}
+        <TemporalStatePanel state={currentTemporal} windowSeconds={windowSeconds} />
+      </div>
+
       {/* ── Live Network Entity Graph ── */}
-      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
+      <div style={{ flexShrink: 0, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div>
             <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Entities</h3>
@@ -367,6 +370,7 @@ export function LiveMonitoringPage() {
           )}
         </div>
         <LiveEntityGraph nodes={liveNodes} edges={liveEdges} running={isRunning} />
+      </div>
       </div>
     </div>
   );
@@ -514,15 +518,27 @@ function LiveEntityGraph({ nodes, edges, running }: { nodes: import('@/types/liv
           const to   = nodes.find(n => n.id === edge.to);
           if (!from || !to) return null;
           const active = hoveredNode === from.id || hoveredNode === to.id;
+          const isAttack = edge.suspicious;
+          
+          const midX = (from.x + to.x) / 2;
+          const midY = (from.y + to.y) / 2;
+          
           return (
             <g key={i}>
+              <title>{edge.label} ({isAttack ? 'Suspicious' : 'Normal'})</title>
               <line
                 x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                stroke={active ? (edge.suspicious ? '#ef4444' : '#6366f1') : '#e2e8f0'}
-                strokeWidth={active ? 2 : 1}
-                strokeDasharray={edge.suspicious ? '5,3' : undefined}
-                style={{ transition: 'stroke 0.2s' }}
+                stroke={isAttack ? '#ef4444' : (active ? '#6366f1' : '#cbd5e1')}
+                strokeWidth={isAttack ? (active ? 3 : 2) : (active ? 2 : 1)}
+                strokeDasharray={isAttack ? '5,5' : undefined}
+                style={{
+                  transition: 'stroke 0.2s',
+                  animation: isAttack ? 'dash-flow 1.5s linear infinite' : 'none'
+                }}
               />
+              <text x={midX} y={midY - 6} fontSize={8} fill={isAttack ? '#ef4444' : '#64748b'} textAnchor="middle" style={{ pointerEvents: 'none' }}>
+                {edge.label}
+              </text>
             </g>
           );
         })}

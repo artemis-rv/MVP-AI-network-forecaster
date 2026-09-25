@@ -7,7 +7,7 @@ export const MOCK_LABEL = 'Simulated demo data — not real network traffic';
 export const kpiData = [
   {
     id: 'alerts',
-    label: 'Critical Alerts',
+    label: 'Total Alerts',
     value: 7,
     change: '+2',
     changeType: 'up' as const,

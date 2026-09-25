@@ -1,22 +1,22 @@
-// NEXTRACE AI — Simulation Page (Step 7)
+// NEXTRACE AI — Attack Path Forecaster Simulator (Live Operations)
 // Route: /simulation
-// SIMULATOR ONLY — no real network traffic generated.
-// Isolated from live, historical, forensic, and investigation state.
+// Multi-Stage Attack Path Forecasting & Forward Simulation on Enterprise Topology
 
 import { useEffect, useState } from 'react';
 import {
-  Play, Pause, SkipForward, Square, RotateCcw,
+  Play, Pause, SkipForward, SkipBack, Square, RotateCcw,
   Cpu, Activity, Target, TrendingUp, AlertTriangle, FileText,
   Search, Key, Eye, ArrowLeftRight, Radio, UploadCloud, Lock, Zap, Settings,
   CheckCircle2, Clock, Circle,
 } from 'lucide-react';
-import { ReactFlow, Background, Controls, type Node, type Edge } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import { useSimulatorStore, DEFAULT_CONFIG, K_MIN, K_MAX } from '@/store/simulatorStore';
 import { useFindingsStore } from '@/store/findingsStore';
+import { useLiveStore } from '@/store/liveStore';
+import { useForecastStore } from '@/store/forecastStore';
 import { useNavigate } from 'react-router-dom';
 import type { SimEvent, ForecastSnapshot, SyntheticFeatureProfile } from '@/types/simulator';
 import { SimulatorLiveTraffic } from '@/components/simulation/SimulatorLiveTraffic';
+import { WholeNetworkGraph } from '@/components/simulation/WholeNetworkGraph';
 
 // ── Stage colours (separate from forecast STAGE_COLORS) ─────────────────────
 const STAGE_META: Record<string, { color: string; bg: string; border: string; icon: (size?: number) => React.ReactNode }> = {
@@ -58,6 +58,14 @@ export function SimulationPage() {
     stopSimulation, resetSimulation, nextStep, selectStep, hardReset,
   } = useSimulatorStore();
 
+  const { session } = useLiveStore();
+  const { currentForecast: liveForecast } = useForecastStore();
+
+  const isLiveRunning = session?.running ?? false;
+  const liveCurrentStage = liveForecast?.current_stage || (isLiveRunning ? 'Initial Access' : null);
+  const livePredictedNext = liveForecast?.predicted_next_stage || (isLiveRunning ? 'Lateral Movement' : null);
+  const liveConfidence = liveForecast?.confidence ? Math.round(liveForecast.confidence <= 1 ? liveForecast.confidence * 100 : liveForecast.confidence) : 85;
+
   useEffect(() => { loadScenarios(); }, [loadScenarios]);
 
   const navigate = useNavigate();
@@ -75,6 +83,11 @@ export function SimulationPage() {
     }
   }
 
+  const handleSeedFromLive = async () => {
+    setConfig({ k: config.k, speed: 1.0 });
+    await startSimulation();
+  };
+
   const isIdle      = status === 'idle';
   const isCompleted = status === 'completed';
   const isStopped   = status === 'stopped';
@@ -85,8 +98,24 @@ export function SimulationPage() {
   const selectedForecast = selectedStep != null ? allForecasts[selectedStep] : currentForecast;
   const selectedFeatures = selectedEvent?.synthetic_feature_profile ?? currentFeatures;
 
+  // Compute preview stages for idle mode based on K
+  const ALL_STAGES = [
+    'Reconnaissance', 'Initial Access', 'Internal Discovery',
+    'Lateral Movement', 'Command & Control', 'Data Exfiltration',
+    'Persistence', 'Impact',
+  ];
+  const K_MAP: Record<number, number[]> = {
+    3: [0, 1, 3],
+    4: [0, 1, 2, 3],
+    5: [0, 1, 2, 3, 5],
+    6: [0, 1, 2, 3, 4, 5],
+    7: [0, 1, 2, 3, 4, 5, 6],
+    8: [0, 1, 2, 3, 4, 5, 6, 7],
+  };
+  const previewSequence = (K_MAP[config.k] ?? K_MAP[5]).map(i => ALL_STAGES[i]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minHeight: 'calc(100vh - 60px)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
       {/* ── Header ── */}
       <div style={{ paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
@@ -94,13 +123,15 @@ export function SimulationPage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
               <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px', margin: 0 }}>
-                Attack Progression Simulator
+                Attack Path Forecaster Simulator
               </h1>
+              <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 999, background: 'rgba(99,102,241,0.1)', color: 'var(--primary)', border: '1px solid rgba(99,102,241,0.25)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                Live Operations
+              </span>
               <SimOnlyBadge/>
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-              Controlled synthetic attack progression for forecasting demonstration ·&nbsp;
-              <strong style={{ color: 'var(--primary)' }}>K={config.k}</strong> stages · All events are in-memory only
+              Live network multi-stage attack path forecasting & forward simulation on enterprise topology · Project <strong style={{ color: 'var(--primary)' }}>K={config.k} steps forward</strong> from current situation
             </p>
           </div>
           {simulationId && (
@@ -137,59 +168,186 @@ export function SimulationPage() {
       <div style={{ background: 'rgba(245,158,11,0.06)', border: '1.5px solid rgba(245,158,11,0.35)', borderRadius: 10, padding: '10px 16px', fontSize: 11, color: '#92400e', display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, flexShrink: 0 }}>
         <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }}/>
         <span>
-          <strong>SIMULATION DATA — NOT REAL NETWORK TRAFFIC.</strong>{' '}
-          All entities, events, and observations are synthetically generated in-memory.
-          No packets are transmitted. No real hosts are contacted. No scanning, exploitation, or offensive action is performed.
+          <strong>SYNTHETIC FORECAST & SIMULATION ENGINE — IN-MEMORY TELEMETRY.</strong>{' '}
+          All simulation entities, paths, and observations are executed in memory against enterprise topology model.
+          No packets are transmitted over public networks. Safe for live SOC evaluation and security planning.
         </span>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingBottom: 40 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingBottom: 40, overflowY: 'auto' }}>
 
-        {/* ── Layout grid: Config + Status (top) ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: isActive ? '320px 1fr' : '1fr', gap: 16, transition: 'all 0.3s' }}>
+        {/* ── Live Network Situation Context Card ── */}
+        <div style={{
+          background: isLiveRunning ? 'linear-gradient(135deg, rgba(16,185,129,0.07), rgba(99,102,241,0.07))' : 'var(--bg-card)',
+          border: `1.5px solid ${isLiveRunning ? 'rgba(16,185,129,0.35)' : 'var(--border-default)'}`,
+          borderRadius: 12,
+          padding: '12px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+          boxShadow: 'var(--shadow-sm)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              background: isLiveRunning ? '#d1fae5' : 'var(--bg-workspace)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: `1.5px solid ${isLiveRunning ? '#10b981' : 'var(--border-subtle)'}`,
+              color: isLiveRunning ? '#059669' : 'var(--text-muted)',
+              flexShrink: 0,
+            }}>
+              <Radio size={19} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {isLiveRunning ? 'Live Network Operational Situation' : 'Live Situation Synchronizer'}
+                </span>
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  background: isLiveRunning ? '#d1fae5' : 'var(--bg-workspace)',
+                  color: isLiveRunning ? '#065f46' : 'var(--text-muted)',
+                  border: `1px solid ${isLiveRunning ? '#a7f3d0' : 'var(--border-default)'}`,
+                  letterSpacing: '0.4px',
+                }}>
+                  {isLiveRunning ? '● LIVE STREAM ACTIVE' : 'STREAM IDLE'}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>
+                {isLiveRunning ? (
+                  <span>
+                    Current Detected Stage: <strong style={{ color: 'var(--text-primary)' }}>{liveCurrentStage}</strong>
+                    {' '}→ Next Stage Prediction: <strong style={{ color: 'var(--primary)' }}>{livePredictedNext}</strong>
+                    {' '}(<span style={{ color: '#059669', fontWeight: 700 }}>{liveConfidence}% confidence</span>)
+                  </span>
+                ) : (
+                  <span>
+                    Live stream is idle. Start live capture or simulate forward K-steps from standard adversary ingress across the whole network.
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
 
-          {/* Config / Controls card */}
-          <SimCard title="Configuration & Controls" icon={<Cpu size={15}/>}>
-            {isIdle ? (
-              <ConfigForm
-                config={config}
-                scenarios={scenarios}
-                setConfig={setConfig}
-                onStart={startSimulation}
-              />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {isLiveRunning ? (
+              <button
+                id="seed-live-simulation-btn"
+                onClick={handleSeedFromLive}
+                disabled={status === 'running'}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, #059669, #0d9488)',
+                  border: 'none',
+                  color: 'white',
+                  boxShadow: '0 2px 10px rgba(5,150,105,0.3)',
+                  cursor: status === 'running' ? 'not-allowed' : 'pointer',
+                  opacity: status === 'running' ? 0.7 : 1,
+                }}
+              >
+                <Zap size={14} /> Simulate K={config.k} Steps Forward from Current Situation
+              </button>
             ) : (
-              <RunningControls
-                status={status}
-                currentStep={currentStep}
-                totalSteps={totalSteps}
-                simulationId={simulationId!}
-                onPause={pauseSimulation}
-                onResume={resumeSimulation}
-                onNext={nextStep}
-                onStop={stopSimulation}
-                onReset={isTerminal ? hardReset : resetSimulation}
-              />
+              <button
+                onClick={() => navigate('/live-monitoring')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-default)',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Radio size={13} color="var(--primary)" /> Go to Live Monitoring
+              </button>
             )}
-          </SimCard>
+          </div>
+        </div>
 
-          {/* Status / Stage Overview — only when active */}
-          {isActive && (
-            <SimCard
-              title="Simulation Status"
-              icon={<Activity size={15}/>}
-              badge={<StatusPill status={status}/>}
-            >
-              <SimStatusPanel
-                status={status}
-                currentStep={currentStep}
-                totalSteps={totalSteps}
-                stageSequence={stageSequence}
-                currentStage={currentStage}
-                selectedStep={selectedStep}
-                onSelectStep={selectStep}
-              />
+        {/* ── Main Layout Grid: Controls (Left) + Whole Network Topology (Right) ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: 16 }}>
+
+          {/* Left Column: Config & Progression Stepper */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <SimCard title="Forecasting Configuration & Controls" icon={<Cpu size={15}/>}>
+              {isIdle ? (
+                <ConfigForm
+                  config={config}
+                  scenarios={scenarios}
+                  setConfig={setConfig}
+                  onStart={startSimulation}
+                />
+              ) : (
+                <RunningControls
+                  status={status}
+                  currentStep={currentStep}
+                  totalSteps={totalSteps}
+                  simulationId={simulationId!}
+                  onPause={pauseSimulation}
+                  onResume={resumeSimulation}
+                  onNext={nextStep}
+                  onStop={stopSimulation}
+                  onReset={isTerminal ? hardReset : resetSimulation}
+                  selectedStep={selectedStep}
+                  onSelectStep={selectStep}
+                />
+              )}
             </SimCard>
-          )}
+
+            {isActive && (
+              <SimCard
+                title="Simulation Progression Stepper"
+                icon={<Activity size={15}/>}
+                badge={<StatusPill status={status}/>}
+              >
+                <SimStatusPanel
+                  status={status}
+                  currentStep={currentStep}
+                  totalSteps={totalSteps}
+                  stageSequence={stageSequence}
+                  currentStage={currentStage}
+                  selectedStep={selectedStep}
+                  onSelectStep={selectStep}
+                />
+              </SimCard>
+            )}
+          </div>
+
+          {/* Right Column: Whole Network Topology Graph */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <WholeNetworkGraph
+              currentStage={currentStage}
+              currentEvent={selectedEvent}
+              stageSequence={stageSequence}
+              currentStep={currentStep}
+              totalSteps={totalSteps}
+              selectedStep={selectedStep}
+              currentForecast={selectedForecast}
+              previewStages={previewSequence}
+              height={isActive ? 460 : 490}
+            />
+          </div>
         </div>
 
         {/* ── Error banner ── */}
@@ -250,12 +408,6 @@ export function SimulationPage() {
           </SimCard>
         )}
 
-        {/* ── Network Graph ── */}
-        {isActive && (
-          <SimCard title="Synthetic Network Graph" icon={<Target size={15}/>} subtitle="Synthetic Network — Simulation Only · No real topology">
-            <NetworkGraph currentStage={currentStage} currentEvent={selectedEvent}/>
-          </SimCard>
-        )}
       </div>
     </div>
   );
@@ -304,27 +456,16 @@ function ConfigForm({
         <KStagePreview k={config.k}/>
       </FormField>
 
-      {/* Window / Speed */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <FormField label="Window (s)">
-          <select
-            value={config.window_seconds}
-            onChange={e => setConfig({ window_seconds: Number(e.target.value) })}
-            style={selectStyle}
-          >
-            {[5, 10, 15, 30].map(v => <option key={v} value={v}>{v}s</option>)}
-          </select>
-        </FormField>
-        <FormField label="Speed">
-          <select
-            value={config.speed}
-            onChange={e => setConfig({ speed: Number(e.target.value) })}
-            style={selectStyle}
-          >
-            {[0.5, 1.0, 2.0, 4.0].map(v => <option key={v} value={v}>{v}×</option>)}
-          </select>
-        </FormField>
-      </div>
+      {/* Window (s) only — speed removed, manual step mode */}
+      <FormField label="Time Window (s)">
+        <select
+          value={config.window_seconds}
+          onChange={e => setConfig({ window_seconds: Number(e.target.value) })}
+          style={selectStyle}
+        >
+          {[5, 10, 15, 30].map(v => <option key={v} value={v}>{v}s</option>)}
+        </select>
+      </FormField>
 
       <button
         id="start-simulation-btn"
@@ -341,7 +482,7 @@ function ConfigForm({
       </button>
 
       <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
-        Synthetic simulation only · No real network activity
+        Manual step mode · Use <strong>Prev / Next Step</strong> to advance · No real network activity
       </div>
     </div>
   );
@@ -385,16 +526,34 @@ function KStagePreview({ k }: { k: number }) {
 function RunningControls({
   status, currentStep, totalSteps, simulationId,
   onPause, onResume, onNext, onStop, onReset,
+  selectedStep, onSelectStep,
 }: {
   status: string; currentStep: number; totalSteps: number; simulationId: string;
   onPause: () => void; onResume: () => void; onNext: () => void;
   onStop: () => void; onReset: () => void;
+  selectedStep: number | null; onSelectStep: (s: number | null) => void;
 }) {
   const isCompleted = status === 'completed';
   const isStopped   = status === 'stopped';
   const isPaused    = status === 'paused';
   const isRunning   = status === 'running';
   const isTerminal  = isCompleted || isStopped;
+
+  // Use the actively viewed step (selected or current)
+  const activeStep = selectedStep !== null ? selectedStep : currentStep;
+
+  const handlePrev = () => {
+    if (activeStep > 0) onSelectStep(activeStep - 1);
+  };
+
+  const handleNext = () => {
+    if (activeStep < currentStep) {
+      const nextIdx = activeStep + 1;
+      onSelectStep(nextIdx === currentStep ? null : nextIdx);
+    } else {
+      onNext();
+    }
+  };
 
   // Progress bar
   const pct = totalSteps > 0 ? Math.round(((currentStep + 1) / totalSteps) * 100) : 0;
@@ -412,35 +571,47 @@ function RunningControls({
         </div>
       </div>
 
-      {/* Status display */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {/* Status + mode label */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <StatusPill status={status as any}/>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
+          {isRunning ? 'Auto-Play Active' : 'Manual Step / Paused'}
+        </span>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
           {simulationId}
         </div>
       </div>
 
       {/* Control buttons */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {isRunning && (
           <CtrlBtn onClick={onPause} icon={<Pause size={13}/>} label="Pause" color="var(--color-warning)"/>
         )}
         {isPaused && (
-          <CtrlBtn onClick={onResume} icon={<Play size={13}/>} label="Resume" color="#059669"/>
-        )}
-        {!isTerminal && (
-          <CtrlBtn
-            onClick={onNext}
-            icon={<SkipForward size={13}/>}
-            label="Next Step"
-            color="var(--primary)"
-            disabled={currentStep + 1 >= totalSteps}
-          />
+          <CtrlBtn onClick={onResume} icon={<Play size={13}/>} label="Play" color="#059669"/>
         )}
         {!isTerminal && (
           <CtrlBtn onClick={onStop} icon={<Square size={13}/>} label="Stop" color="var(--color-critical)"/>
         )}
-        <CtrlBtn onClick={onReset} icon={<RotateCcw size={13}/>} label={isTerminal ? 'New Simulation' : 'Reset'} color="var(--text-muted)"/>
+        <CtrlBtn onClick={onReset} icon={<RotateCcw size={13}/>} label={isTerminal ? 'New Sim' : 'Reset'} color="var(--text-muted)"/>
+      </div>
+
+      {/* Prev / Next — primary navigation */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+        <CtrlBtn
+          onClick={handlePrev}
+          icon={<SkipBack size={13}/>}
+          label="Previous Step"
+          color="var(--primary)"
+          disabled={activeStep <= 0}
+        />
+        <CtrlBtn
+          onClick={handleNext}
+          icon={<SkipForward size={13}/>}
+          label="Next Step"
+          color="var(--primary)"
+          disabled={isCompleted || isStopped}
+        />
       </div>
 
       {isCompleted && (
@@ -792,82 +963,7 @@ function ForecastTimeline({ forecasts, selectedStep, onSelect }: {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// NETWORK GRAPH (React Flow)
-// ═══════════════════════════════════════════════════════════════════════════
 
-const ENTITY_POSITIONS: Record<string, { x: number; y: number }> = {
-  'Simulated External': { x: 50,  y: 50 },
-  'Workstation':        { x: 280, y: 50 },
-  'Internal Server':    { x: 280, y: 190 },
-  'Database':           { x: 500, y: 190 },
-};
-
-function NetworkGraph({ currentStage, currentEvent }: {
-  currentStage: string | null; currentEvent: SimEvent | null;
-}) {
-  const nodes: Node[] = [
-    { id: 'ext',  position: ENTITY_POSITIONS['Simulated External'], data: { label: 'Simulated External\n198.51.100.20', type: 'external', active: currentEvent?.source_label === 'Simulated External' || currentEvent?.destination_label === 'Simulated External' }, type: 'default' },
-    { id: 'ws',   position: ENTITY_POSITIONS['Workstation'],        data: { label: 'Workstation\n10.10.1.10', type: 'internal', active: currentEvent?.source_label === 'Workstation' || currentEvent?.destination_label === 'Workstation' }, type: 'default' },
-    { id: 'srv',  position: ENTITY_POSITIONS['Internal Server'],     data: { label: 'Internal Server\n10.10.2.20', type: 'internal', active: currentEvent?.source_label === 'Internal Server' || currentEvent?.destination_label === 'Internal Server' }, type: 'default' },
-    { id: 'db',   position: ENTITY_POSITIONS['Database'],            data: { label: 'Database\n10.10.3.30', type: 'internal', active: currentEvent?.source_label === 'Database' || currentEvent?.destination_label === 'Database' }, type: 'default' },
-  ].map(n => ({
-    ...n,
-    style: {
-      background: (n.data as any).active ? (n.data as any).type === 'external' ? '#fee2e2' : '#ede9fe' : 'var(--bg-card)',
-      border: `1.5px solid ${(n.data as any).active ? ((n.data as any).type === 'external' ? '#ef4444' : '#6366f1') : 'var(--border-default)'}`,
-      borderRadius: 10, padding: '8px 12px', fontSize: 11, fontWeight: 600, color: 'var(--text-primary)',
-      whiteSpace: 'pre-line', textAlign: 'center' as const,
-      boxShadow: (n.data as any).active ? `0 0 12px ${(n.data as any).type === 'external' ? 'rgba(239,68,68,0.3)' : 'rgba(99,102,241,0.3)'}` : 'none',
-      transition: 'all 0.3s',
-    },
-  }));
-
-  // Edges based on current event
-  const edges: Edge[] = [];
-  if (currentEvent) {
-    const LABEL_TO_ID: Record<string, string> = {
-      'Simulated External': 'ext',
-      'Workstation': 'ws',
-      'Internal Server': 'srv',
-      'Database': 'db',
-    };
-    const srcId = LABEL_TO_ID[currentEvent.source_label];
-    const dstId = LABEL_TO_ID[currentEvent.destination_label];
-    if (srcId && dstId) {
-      edges.push({
-        id: `e-${srcId}-${dstId}`,
-        source: srcId,
-        target: dstId,
-        animated: true,
-        label: `${currentEvent.protocol} · ${currentEvent.connection_count} conn`,
-        style: { stroke: '#6366f1', strokeWidth: 2 },
-        labelStyle: { fontSize: 9, fill: 'var(--text-muted)' },
-      });
-    }
-  } else {
-    // Show baseline topology
-    edges.push(
-      { id: 'e-ext-srv', source: 'ext', target: 'srv', label: 'internet', style: { stroke: 'var(--border-default)' } },
-      { id: 'e-srv-db',  source: 'srv', target: 'db',  label: 'internal', style: { stroke: 'var(--border-default)' } },
-      { id: 'e-srv-ws',  source: 'srv', target: 'ws',  label: 'internal', style: { stroke: 'var(--border-default)' } },
-    );
-  }
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10, fontSize: 9, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(245,158,11,0.1)', color: '#92400e', border: '1px solid rgba(245,158,11,0.4)', display: 'flex', alignItems: 'center', gap: 5 }}>
-        <AlertTriangle size={11} /> SYNTHETIC NETWORK — SIMULATION ONLY{currentStage ? ` · Active: ${currentStage}` : ''}
-      </div>
-      <div style={{ height: 320, borderRadius: 12, overflow: 'hidden', background: 'var(--bg-workspace)', border: '1px solid var(--border-subtle)' }}>
-        <ReactFlow nodes={nodes} edges={edges} fitView nodesDraggable panOnDrag zoomOnScroll={false}>
-          <Background color="var(--border-subtle)" gap={20}/>
-          <Controls/>
-        </ReactFlow>
-      </div>
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SHARED UTILITY COMPONENTS

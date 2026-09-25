@@ -1,22 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { recentAlerts } from '@/data/mockData';
+import { useAlertStore } from '@/store/alertStore';
 import { Badge } from '@/components/ui/Badge';
 import { ChevronRight } from 'lucide-react';
+import type { Alert } from '@/types/alert';
 
 export function RecentAlerts() {
   const [hovered, setHovered] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { alerts, fetchAlerts, selectAlert } = useAlertStore();
 
-  function handleInvestigate(alert: typeof recentAlerts[0], e: React.MouseEvent) {
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  const displayAlerts = alerts.slice(0, 5);
+
+  function formatTime(isoStr?: string) {
+    if (!isoStr) return 'Just now';
+    const d = new Date(isoStr);
+    return isNaN(d.getTime()) ? isoStr : d.toLocaleTimeString('en-US', { hour12: false });
+  }
+
+  function formatSeverity(sev: string): 'Critical' | 'High' | 'Medium' | 'Low' {
+    const s = sev.toUpperCase();
+    if (s === 'CRITICAL') return 'Critical';
+    if (s === 'HIGH') return 'High';
+    if (s === 'MEDIUM') return 'Medium';
+    return 'Low';
+  }
+
+  function handleInvestigate(alert: Alert, e: React.MouseEvent) {
     e.stopPropagation();
-    const params = new URLSearchParams({
-      ip: alert.source,
-      source: 'alert',
-      alertId: alert.id,
-      event: alert.event,
-    });
-    navigate(`/investigation?${params.toString()}`);
+    selectAlert(alert.id);
+    if (alert.source_ip) {
+      const params = new URLSearchParams({
+        ip: alert.source_ip,
+        source: 'alert',
+        alertId: alert.id,
+        event: alert.title,
+      });
+      navigate(`/investigation?${params.toString()}`);
+    } else {
+      navigate('/alerts');
+    }
   }
 
   return (
@@ -39,7 +66,12 @@ export function RecentAlerts() {
           borderBottom: '1px solid var(--border-subtle)',
         }}
       >
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Recent Alerts</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Recent Alerts</h3>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: 'var(--bg-workspace)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
+            {alerts.length} Total
+          </span>
+        </div>
         <button
           onClick={() => navigate('/alerts')}
           style={{
@@ -63,7 +95,7 @@ export function RecentAlerts() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--bg-workspace)' }}>
-              {['Time', 'Severity', 'Event', 'Source IP', 'Destination IP', ''].map((col) => (
+              {['Time', 'Severity', 'Event', 'Source IP', 'Destination IP', 'Status', ''].map((col) => (
                 <th
                   key={col}
                   style={{
@@ -83,7 +115,7 @@ export function RecentAlerts() {
             </tr>
           </thead>
           <tbody>
-            {recentAlerts.map((alert) => (
+            {displayAlerts.map((alert) => (
               <tr
                 key={alert.id}
                 style={{
@@ -94,21 +126,37 @@ export function RecentAlerts() {
                 }}
                 onMouseEnter={() => setHovered(alert.id)}
                 onMouseLeave={() => setHovered(null)}
+                onClick={() => {
+                  selectAlert(alert.id);
+                  navigate('/alerts');
+                }}
               >
                 <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                  {alert.time}
+                  {formatTime(alert.created_at || alert.last_seen)}
                 </td>
                 <td style={{ padding: '12px 16px' }}>
-                  <Badge severity={alert.severity} />
+                  <Badge severity={formatSeverity(alert.severity)} />
                 </td>
                 <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
-                  {alert.event}
+                  {alert.title}
                 </td>
                 <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                  {alert.source}
+                  {alert.source_ip || '—'}
                 </td>
                 <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                  {alert.destination}
+                  {alert.destination_ip || '—'}
+                </td>
+                <td style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700 }}>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    background: alert.status === 'OPEN' ? 'rgba(245, 158, 11, 0.1)' :
+                                alert.status === 'RESOLVED' ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-workspace)',
+                    color: alert.status === 'OPEN' ? '#d97706' :
+                           alert.status === 'RESOLVED' ? '#059669' : 'var(--text-secondary)'
+                  }}>
+                    {alert.status}
+                  </span>
                 </td>
                 <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                   <button

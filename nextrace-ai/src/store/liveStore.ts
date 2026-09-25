@@ -58,6 +58,7 @@ interface LiveStore {
   setWsConnected: (v: boolean) => void;
   setBackendAvailable: (v: boolean) => void;
   addEvent: (event: PacketEvent) => void;
+  addEventsBatched: (events: PacketEvent[]) => void;
   setTemporal: (t: TemporalState) => void;
   setSession: (s: SessionStatus | null) => void;
   setPaused: (p: boolean) => void;
@@ -111,17 +112,64 @@ export const useLiveStore = create<LiveStore>()(
       resetEntities: () => set({ liveNodes: [], liveEdges: [] }),
 
       addEvent: (event) => {
-        const id = `${event.timestamp}-${Math.random().toString(36).slice(2, 7)}`;
-        const tagged = { ...event, id };
+        get().addEventsBatched([event]);
+      },
+
+      addEventsBatched: (events) => {
+        if (events.length === 0) return;
 
         set((state) => {
+          // Process events
+          const taggedEvents = events.map(e => ({
+            ...e,
+            id: `${e.timestamp}-${Math.random().toString(36).slice(2, 7)}`
+          }));
+
           // Rolling all-events buffer
-          const allEvents = [tagged, ...state.allEvents].slice(0, MAX_EVENTS);
+          const allEvents = [...taggedEvents, ...state.allEvents].slice(0, MAX_EVENTS);
           // Only update display when not paused
           const displayEvents = state.isPaused
             ? state.displayEvents
-            : [tagged, ...state.displayEvents].slice(0, MAX_EVENTS);
-          return { allEvents, displayEvents };
+            : [...taggedEvents, ...state.displayEvents].slice(0, MAX_EVENTS);
+
+          // Update entities efficiently
+          const nodesMap = new Map(state.liveNodes.map((n) => [n.id, n]));
+          const edgesMap = new Map(state.liveEdges.map((e) => [`${e.from}->${e.to}`, e]));
+
+          const ensureNode = (ip: string) => {
+            if (!nodesMap.has(ip)) {
+              const type = classifyIp(ip);
+              if (type === 'external') return;
+              
+              const count = Array.from(nodesMap.values()).filter(n => n.type === type).length;
+              const x = { suspicious: 120, internal: 350, server: 580, external: -100 }[type] as number;
+              const y = 80 + (count * 70);
+              
+              nodesMap.set(ip, {
+                id: ip, ip, label: ipToLabel(ip), type, x, y,
+              });
+            }
+          };
+
+          for (const ev of events) {
+            ensureNode(ev.src_ip);
+            ensureNode(ev.dst_ip);
+
+            const key = `${ev.src_ip}->${ev.dst_ip}`;
+            if (nodesMap.has(ev.src_ip) && nodesMap.has(ev.dst_ip)) {
+              edgesMap.set(key, {
+                from: ev.src_ip,
+                to: ev.dst_ip,
+                label: ev.protocol,
+                suspicious: ev.classification === 'suspicious',
+              });
+            }
+          }
+
+          const liveNodes = Array.from(nodesMap.values());
+          const liveEdges = Array.from(edgesMap.values()).slice(-50);
+
+          return { allEvents, displayEvents, liveNodes, liveEdges };
         });
       },
 
@@ -133,47 +181,7 @@ export const useLiveStore = create<LiveStore>()(
       },
 
       updateEntities: (event: PacketEvent) => {
-        set((state) => {
-          const nodesMap = new Map(state.liveNodes.map((n) => [n.id, n]));
-
-          const ensureNode = (ip: string) => {
-            if (!nodesMap.has(ip)) {
-              const type = classifyIp(ip);
-              // Calculate dynamic Y position based on existing nodes of this type to prevent overlap
-              const count = Array.from(nodesMap.values()).filter(n => n.type === type).length;
-              const x = { suspicious: 90, internal: 250, server: 470, external: 650 }[type] as number;
-              const y = 60 + (count * 60);
-              
-              nodesMap.set(ip, {
-                id: ip,
-                ip,
-                label: ipToLabel(ip),
-                type,
-                x,
-                y,
-              });
-            }
-          };
-
-          ensureNode(event.src_ip);
-          ensureNode(event.dst_ip);
-
-          const liveNodes = Array.from(nodesMap.values());
-
-          // Edges (dedup by from+to)
-          const edgesMap = new Map(state.liveEdges.map((e) => [`${e.from}->${e.to}`, e]));
-          const key = `${event.src_ip}->${event.dst_ip}`;
-          edgesMap.set(key, {
-            from: event.src_ip,
-            to: event.dst_ip,
-            label: event.protocol,
-            suspicious: event.classification === 'suspicious',
-          });
-
-          const liveEdges = Array.from(edgesMap.values()).slice(-50); // cap edge count
-
-          return { liveNodes, liveEdges };
-        });
+        get().addEventsBatched([event]);
       },
 
       setSearchQuery: (q) => set({ searchQuery: q }),

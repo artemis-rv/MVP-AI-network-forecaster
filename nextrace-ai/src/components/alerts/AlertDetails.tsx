@@ -1,12 +1,13 @@
 import { Badge } from '@/components/ui/Badge';
 import type { Alert } from '@/types/alert';
-import { Target, Clock, Hash, Tag, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Target, Clock, Hash, Tag, FileText, CheckCircle, AlertTriangle, RotateCcw, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface AlertDetailsProps {
   alert: Alert;
   onAcknowledge: (id: string) => void;
   onResolve: (id: string) => void;
+  onReopen: (id: string) => void;
   onUpdateStatus: (id: string, status: import('@/types/alert').AlertStatus) => void;
 }
 
@@ -14,7 +15,7 @@ const severityMap: Record<string, 'Critical' | 'High' | 'Medium' | 'Low'> = {
   CRITICAL: 'Critical', HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low'
 };
 
-export function AlertDetails({ alert, onAcknowledge, onResolve, onUpdateStatus }: AlertDetailsProps) {
+export function AlertDetails({ alert, onAcknowledge, onResolve, onReopen, onUpdateStatus }: AlertDetailsProps) {
   const navigate = useNavigate();
 
   function handleInvestigate() {
@@ -180,6 +181,15 @@ export function AlertDetails({ alert, onAcknowledge, onResolve, onUpdateStatus }
           </button>
         )}
 
+        {alert.status === 'RESOLVED' && (
+          <button
+            onClick={() => onReopen(alert.id)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '10px', background: 'var(--bg-card)', color: '#d97706', border: '1px solid #d97706', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          >
+            <RotateCcw size={16} /> Reopen Alert (Mark Open)
+          </button>
+        )}
+
         <button
           onClick={handleInvestigate}
           disabled={!alert.source_ip}
@@ -191,6 +201,3 @@ export function AlertDetails({ alert, onAcknowledge, onResolve, onUpdateStatus }
     </div>
   );
 }
-
-// Ensure Search is imported if we use it for Investigate
-import { Search } from 'lucide-react';

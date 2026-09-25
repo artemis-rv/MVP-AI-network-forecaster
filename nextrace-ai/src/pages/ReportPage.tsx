@@ -48,65 +48,66 @@ function exportJSON(report: Report) {
 }
 
 function exportMarkdown(report: Report) {
+  const isSim = report.report_type === 'simulation';
+  const typeStr = isSim ? 'Simulation' : 'Historical Forensic';
+
+  const critical = report.findings.filter(f => f.severity === 'CRITICAL');
+  const high     = report.findings.filter(f => f.severity === 'HIGH');
+  const medium   = report.findings.filter(f => f.severity === 'MEDIUM');
+  const low      = report.findings.filter(f => f.severity === 'LOW');
+  const total    = report.findings.length;
+
   const lines: string[] = [
     `# ${report.title}`,
-    ``,
-    `**Report ID:** \`${report.report_id}\`  `,
-    `**Type:** ${report.report_type === 'historical' ? 'Historical Forensic' : 'Simulation'}  `,
-    `**Source ID:** \`${report.source_id}\`  `,
-    `**Generated:** ${tsLabel(report.generated_at)}  `,
-    `**Status:** ${report.status}`,
+    `**Type:** ${typeStr} | **Date:** ${tsLabel(report.generated_at)} | **ID:** \`${report.report_id}\``,
     ``,
     `---`,
     ``,
-    `## Disclaimer`,
-    ``,
-    `> ${report.disclaimer}`,
+    `## Overall Assessment`,
+    `This report analyzes network and system events based on ${total} detected findings. The environment exhibits ${critical.length} critical and ${high.length} high severity alerts, warranting immediate investigation. ` + 
+    (isSim ? `*Note: All data is synthetically generated via simulation and does not represent real network traffic.*` : `These patterns are consistent with active exploitation or post-compromise activity.`),
     ``,
     `---`,
     ``,
-    `## Findings Summary`,
+    `## Alert Analysis`,
+    `### Security Findings by Severity`,
+    `| Severity | Count | Priority Action |`,
+    `|----------|-------|-----------------|`,
+    `| CRITICAL | ${critical.length} | Immediate remediation required |`,
+    `| HIGH     | ${high.length} | Schedule patching/investigation |`,
+    `| MEDIUM   | ${medium.length} | Review during regular audits |`,
+    `| LOW      | ${low.length} | Monitor for anomalies |`,
+    `| **Total**| **${total}** | |`,
     ``,
-    `| Severity | Count |`,
-    `|----------|-------|`,
-    ...(['CRITICAL','HIGH','MEDIUM','LOW'] as FindingSeverity[]).map(s => {
-      const count = report.findings.filter(f => f.severity === s).length;
-      return `| ${s} | ${count} |`;
+    `### Top Priority Security Events`,
+    `This section highlights the most critical findings affecting the monitored infrastructure.`,
+    ``,
+    `| Severity | Category | Confidence | Description |`,
+    `|----------|----------|------------|-------------|`,
+    ...[...critical, ...high].slice(0, 10).map(f => 
+      `| ${f.severity} | ${f.category} | ${f.confidence}% | **${f.title}**: ${f.summary.replace(/\n/g, ' ')} |`
+    ),
+    ``,
+    `---`,
+    ``,
+    `## Network & Endpoint Analysis`,
+    `### Activity Distribution`,
+    `| Category | Count | Status |`,
+    `|----------|-------|--------|`,
+    ...Array.from(new Set(report.findings.map(f => f.category))).map(cat => {
+      const count = report.findings.filter(f => f.category === cat).length;
+      return `| ${cat} | ${count} | ${count > 5 ? 'Elevated' : 'Normal'} |`;
     }),
-    `| **Total** | **${report.findings.length}** |`,
     ``,
     `---`,
     ``,
-    `## Findings`,
+    `## Recommended Actions`,
+    `Based on the alert activity and analysis, the following actions are recommended:`,
     ``,
-    ...report.findings.map((f, i) => [
-      `### ${i + 1}. ${f.title}`,
-      ``,
-      `- **Severity:** ${f.severity}`,
-      `- **Category:** ${f.category}`,
-      `- **Confidence:** ${f.confidence}%`,
-      `- **Source:** ${f.source_type} / \`${f.source_id}\``,
-      ``,
-      f.summary,
-      ``,
-      `**Evidence references:**`,
-      ...f.evidence.filter(Boolean).map(e => `- ${e}`),
-      ``,
-    ].join('\n')),
-    `---`,
+    ...critical.slice(0, 3).map(f => `- **High Urgency**: Investigate ${f.title}. ${f.summary.split('.')[0]}.`),
+    ...high.slice(0, 3).map(f => `- **Medium Urgency**: Review ${f.title} to confirm authorization.`),
+    `- **General**: Conduct a full review of the security posture and implement a remediation plan to address the highest-impact failing controls.`,
     ``,
-    `## Report Sections`,
-    ``,
-    ...report.sections.map(s => [
-      `### ${s.order}. ${s.title}`,
-      ``,
-      `\`\`\`json`,
-      JSON.stringify(s.content, null, 2),
-      `\`\`\``,
-      ``,
-      `**Evidence references:** ${s.evidence_refs.join('; ')}`,
-      ``,
-    ].join('\n')),
   ];
 
   const md   = lines.join('\n');
@@ -166,8 +167,8 @@ export function ReportPage() {
   const selectedFinding = report.findings.find(f => f.id === selectedFindingId) ?? null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
       {/* ── Header ── */}
       <div style={{ paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -354,6 +355,7 @@ export function ReportPage() {
         <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
           {report.disclaimer}
         </p>
+      </div>
       </div>
     </div>
   );
@@ -627,7 +629,7 @@ function NotFoundState({ onBack }: { onBack: () => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, gap: 14 }}>
       <FileText size={32} color="var(--text-muted)" />
-      <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Report not found</span>
+      <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>No report generated yet.</span>
       <button onClick={onBack} style={ghostBtnStyle}><ArrowLeft size={12} /> Go back</button>
     </div>
   );

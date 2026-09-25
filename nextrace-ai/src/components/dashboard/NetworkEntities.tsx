@@ -29,7 +29,7 @@ export function NetworkEntities({ nodes: propNodes }: { nodes?: LiveNode[], edge
     n.label.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => b.riskScore - a.riskScore).slice(0, 8); // Top 8 highest risk entities
 
-  const getTypeIcon = (type: NodeType) => {
+  const getTypeIcon = (type: NodeType | string) => {
     switch (type) {
       case 'suspicious': return <ShieldAlert size={14} color="var(--color-critical)" />;
       case 'server': return <Server size={14} color="var(--color-live)" />;

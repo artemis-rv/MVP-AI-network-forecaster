@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Target, Clock, Shield,
-  ChevronRight, Info, AlertTriangle, Search, Key, ArrowLeftRight, UploadCloud, CheckCircle2, Pause, TrendingUp,
+  ChevronRight, AlertTriangle, Search, Key, ArrowLeftRight, UploadCloud, CheckCircle2, Pause, TrendingUp,
 } from 'lucide-react';
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
@@ -12,6 +12,7 @@ import { ATTACK_STAGES, STAGE_COLORS } from '@/types/forecast';
 
 // ─────────────────────────────────────────────────────────────────────────────
 export function AttackPredictionPage() {
+  const navigate = useNavigate();
   const { currentForecast, selectedStage, setSelectedStage, setForecast, setLoading } = useForecastStore();
   const { session } = useLiveStore();
   const isLive = session?.running ?? false;
@@ -29,9 +30,9 @@ export function AttackPredictionPage() {
   const isBenign = forecast?.is_benign ?? true;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* ── Page Header ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
@@ -49,28 +50,90 @@ export function AttackPredictionPage() {
         </div>
       </div>
 
-      {/* ── No session banner ── */}
-      {!isLive && !forecast && (
-        <NoSessionBanner />
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20, paddingTop: 16, paddingBottom: 40 }}>
+      {/* ── Main content area ── */}
+      {!isLive && !forecast ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: 'var(--text-muted)', paddingTop: '10vh' }}>
+          <AlertTriangle size={64} color="var(--color-warning)" style={{ opacity: 0.8 }} />
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Live Network Required</h2>
+          <p style={{ textAlign: 'center', maxWidth: 450, lineHeight: 1.6, fontSize: 14 }}>
+            To view attack predictions, please start the live monitoring network first. The prediction engine requires real-time traffic features to forecast the next stage of an attack.
+          </p>
+          <button 
+            onClick={() => window.location.href='/live'} 
+            style={{ marginTop: 12, padding: '10px 20px', borderRadius: 8, background: 'var(--primary)', color: 'white', fontWeight: 600, border: 'none', cursor: 'pointer' }}
+          >
+            Go to Live Monitoring
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* ── Attack Path Forecaster Forward Simulation Callout ── */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.06))',
+            border: '1.5px solid rgba(99,102,241,0.25)',
+            borderRadius: 12,
+            padding: '12px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                <Target size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>
+                  Simulate Forward Paths on Whole Enterprise Topology
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  Current observed state predicting <strong>{forecast?.predicted_next_stage || 'Next Stage'}</strong>. Project K steps forward across the entire network topology in real-time.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/simulation')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                fontWeight: 800,
+                padding: '8px 16px',
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
+                color: 'white',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 2px 10px rgba(99,102,241,0.3)',
+              }}
+            >
+              Open Attack Path Forecaster Simulator →
+            </button>
+          </div>
+
+          {/* ── Main 2-col layout ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <CurrentStateCard forecast={forecast} />
+            <ForecastCard forecast={forecast} />
+          </div>
+
+          {/* ── Attack Progression ── */}
+          <AttackProgressionBar
+            forecast={forecast}
+            selectedStage={selectedStage}
+            onStageClick={setSelectedStage}
+          />
+
+          {/* ── Bottom 2-col: Timeline + Evidence ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <ForecastTimeline forecast={forecast} />
+            <EvidencePanel forecast={forecast} isBenign={isBenign} />
+          </div>
+        </>
       )}
-
-      {/* ── Main 2-col layout ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        <CurrentStateCard forecast={forecast} />
-        <ForecastCard forecast={forecast} />
-      </div>
-
-      {/* ── Attack Progression ── */}
-      <AttackProgressionBar
-        forecast={forecast}
-        selectedStage={selectedStage}
-        onStageClick={setSelectedStage}
-      />
-
-      {/* ── Bottom 2-col: Timeline + Evidence ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        <ForecastTimeline forecast={forecast} />
-        <EvidencePanel forecast={forecast} isBenign={isBenign} />
       </div>
     </div>
   );
@@ -454,19 +517,6 @@ function EvidencePanel({ forecast, isBenign }: { forecast: ForecastResult | null
 }
 
 // ─── Helper Components ─────────────────────────────────────────────────────────
-function NoSessionBanner() {
-  return (
-    <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 12, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'center' }}>
-      <Info size={18} color="var(--text-muted)" />
-      <div>
-        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>No active session</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-          Go to <strong>Live Monitoring</strong> and start a demo session. Forecast data will update automatically.
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function LiveBadge() {
   return (

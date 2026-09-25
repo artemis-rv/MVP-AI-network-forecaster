@@ -8,18 +8,17 @@ import { LiveMonitoringPage } from '@/pages/LiveMonitoringPage';
 import { AttackPredictionPage } from '@/pages/AttackPredictionPage';
 import { InvestigationPage } from '@/pages/InvestigationPage';
 import { HistoricalAnalysisPage } from '@/pages/HistoricalAnalysisPage';
-import { PlaceholderPage } from '@/pages/PlaceholderPage';
+import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 import { ForensicAnalysisPage } from '@/pages/ForensicAnalysisPage';
 import { SimulationPage } from '@/pages/SimulationPage';
 import { ReportPage } from '@/pages/ReportPage';
+import { UserManagementPage } from '@/pages/UserManagementPage';
+import { SystemHealthPage } from '@/pages/SystemHealthPage';
 import { ReportsListPage } from '@/pages/ReportsListPage';
 import { AlertsPage } from '@/pages/AlertsPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { InvestigationAssistant } from '@/components/dashboard/InvestigationAssistant';
 import { useAppStore } from '@/store/appStore';
-import {
-  FileText, ShieldCheck, Activity,
-} from 'lucide-react';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -46,7 +45,7 @@ function App() {
           <main className="app-content">
             <Routes>
               {/* Shared Routes */}
-              <Route path="/" element={<DashboardPage />} />
+              <Route path="/" element={userRole === 'admin' ? <AdminDashboardPage /> : <DashboardPage />} />
               <Route path="/reports" element={<ReportsListPage />} />
               <Route path="/reports/:reportId" element={<ReportPage />} />
 
@@ -66,20 +65,8 @@ function App() {
               {/* Admin Routes */}
               {userRole === 'admin' && (
                 <>
-                  <Route path="/admin" element={
-                    <PlaceholderPage
-                      title="Admin"
-                      description="Manage SOC analyst accounts, roles and permissions. View reports and inspect data sources."
-                      icon={<ShieldCheck size={36} />}
-                    />
-                  } />
-                  <Route path="/system-status" element={
-                    <PlaceholderPage
-                      title="System Status"
-                      description="View health of all backend services, storage utilization, and telemetry data sources."
-                      icon={<Activity size={36} />}
-                    />
-                  } />
+                  <Route path="/admin" element={<UserManagementPage />} />
+                  <Route path="/system-status" element={<SystemHealthPage />} />
                 </>
               )}
             </Routes>

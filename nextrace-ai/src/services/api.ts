@@ -169,6 +169,17 @@ export const apiService = {
       body: JSON.stringify(updates),
     });
   },
+
+  async reopenAlert(alertId: string): Promise<Alert> {
+    return request(`/api/alerts/${alertId}/reopen`, { method: 'POST' });
+  },
+
+  async createAlert(data: Partial<Alert>): Promise<Alert> {
+    return request('/api/alerts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 

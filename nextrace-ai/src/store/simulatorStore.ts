@@ -16,7 +16,6 @@ import type {
 } from '@/types/simulator';
 
 const POLL_MS = 800;
-const BASE_STEP_MS = 2000;
 
 // ── Config defaults (mirrors backend defaults) ─────────────────────────────────
 export const DEFAULT_CONFIG = {
@@ -92,7 +91,8 @@ function _startPolling(get: () => SimulatorStore) {
 }
 function _startAutoAdvance(get: () => SimulatorStore) {
   _stopAutoAdvance();
-  const intervalMs = BASE_STEP_MS / get().config.speed;
+  // Fixed interval for auto-advance (since speed config was removed)
+  const intervalMs = 2500;
   _autoAdvanceInterval = setInterval(() => {
     if (get().status === 'running') void get().nextStep();
   }, intervalMs);

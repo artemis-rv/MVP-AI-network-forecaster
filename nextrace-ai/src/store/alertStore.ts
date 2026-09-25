@@ -28,7 +28,9 @@ interface AlertStore {
 
   acknowledgeAlert: (id: string) => Promise<void>;
   resolveAlert: (id: string) => Promise<void>;
+  reopenAlert: (id: string) => Promise<void>;
   updateAlert: (id: string, updates: { status?: AlertStatus; assigned_to?: string | null }) => Promise<void>;
+  createAlert: (data?: Partial<Alert>) => Promise<Alert>;
 }
 
 const defaultFilters: AlertFilters = {
@@ -40,9 +42,19 @@ const defaultFilters: AlertFilters = {
 
 export const useAlertStore = create<AlertStore>((set, get) => ({
   alerts: [],
-  totalAlerts: 0,
+  totalAlerts: 7,
   selectedAlertId: null,
-  stats: null,
+  stats: {
+    total: 7,
+    open: 5,
+    acknowledged: 0,
+    in_progress: 1,
+    resolved: 1,
+    critical: 2,
+    high: 3,
+    medium: 1,
+    low: 1,
+  },
   loading: false,
   error: null,
   filters: { ...defaultFilters },
@@ -67,7 +79,7 @@ export const useAlertStore = create<AlertStore>((set, get) => ({
   fetchStats: async () => {
     try {
       const stats = await apiService.getAlertStats();
-      set({ stats });
+      set({ stats, totalAlerts: stats.total });
     } catch (err: any) {
       console.error('Failed to fetch alert stats', err);
     }
@@ -85,13 +97,28 @@ export const useAlertStore = create<AlertStore>((set, get) => ({
 
   selectAlert: (id) => set({ selectedAlertId: id }),
 
+  createAlert: async (data) => {
+    try {
+      const created = await apiService.createAlert(data || {});
+      set((state) => ({
+        alerts: [created, ...state.alerts],
+        totalAlerts: state.totalAlerts + 1,
+      }));
+      await get().fetchStats();
+      return created;
+    } catch (err: any) {
+      set({ error: err.message });
+      throw err;
+    }
+  },
+
   acknowledgeAlert: async (id) => {
     try {
       const updated = await apiService.acknowledgeAlert(id);
       set((state) => ({
         alerts: state.alerts.map((a) => (a.id === id ? updated : a)),
       }));
-      get().fetchStats();
+      await get().fetchStats();
     } catch (err: any) {
       set({ error: err.message });
     }
@@ -103,7 +130,19 @@ export const useAlertStore = create<AlertStore>((set, get) => ({
       set((state) => ({
         alerts: state.alerts.map((a) => (a.id === id ? updated : a)),
       }));
-      get().fetchStats();
+      await get().fetchStats();
+    } catch (err: any) {
+      set({ error: err.message });
+    }
+  },
+
+  reopenAlert: async (id) => {
+    try {
+      const updated = await apiService.reopenAlert(id);
+      set((state) => ({
+        alerts: state.alerts.map((a) => (a.id === id ? updated : a)),
+      }));
+      await get().fetchStats();
     } catch (err: any) {
       set({ error: err.message });
     }
@@ -115,7 +154,7 @@ export const useAlertStore = create<AlertStore>((set, get) => ({
       set((state) => ({
         alerts: state.alerts.map((a) => (a.id === id ? updated : a)),
       }));
-      get().fetchStats();
+      await get().fetchStats();
     } catch (err: any) {
       set({ error: err.message });
     }

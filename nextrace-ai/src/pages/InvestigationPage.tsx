@@ -112,7 +112,7 @@ export function InvestigationPage() {
   const suspCount = currentTemporal?.suspicious_count ?? 12;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
       {/* ── Page Header ── */}
       <div style={{ padding: '14px 0 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>

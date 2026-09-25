@@ -2,6 +2,64 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { notifications as mockNotifs } from '@/data/mockData';
 
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  password?: string;
+  role: 'Admin' | 'SOC Analyst';
+  status: 'Active' | 'Disabled';
+  lastActive: string;
+}
+
+export const DEFAULT_USERS: UserAccount[] = [
+  {
+    id: 'usr-1',
+    name: 'Alice Administrator',
+    email: 'admin@nextrace.ai',
+    password: 'admin123',
+    role: 'Admin',
+    status: 'Active',
+    lastActive: 'Just now',
+  },
+  {
+    id: 'usr-2',
+    name: 'Bob Analyst',
+    email: 'analyst@nextrace.ai',
+    password: 'soc123',
+    role: 'SOC Analyst',
+    status: 'Active',
+    lastActive: '5 mins ago',
+  },
+  {
+    id: 'usr-3',
+    name: 'Charlie Security',
+    email: 'charlie@nextrace.ai',
+    password: 'soc123',
+    role: 'SOC Analyst',
+    status: 'Active',
+    lastActive: '32 mins ago',
+  },
+  {
+    id: 'usr-4',
+    name: 'Diana Forensic',
+    email: 'diana@nextrace.ai',
+    password: 'soc123',
+    role: 'SOC Analyst',
+    status: 'Active',
+    lastActive: '3 hours ago',
+  },
+  {
+    id: 'usr-5',
+    name: 'Evan Inactive',
+    email: 'evan@nextrace.ai',
+    password: 'soc123',
+    role: 'SOC Analyst',
+    status: 'Disabled',
+    lastActive: '4 days ago',
+  },
+];
+
 interface Notification {
   id: string;
   title: string;
@@ -22,9 +80,18 @@ interface AppState {
   activePage: string;
   setActivePage: (page: string) => void;
 
-  // Auth
+  // Auth & User Accounts
   userRole: 'soc' | 'admin' | null;
   setUserRole: (role: 'soc' | 'admin' | null) => void;
+  currentUser: UserAccount | null;
+  users: UserAccount[];
+  loginWithCredentials: (email: string, password: string) => { success: boolean; error?: string; user?: UserAccount };
+  loginAsDemo: (role: 'soc' | 'admin') => void;
+  logout: () => void;
+  addUser: (userData: { name: string; email: string; password?: string; role: 'Admin' | 'SOC Analyst'; status: 'Active' | 'Disabled' }) => void;
+  updateUser: (id: string, updates: Partial<UserAccount>) => void;
+  toggleUserStatus: (id: string) => void;
+  deleteUser: (id: string) => void;
 
   // Notifications
   notifications: Notification[];
@@ -60,7 +127,108 @@ export const useAppStore = create<AppState>()(
       setActivePage: (page) => set({ activePage: page }),
 
       userRole: null,
-      setUserRole: (role) => set({ userRole: role }),
+      currentUser: null,
+      users: DEFAULT_USERS,
+
+      setUserRole: (role) => {
+        if (!role) {
+          set({ userRole: null, currentUser: null });
+        } else {
+          // If setting role directly, find corresponding default user
+          const matchedUser = get().users.find(
+            (u) => (role === 'admin' ? u.role === 'Admin' : u.role === 'SOC Analyst') && u.status === 'Active'
+          ) || get().users[0];
+          set({ userRole: role, currentUser: matchedUser });
+        }
+      },
+
+      loginWithCredentials: (email: string, password: string) => {
+        const cleanEmail = email.trim().toLowerCase();
+        const user = get().users.find((u) => u.email.toLowerCase() === cleanEmail);
+
+        if (!user) {
+          return { success: false, error: 'User not found. Check your email address or use demo credentials.' };
+        }
+
+        if (user.password && user.password !== password) {
+          return { success: false, error: 'Invalid password. Please check your credentials.' };
+        }
+
+        if (user.status === 'Disabled') {
+          return { success: false, error: 'This user account is currently disabled. Please contact a system administrator.' };
+        }
+
+        const nowStr = 'Just now';
+        const updatedUsers = get().users.map((u) =>
+          u.id === user.id ? { ...u, lastActive: nowStr } : u
+        );
+
+        const role: 'admin' | 'soc' = user.role === 'Admin' ? 'admin' : 'soc';
+
+        set({
+          userRole: role,
+          currentUser: { ...user, lastActive: nowStr },
+          users: updatedUsers,
+          activePage: role === 'admin' ? 'overview' : 'dashboard',
+        });
+
+        return { success: true, user };
+      },
+
+      loginAsDemo: (role: 'soc' | 'admin') => {
+        const targetRole = role === 'admin' ? 'Admin' : 'SOC Analyst';
+        const user = get().users.find((u) => u.role === targetRole && u.status === 'Active') || get().users[0];
+
+        const nowStr = 'Just now';
+        const updatedUsers = get().users.map((u) =>
+          u.id === user.id ? { ...u, lastActive: nowStr } : u
+        );
+
+        set({
+          userRole: role,
+          currentUser: { ...user, lastActive: nowStr },
+          users: updatedUsers,
+          activePage: role === 'admin' ? 'overview' : 'dashboard',
+        });
+      },
+
+      logout: () => {
+        set({ userRole: null, currentUser: null, userMenuOpen: false });
+      },
+
+      addUser: (userData) => {
+        const newUser: UserAccount = {
+          id: `usr-${Date.now()}`,
+          name: userData.name,
+          email: userData.email,
+          password: userData.password || 'nextrace123',
+          role: userData.role,
+          status: userData.status,
+          lastActive: 'Never',
+        };
+        set((state) => ({ users: [newUser, ...state.users] }));
+      },
+
+      updateUser: (id, updates) => {
+        set((state) => ({
+          users: state.users.map((u) => (u.id === id ? { ...u, ...updates } : u)),
+          currentUser: state.currentUser?.id === id ? { ...state.currentUser, ...updates } : state.currentUser,
+        }));
+      },
+
+      toggleUserStatus: (id) => {
+        set((state) => ({
+          users: state.users.map((u) =>
+            u.id === id ? { ...u, status: u.status === 'Active' ? 'Disabled' : 'Active' } : u
+          ),
+        }));
+      },
+
+      deleteUser: (id) => {
+        set((state) => ({
+          users: state.users.filter((u) => u.id !== id),
+        }));
+      },
 
       notifications: mockNotifs,
       unreadCount: mockNotifs.filter((n) => !n.read).length,
@@ -94,7 +262,12 @@ export const useAppStore = create<AppState>()(
     {
       name: 'app-storage',
       storage: createJSONStorage(() => sessionStorage),
-      partialize: (state) => ({ userRole: state.userRole, activePage: state.activePage }), // Only persist role and page
+      partialize: (state) => ({
+        userRole: state.userRole,
+        currentUser: state.currentUser,
+        users: state.users,
+        activePage: state.activePage,
+      }),
     }
   )
 );

@@ -10,7 +10,7 @@ export function TopBar() {
     notifPanelOpen, setNotifPanelOpen,
     notifications, unreadCount, markAllRead,
     addToast,
-    userRole, setUserRole
+    userRole, currentUser, logout
   } = useAppStore();
 
   const { session } = useLiveStore();
@@ -165,8 +165,9 @@ export function TopBar() {
         onClick={() => addToast('Live demo mode is active. Data is simulated.', 'info')}
       >
         {isLiveRunning && (
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-critical)', marginRight: 8, paddingRight: 8, borderRight: '1px solid rgba(0,0,0,0.1)' }}>
-            🟢 LIVE RUNNING
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid rgba(0,0,0,0.1)' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-critical)', animation: 'pulse-dot 1.5s infinite' }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-critical)' }}>LIVE RUNNING</span>
           </span>
         )}
         <div
@@ -344,11 +345,13 @@ export function TopBar() {
             }}
           >
             <span style={{ fontSize: 12, fontWeight: 700, color: 'white' }}>
-              {userRole === 'admin' ? 'AD' : 'SA'}
+              {currentUser
+                ? currentUser.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+                : (userRole === 'admin' ? 'AD' : 'SA')}
             </span>
           </div>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-            {userRole === 'admin' ? 'Administrator' : 'SOC Analyst'}
+            {currentUser?.name || (userRole === 'admin' ? 'Administrator' : 'SOC Analyst')}
           </span>
           <ChevronDown
             size={14}
@@ -364,7 +367,7 @@ export function TopBar() {
               position: 'absolute',
               top: 'calc(100% + 8px)',
               right: 0,
-              width: 200,
+              width: 220,
               background: 'white',
               borderRadius: 12,
               border: '1px solid var(--border-default)',
@@ -374,8 +377,15 @@ export function TopBar() {
             }}
           >
             <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{userRole === 'admin' ? 'Administrator' : 'SOC Analyst'}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{userRole === 'admin' ? 'admin@nextrace.ai' : 'analyst@nextrace.ai'}</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                {currentUser?.name || (userRole === 'admin' ? 'Administrator' : 'SOC Analyst')}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                {currentUser?.email || (userRole === 'admin' ? 'admin@nextrace.ai' : 'analyst@nextrace.ai')}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--primary)', marginTop: 4, fontWeight: 600 }}>
+                Role: {currentUser?.role || (userRole === 'admin' ? 'Admin' : 'SOC Analyst')}
+              </div>
             </div>
             {[
               { icon: User, label: 'Profile' },
@@ -407,7 +417,7 @@ export function TopBar() {
             ))}
             <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
               <button
-                onClick={() => setUserRole(null)}
+                onClick={() => logout()}
                 style={{
                   width: '100%',
                   display: 'flex',

@@ -1,17 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAlertStore } from '@/store/alertStore';
 import { useLiveStore } from '@/store/liveStore';
-import { ShieldAlert, AlertCircle, AlertTriangle, List, Search as SearchIcon, RefreshCw } from 'lucide-react';
+import { ShieldAlert, AlertCircle, AlertTriangle, List, Search as SearchIcon, RefreshCw, Plus, Check } from 'lucide-react';
 import { AlertTable } from '@/components/alerts/AlertTable';
 import { AlertDetailsDrawer } from '@/components/alerts/AlertDetailsDrawer';
 
 export function AlertsPage() {
   const { 
     alerts, stats, filters, loading, error, 
-    fetchAlerts, fetchStats, setFilter, resetFilters, selectAlert, selectedAlertId 
+    fetchAlerts, fetchStats, setFilter, resetFilters, selectAlert, selectedAlertId, createAlert 
   } = useAlertStore();
 
   const { session } = useLiveStore();
+  const [generating, setGenerating] = useState(false);
+  const [justGenerated, setJustGenerated] = useState(false);
 
   useEffect(() => {
     fetchAlerts();
@@ -20,8 +22,82 @@ export function AlertsPage() {
 
   const activeFiltersCount = Object.values(filters).filter(v => v !== '').length;
 
+  const handleGenerateSampleAlert = async () => {
+    setGenerating(true);
+    const samples = [
+      {
+        title: 'Unauthorized Cloud API Token Generation',
+        description: 'New high-privilege IAM access key created outside normal business hours.',
+        severity: 'CRITICAL' as const,
+        status: 'OPEN' as const,
+        category: 'EXFILTRATION',
+        source_ip: '10.0.0.142',
+        destination_ip: '203.0.113.88',
+        protocol: 'HTTPS',
+        event_count: 8,
+        confidence: 96,
+        tags: ['iam', 'cloud', 'token'],
+        evidence: ['API call CreateAccessKey by unusual identity', 'IP origin matches anonymizer service']
+      },
+      {
+        title: 'SQL Injection Pattern on Web Gateway',
+        description: 'Repetitive UNION SELECT syntax detected in HTTP POST body payloads.',
+        severity: 'HIGH' as const,
+        status: 'OPEN' as const,
+        category: 'ANOMALY',
+        source_ip: '198.51.100.99',
+        destination_ip: '10.0.0.10',
+        protocol: 'TCP',
+        event_count: 73,
+        confidence: 91,
+        tags: ['sqli', 'web', 'waf'],
+        evidence: ['WAF rule 942100 triggered', 'Error-based SQL error signatures returned']
+      },
+      {
+        title: 'Ransomware Canary File Modification',
+        description: 'Cryptographic modification attempt on designated file-integrity canary node.',
+        severity: 'CRITICAL' as const,
+        status: 'OPEN' as const,
+        category: 'ANOMALY',
+        source_ip: '10.0.0.60',
+        destination_ip: '10.0.0.4',
+        protocol: 'SMB',
+        event_count: 140,
+        confidence: 98,
+        tags: ['ransomware', 'canary', 'crypto'],
+        evidence: ['Canary .docx file encrypted with unfamiliar entropy', 'High disk I/O burst observed']
+      },
+      {
+        title: 'Kerberoasting TGS Ticket Request Spurt',
+        description: 'Abnormal volume of RC4 service ticket requests for domain service accounts.',
+        severity: 'HIGH' as const,
+        status: 'OPEN' as const,
+        category: 'BRUTE_FORCE',
+        source_ip: '10.0.0.33',
+        destination_ip: '10.0.0.2',
+        protocol: 'Kerberos',
+        event_count: 62,
+        confidence: 89,
+        tags: ['kerberos', 'tgs', 'active_directory'],
+        evidence: ['Event ID 4769 burst for 12 SPNs', 'Requested encryption type 0x17 (RC4)']
+      }
+    ];
+
+    const pick = samples[Math.floor(Math.random() * samples.length)];
+    try {
+      await createAlert(pick);
+      await fetchAlerts();
+      setJustGenerated(true);
+      setTimeout(() => setJustGenerated(false), 2000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minHeight: 'calc(100vh - 60px)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, flex: 1, minHeight: 0 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)' }}>
         <div>
@@ -37,13 +113,37 @@ export function AlertsPage() {
             Security Alert Management & Triage Center
           </p>
         </div>
-        <button 
-          onClick={() => { fetchAlerts(); fetchStats(); }}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
-        >
-          <RefreshCw size={14} className={loading ? 'spin' : ''} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button 
+            onClick={handleGenerateSampleAlert}
+            disabled={generating}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 6, 
+              padding: '6px 14px', 
+              background: justGenerated ? '#10b981' : 'var(--primary)', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: 6, 
+              fontSize: 12, 
+              fontWeight: 600, 
+              cursor: generating ? 'not-allowed' : 'pointer',
+              boxShadow: '0 2px 6px rgba(99, 102, 241, 0.25)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            {justGenerated ? <Check size={14} /> : <Plus size={14} />}
+            {justGenerated ? 'Alert Generated!' : generating ? 'Generating...' : 'Generate Alert'}
+          </button>
+          <button 
+            onClick={() => { fetchAlerts(); fetchStats(); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
+          >
+            <RefreshCw size={14} className={loading ? 'spin' : ''} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}

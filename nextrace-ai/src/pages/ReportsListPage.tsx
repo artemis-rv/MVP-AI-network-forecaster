@@ -1,18 +1,19 @@
 import { useNavigate } from 'react-router-dom';
-import { FileText, Download, Eye, Calendar, ShieldCheck } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { FileText, Calendar, Eye, AlertCircle } from 'lucide-react';
+import { useEffect } from 'react';
+import { useFindingsStore } from '@/store/findingsStore';
 
 export function ReportsListPage() {
   const navigate = useNavigate();
+  const { reportList, fetchReportList } = useFindingsStore();
 
-  const mockReports = [
-    { id: 'REP-9921', title: 'Suspicious Lateral Movement Detected (10.0.0.50)', date: 'Sep 24, 2026', type: 'Historical PCAP', status: 'Completed', author: 'SOC Auto-Forensic' },
-    { id: 'REP-9920', title: 'Data Exfiltration Simulation Results (Fixed-K)', date: 'Sep 23, 2026', type: 'Attack Simulation', status: 'Completed', author: 'Admin' },
-    { id: 'REP-9919', title: 'Daily Network Threat Summary', date: 'Sep 22, 2026', type: 'Daily Summary', status: 'Completed', author: 'System' },
-  ];
+  useEffect(() => {
+    fetchReportList();
+  }, [fetchReportList]);
 
   return (
-    <div style={{ padding: '24px 32px', maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
         <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <FileText size={24} />
@@ -35,33 +36,46 @@ export function ReportsListPage() {
             </tr>
           </thead>
           <tbody>
-            {mockReports.map((r, i) => (
-              <tr key={r.id} style={{ borderBottom: i === mockReports.length - 1 ? 'none' : '1px solid var(--border-subtle)', background: 'white' }}>
-                <td style={{ padding: '16px', fontWeight: 700, color: 'var(--primary)' }}>{r.id}</td>
-                <td style={{ padding: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.title}</td>
-                <td style={{ padding: '16px' }}>
-                  <span style={{ background: 'var(--bg-workspace)', padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    {r.type}
-                  </span>
-                </td>
-                <td style={{ padding: '16px', color: 'var(--text-muted)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Calendar size={14} />
-                    {r.date}
+            {reportList.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ padding: '48px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                    <AlertCircle size={32} color="var(--border-default)" />
+                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)' }}>No reports generated</div>
+                    <div style={{ fontSize: 13 }}>Run a simulation or historical analysis to generate reports.</div>
                   </div>
                 </td>
-                <td style={{ padding: '16px', textAlign: 'right' }}>
-                  <button
-                    onClick={() => navigate(`/reports/${r.id}`)}
-                    style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <Eye size={14} /> View
-                  </button>
-                </td>
               </tr>
-            ))}
+            ) : (
+              reportList.map((r, i) => (
+                <tr key={r.report_id} style={{ borderBottom: i === reportList.length - 1 ? 'none' : '1px solid var(--border-subtle)', background: 'white' }}>
+                  <td style={{ padding: '16px', fontWeight: 700, color: 'var(--primary)' }}>{r.report_id}</td>
+                  <td style={{ padding: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.title || (r.report_type === 'simulation' ? 'Simulation Report' : 'Historical Analysis Report')}</td>
+                  <td style={{ padding: '16px' }}>
+                    <span style={{ background: 'var(--bg-workspace)', padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      {r.report_type}
+                    </span>
+                  </td>
+                  <td style={{ padding: '16px', color: 'var(--text-muted)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Calendar size={14} />
+                      {new Date(r.generated_at * 1000).toLocaleDateString()}
+                    </div>
+                  </td>
+                  <td style={{ padding: '16px', textAlign: 'right' }}>
+                    <button
+                      onClick={() => navigate(`/reports/${r.report_id}`)}
+                      style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Eye size={14} /> View
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Radio, TrendingUp, Bell, Search,
@@ -6,9 +6,18 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import { useAlertStore } from '@/store/alertStore';
 
 export function Sidebar() {
   const { setActivePage, userRole } = useAppStore();
+  const { stats, fetchStats } = useAlertStore();
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  const activeAlertsBadge = (stats?.open ?? 0) + (stats?.in_progress ?? 0);
+
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     live: true,
     historical: true,
@@ -43,7 +52,8 @@ export function Sidebar() {
             { id: 'overview', label: 'Overview', icon: LayoutDashboard, path: '/' },
             { id: 'live-monitoring', label: 'Live Monitoring', icon: Radio, path: '/live-monitoring' },
             { id: 'attack-prediction', label: 'Attack Prediction', icon: TrendingUp, path: '/attack-prediction' },
-            { id: 'alerts', label: 'Alerts', icon: Bell, path: '/alerts', badge: 3 },
+            { id: 'path-forecaster', label: 'Attack Path Forecaster', icon: Target, path: '/simulation' },
+            { id: 'alerts', label: 'Alerts', icon: Bell, path: '/alerts', badge: activeAlertsBadge > 0 ? activeAlertsBadge : undefined },
           ]
         },
         {
@@ -52,7 +62,6 @@ export function Sidebar() {
           items: [
             { id: 'investigation', label: 'Investigation', icon: Search, path: '/investigation' },
             { id: 'historical-pcap', label: 'Historical PCAP', icon: FileSearch, path: '/historical-pcap' },
-            { id: 'attack-simulator', label: 'Attack Simulator', icon: Target, path: '/simulation' },
             { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
           ]
         }

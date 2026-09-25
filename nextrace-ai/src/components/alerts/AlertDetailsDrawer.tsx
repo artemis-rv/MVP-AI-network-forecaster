@@ -4,7 +4,7 @@ import { useAlertStore } from '@/store/alertStore';
 import { AlertDetails } from './AlertDetails';
 
 export function AlertDetailsDrawer() {
-  const { selectedAlertId, alerts, selectAlert, acknowledgeAlert, resolveAlert, updateAlert } = useAlertStore();
+  const { selectedAlertId, alerts, selectAlert, acknowledgeAlert, resolveAlert, reopenAlert, updateAlert } = useAlertStore();
   
   const alert = alerts.find(a => a.id === selectedAlertId);
 
@@ -57,6 +57,7 @@ export function AlertDetailsDrawer() {
             alert={alert} 
             onAcknowledge={acknowledgeAlert}
             onResolve={resolveAlert}
+            onReopen={reopenAlert}
             onUpdateStatus={(id, status) => updateAlert(id, { status })}
           />
         </div>

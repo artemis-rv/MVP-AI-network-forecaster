@@ -86,6 +86,48 @@ def _create_demo_alerts() -> Dict[str, dict]:
         },
         {
             "id": "ALT-0004",
+            "title": "Suspicious Lateral Movement via SMB",
+            "description": "Multiple high-privileged SMB connections observed originating from compromised host.",
+            "severity": "CRITICAL",
+            "status": "OPEN",
+            "category": "LATERAL_MOVEMENT",
+            "source_ip": "10.0.0.25",
+            "destination_ip": "10.0.0.12",
+            "protocol": "TCP",
+            "event_count": 84,
+            "confidence": 94,
+            "first_seen": now,
+            "last_seen": now,
+            "created_at": now,
+            "assigned_to": "usr-002",
+            "acknowledged_at": now,
+            "tags": ["smb", "lateral_movement", "psexec"],
+            "evidence": ["Admin share access (C$, ADMIN$)", "NTLM relay indicators detected"],
+            "simulation": False,
+        },
+        {
+            "id": "ALT-0005",
+            "title": "DNS C2 Tunneling Activity",
+            "description": "Anomalous subdomain entropy and high-frequency TXT record lookups to dynamic external domains.",
+            "severity": "HIGH",
+            "status": "OPEN",
+            "category": "C2",
+            "source_ip": "10.0.0.75",
+            "destination_ip": "198.51.100.33",
+            "protocol": "UDP",
+            "event_count": 312,
+            "confidence": 89,
+            "first_seen": now,
+            "last_seen": now,
+            "created_at": now,
+            "assigned_to": None,
+            "acknowledged_at": None,
+            "tags": ["dns", "c2", "tunneling"],
+            "evidence": ["Subdomain query length > 45 chars", "Base64 encoded payload in DNS TXT responses"],
+            "simulation": False,
+        },
+        {
+            "id": "ALT-0006",
             "title": "ICMP Traffic Anomaly",
             "description": "High volume of ICMP Echo Requests (ping) detected.",
             "severity": "MEDIUM",
@@ -106,7 +148,7 @@ def _create_demo_alerts() -> Dict[str, dict]:
             "simulation": False,
         },
         {
-            "id": "ALT-0005",
+            "id": "ALT-0007",
             "title": "Unusual Packet Rate",
             "description": "General increase in network traffic rate from source.",
             "severity": "LOW",
@@ -135,8 +177,7 @@ _ALERTS: Dict[str, dict] = _create_demo_alerts()
 
 def list_alerts() -> List[dict]:
     """Return all alerts sorted by created_at (newest first)."""
-    # For demo, just sort by ID descending or created_at
-    return sorted(list(_ALERTS.values()), key=lambda x: x["created_at"], reverse=True)
+    return sorted(list(_ALERTS.values()), key=lambda x: (x.get("created_at") or "", x.get("id") or ""), reverse=True)
 
 def get_alert(alert_id: str) -> Optional[dict]:
     return _ALERTS.get(alert_id)
@@ -159,6 +200,41 @@ def get_stats() -> dict:
         elif severity == "LOW": stats.low += 1
     return stats.model_dump()
 
+def create_alert(data: dict) -> dict:
+    """Create and insert a new alert."""
+    now = _now_iso()
+    new_id = data.get("id")
+    if not new_id:
+        counter = len(_ALERTS) + 1
+        new_id = f"ALT-{counter:04d}"
+        while new_id in _ALERTS:
+            counter += 1
+            new_id = f"ALT-{counter:04d}"
+
+    alert = {
+        "id": new_id,
+        "title": data.get("title", "Suspicious Activity Detected"),
+        "description": data.get("description", "Automated threat detection trigger."),
+        "severity": data.get("severity", "HIGH"),
+        "status": data.get("status", "OPEN"),
+        "category": data.get("category", "ANOMALY"),
+        "source_ip": data.get("source_ip", "10.0.0.120"),
+        "destination_ip": data.get("destination_ip", "10.0.0.5"),
+        "protocol": data.get("protocol", "TCP"),
+        "event_count": data.get("event_count", 1),
+        "confidence": data.get("confidence", 85),
+        "first_seen": data.get("first_seen", now),
+        "last_seen": data.get("last_seen", now),
+        "created_at": data.get("created_at", now),
+        "assigned_to": data.get("assigned_to"),
+        "acknowledged_at": None,
+        "tags": data.get("tags", ["automated", "live"]),
+        "evidence": data.get("evidence", ["Triggered by security rules"]),
+        "simulation": data.get("simulation", False),
+    }
+    _ALERTS[new_id] = alert
+    return alert
+
 def update_alert(alert_id: str, updates: dict) -> dict:
     """Update specific fields of an alert."""
     if alert_id not in _ALERTS:
@@ -170,6 +246,10 @@ def update_alert(alert_id: str, updates: dict) -> dict:
         if updates["status"] not in STATUSES:
             raise ValueError(f"Invalid status. Must be one of {STATUSES}")
         alert["status"] = updates["status"]
+        if updates["status"] == "RESOLVED":
+            pass
+        elif updates["status"] == "OPEN":
+            alert["acknowledged_at"] = None
         
     if "assigned_to" in updates:
         alert["assigned_to"] = updates["assigned_to"]

@@ -18,20 +18,47 @@ class WebSocketService {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose    = false;
 
+  private eventQueue: PacketEvent[] = [];
+  private batchTimer: ReturnType<typeof setInterval> | null = null;
+
   connect(): void {
     this.intentionalClose = false;
     this.reconnectAttempts = 0;
+    
+    // Start batch processor
+    if (!this.batchTimer) {
+      this.batchTimer = setInterval(() => this._flushEventQueue(), 100);
+    }
+    
     this._openSocket();
   }
 
   disconnect(): void {
     this.intentionalClose = true;
     this._clearReconnectTimer();
+    
+    if (this.batchTimer) {
+      clearInterval(this.batchTimer);
+      this.batchTimer = null;
+    }
+    this._flushEventQueue(); // Flush any remaining
+    
     if (this.ws) {
       this.ws.close(1000, 'User stopped session');
       this.ws = null;
     }
     useLiveStore.getState().setWsConnected(false);
+  }
+
+  private _flushEventQueue() {
+    if (this.eventQueue.length === 0) return;
+    
+    const eventsToProcess = [...this.eventQueue];
+    this.eventQueue = [];
+    
+    const store = useLiveStore.getState();
+    // Use the batched add method to avoid N separate state updates
+    store.addEventsBatched(eventsToProcess);
   }
 
   private _openSocket(): void {
@@ -74,8 +101,8 @@ class WebSocketService {
 
       switch (msg.type) {
         case 'packet_event':
-          store.addEvent(msg.data as unknown as PacketEvent);
-          store.updateEntities(msg.data as unknown as PacketEvent);
+          // Queue events to avoid lagging UI
+          this.eventQueue.push(msg.data as unknown as PacketEvent);
           break;
         case 'temporal_state':
           store.setTemporal(msg.data as unknown as TemporalState);
