@@ -46,7 +46,9 @@ def _get_completed_hist_and_forensic(job_id: str):
     hist_job = _HIST_JOBS.get(job_id)
     if not hist_job:
         raise HTTPException(status_code=404, detail=f"Historical job '{job_id}' not found.")
-    if hist_job.get("status") != "completed":
+    
+    hist_status = str(hist_job.get("status", "")).strip().lower()
+    if hist_status != "completed":
         raise HTTPException(
             status_code=409,
             detail=(
@@ -65,7 +67,9 @@ def _get_completed_hist_and_forensic(job_id: str):
                 f"Run POST /api/forensic/{job_id}/analyze first."
             ),
         )
-    if forensic_job.get("status") != "completed":
+    
+    forensic_status = str(forensic_job.get("status", "")).strip().lower()
+    if forensic_status != "completed":
         raise HTTPException(
             status_code=409,
             detail=(

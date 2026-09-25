@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useFindingsStore, getFilteredFindings } from '@/store/findingsStore';
 import type { Finding, Report, ReportSection, FindingSeverity, FindingCategory } from '@/types/report';
+import { generateSecurityReportPdf } from '@/utils/pdfGenerator';
 
 // ── Design tokens (reuse NEXTRACE AI palette) ─────────────────────────────────
 const SEV: Record<FindingSeverity, { color: string; bg: string; border: string }> = {
@@ -197,11 +198,14 @@ export function ReportPage() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0, paddingTop: 4 }}>
-            <button id="export-json-btn" onClick={() => exportJSON(report)} style={exportBtnStyle}>
+            <button id="export-json-btn" onClick={() => exportJSON(report)} className="btn-export">
               <Download size={13} /> Export JSON
             </button>
-            <button id="export-md-btn" onClick={() => exportMarkdown(report)} style={{ ...exportBtnStyle, background: 'var(--primary)', color: 'white', border: '1px solid var(--primary)' }}>
+            <button id="export-md-btn" onClick={() => exportMarkdown(report)} className="btn-export">
               <Download size={13} /> Export MD
+            </button>
+            <button id="export-pdf-btn" onClick={() => generateSecurityReportPdf(report)} className="btn-export-pdf">
+              <Download size={13} /> Export PDF
             </button>
           </div>
         </div>
@@ -724,13 +728,6 @@ const ghostBtnStyle: React.CSSProperties = {
   fontSize: 12, fontWeight: 600, padding: '7px 14px', borderRadius: 8,
   background: 'var(--bg-workspace)', border: '1px solid var(--border-default)',
   color: 'var(--text-secondary)', cursor: 'pointer',
-};
-
-const exportBtnStyle: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 6,
-  fontSize: 12, fontWeight: 600, padding: '8px 16px', borderRadius: 8,
-  background: 'var(--bg-workspace)', border: '1px solid var(--border-default)',
-  color: 'var(--text-primary)', cursor: 'pointer',
 };
 
 const thStyle: React.CSSProperties = {

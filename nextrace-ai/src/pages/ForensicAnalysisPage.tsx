@@ -114,13 +114,18 @@ export function ForensicAnalysisPage() {
     if (reportId) {
       navigate(`/reports/${reportId}`);
     } else {
-      setReportError('Report generation failed. Ensure forensic analysis is complete.');
+      const storeErr = useFindingsStore.getState().error;
+      setReportError(storeErr || 'Report generation failed. Please try again.');
     }
   }
 
+  const normalizedStatus = String(status || '').toLowerCase();
+  const isCompleted = normalizedStatus === 'completed';
+  const isFailed = normalizedStatus === 'failed';
+
   const view =
-    status === 'completed'  ? 'result' :
-    status === 'failed'     ? 'error'  : 'processing';
+    isCompleted ? 'result' :
+    isFailed    ? 'error'  : 'processing';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flex: 1, minHeight: 0 }}>
@@ -150,7 +155,7 @@ export function ForensicAnalysisPage() {
               </div>
             )}
             {isDemo && <SimulatedBadge/>}
-            {status === 'completed' && (
+            {isCompleted && (
               <button
                 id="generate-report-btn"
                 onClick={handleGenerateReport}

@@ -115,6 +115,13 @@ class TestForensicSuite(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["historical_job_id"], "HIST-MOCK-1")
 
+        # Generate Report
+        res = self.client.post("/api/reports/historical/HIST-MOCK-1/generate")
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertIn("report_id", data)
+        self.assertEqual(data["source_id"], "HIST-MOCK-1")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -135,3 +135,20 @@ def test_forensic_pipeline_on_real_pcap_result(sample_real_pcap):
     assert "final_assessment" in forensic
     assert "overall_confidence" in forensic["final_assessment"]
     assert "assessment_text" in forensic["final_assessment"]
+
+    # Register in registries and test report builder
+    from backend.api.historical import _JOBS as _HIST_JOBS
+    from backend.api.forensic import _FORENSIC_JOBS
+    from backend.reports.report_builder import build_historical_report
+
+    fake_job["result"] = hist_result
+    _HIST_JOBS["TEST-HIST-01"] = fake_job
+    _FORENSIC_JOBS["TEST-HIST-01"] = forensic
+
+    rpt = build_historical_report("TEST-HIST-01")
+    assert rpt is not None
+    net_sec = next(s for s in rpt["sections"] if s["title"] == "Network Activity")["content"]
+    assert net_sec["packet_count"] > 0
+    assert net_sec["flow_count"] > 0
+    assert len(net_sec["top_src_ips"]) > 0
+    assert len(net_sec["top_dst_ips"]) > 0

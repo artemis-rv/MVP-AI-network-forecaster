@@ -138,53 +138,7 @@ def build_historical_findings(
             source_id=job_id,
         ))
 
-    # ── 3. Suspicious indicators ──────────────────────────────────────────────
-    if sus_events:
-        # Group by indicator type
-        types: dict[str, list] = {}
-        for e in sus_events:
-            t = e.get("indicator_type", e.get("type", "unknown"))
-            types.setdefault(t, []).append(e)
 
-        for itype, evts in list(types.items())[:4]:  # cap at 4
-            count = len(evts)
-            severity = SEVERITY_HIGH if count >= 5 else SEVERITY_MEDIUM if count >= 2 else SEVERITY_LOW
-
-            # Derive a human-readable title
-            if "port_scan" in itype.lower() or "scan" in itype.lower():
-                title = "Possible reconnaissance/port-scan activity observed"
-            elif "brute" in itype.lower() or "auth" in itype.lower():
-                title = "Repeated service/authentication attempts observed"
-            elif "transfer" in itype.lower() or "exfil" in itype.lower():
-                title = "Possible data transfer/exfiltration pattern observed"
-            elif "beacon" in itype.lower() or "c2" in itype.lower():
-                title = "Possible beaconing/C2 communication pattern observed"
-            else:
-                title = f"Suspicious indicator type '{itype}' observed"
-
-            e_refs: list[str] = [f"Indicator count: {count}", f"Source: historical job {job_id}"]
-            first = evts[0]
-            if first.get("src_ip"):
-                e_refs.append(f"Example source: {first['src_ip']}")
-            if first.get("dst_ip"):
-                e_refs.append(f"Example destination: {first['dst_ip']}")
-            if first.get("timestamp"):
-                ts = first["timestamp"]
-                e_refs.append(f"First observed: T+{ts:.1f}s")
-
-            findings.append(_new_finding(
-                title=title,
-                category=CAT_SUSPICIOUS,
-                severity=severity,
-                confidence=min(70, 40 + count * 5),
-                summary=(
-                    f"{count} indicator(s) of type '{itype}' observed in the capture. "
-                    f"Indicator is heuristic only — may include benign activity."
-                ),
-                evidence=e_refs,
-                source_type="historical",
-                source_id=job_id,
-            ))
 
     # ── 4. Suspicious entity relationships ────────────────────────────────────
     sus_rels = [r for r in entities if r.get("is_suspicious")]

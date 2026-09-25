@@ -2,6 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, Calendar, Eye, AlertCircle } from 'lucide-react';
 import { useEffect } from 'react';
 import { useFindingsStore } from '@/store/findingsStore';
+import { generateSecurityReportPdf } from '@/utils/pdfGenerator';
+import { apiService } from '@/services/api';
 
 export function ReportsListPage() {
   const navigate = useNavigate();
@@ -63,12 +65,29 @@ export function ReportsListPage() {
                     </div>
                   </td>
                   <td style={{ padding: '16px', textAlign: 'right' }}>
-                    <button
-                      onClick={() => navigate(`/reports/${r.report_id}`)}
-                      style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                    >
-                      <Eye size={14} /> View
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={() => navigate(`/reports/${r.report_id}`)}
+                        style={{ background: 'var(--bg-workspace)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', padding: '6px 14px', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <Eye size={14} /> View
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const fullReport = await apiService.getReport(r.report_id);
+                            generateSecurityReportPdf(fullReport);
+                          } catch (err) {
+                            console.error("Failed to fetch full report for PDF:", err);
+                            generateSecurityReportPdf({ title: r.title, reportId: r.report_id, generatedAt: r.generated_at });
+                          }
+                        }}
+                        className="btn-export-pdf"
+                        style={{ padding: '6px 14px', fontSize: 12 }}
+                      >
+                        <FileText size={14} /> Export PDF
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

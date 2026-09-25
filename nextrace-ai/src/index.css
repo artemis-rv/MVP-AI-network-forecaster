@@ -223,3 +223,53 @@ body {
     transform: translateY(0);
   }
 }
+
+/* ═══ Export Button Hover Highlights ═══ */
+.btn-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-export:hover {
+  background: #f1f5f9;
+  border-color: #0B63CE;
+  color: #0B63CE;
+  box-shadow: 0 4px 12px rgba(11, 99, 206, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-export-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: #0B63CE;
+  border: 1px solid #0B63CE;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(11, 99, 206, 0.25);
+}
+
+.btn-export-pdf:hover {
+  background: #0952AC;
+  border-color: #0952AC;
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(11, 99, 206, 0.45);
+  transform: translateY(-2px);
+}
+

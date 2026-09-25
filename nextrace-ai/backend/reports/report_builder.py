@@ -62,7 +62,8 @@ def build_historical_report(job_id: str) -> dict[str, Any]:
     hist_job = _HIST_JOBS.get(job_id)
     if not hist_job:
         raise ValueError(f"Historical job '{job_id}' not found.")
-    if hist_job.get("status") != "completed":
+    hist_status = str(hist_job.get("status", "")).strip().lower()
+    if hist_status != "completed":
         raise ValueError(
             f"Historical job '{job_id}' is not completed "
             f"(status: {hist_job.get('status')}). "
@@ -75,37 +76,70 @@ def build_historical_report(job_id: str) -> dict[str, Any]:
             f"No forensic analysis found for historical job '{job_id}'. "
             f"Complete forensic analysis first."
         )
-    if forensic_job.get("status") != "completed":
+    
+    forensic_status = str(forensic_job.get("status", "")).strip().lower()
+    if forensic_status != "completed":
         raise ValueError(
             f"Forensic analysis for job '{job_id}' is not completed "
             f"(status: {forensic_job.get('status')}). "
-            f"Cannot generate report from incomplete forensic analysis."
+            f"Cannot generate report from incomplete analysis."
         )
 
-    hist_result    = hist_job.get("result", {}) or {}
+    hist_result = hist_job.get("result", {}) or {}
     forensic_result = forensic_job.get("result", {}) or {}
-    is_demo        = hist_job.get("is_demo", False)
-    filename       = hist_job.get("filename", "unknown")
+    filename = hist_job.get("filename", "unknown.pcap")
+    is_demo = hist_job.get("is_demo", False)
 
-    # Build findings
+    integrity = forensic_result.get("integrity", {}) or {}
+    ev_summary = forensic_result.get("evidence_summary", {}) or {}
+    indicators = forensic_result.get("anti_forensic_indicators", []) or []
+    hypotheses = forensic_result.get("hypotheses", []) or []
+    assessment = forensic_result.get("final_assessment", {}) or {}
+
+    sus_events = hist_result.get("suspicious_events", []) or []
+    windows = hist_result.get("temporal_windows", []) or []
+    entities = hist_result.get("entity_relationships", []) or []
+    protocols = hist_result.get("protocol_distribution", []) or []
+    src_ips = hist_result.get("top_src_ips", []) or []
+    dst_ips = hist_result.get("top_dst_ips", []) or []
+    dst_ports = hist_result.get("top_dst_ports", []) or []
+
+    duration = hist_result.get("duration_seconds", 0)
+    pkt_count = (
+        hist_result.get("packet_count")
+        if hist_result.get("packet_count") is not None
+        else (hist_result.get("total_packets") if hist_result.get("total_packets") is not None else integrity.get("packet_count", 0))
+    )
+    flow_count = (
+        hist_result.get("flow_count")
+        if hist_result.get("flow_count") is not None
+        else (hist_result.get("total_flows") if hist_result.get("total_flows") is not None else integrity.get("flow_count", 0))
+    )
+
     findings = build_historical_findings(hist_job, forensic_result)
 
-    # ── Build sections ─────────────────────────────────────────────────────────
-    integrity   = forensic_result.get("integrity", {}) or {}
-    ev_summary  = forensic_result.get("evidence_summary", {}) or {}
-    indicators  = forensic_result.get("anti_forensic_indicators", []) or []
-    hypotheses  = forensic_result.get("hypotheses", []) or []
-    assessment  = forensic_result.get("final_assessment", {}) or {}
-    sus_events  = hist_result.get("suspicious_events", []) or []
-    windows     = hist_result.get("temporal_windows", []) or []
-    entities    = hist_result.get("entity_relationships", []) or []
-    protocols   = hist_result.get("protocol_distribution", []) or []
-    src_ips     = hist_result.get("top_src_ips", []) or []
-    dst_ips     = hist_result.get("top_dst_ips", []) or []
-    dst_ports   = hist_result.get("top_dst_ports", []) or []
-    duration    = hist_result.get("duration_seconds", 0)
-    pkt_count   = hist_result.get("total_packets", 0)
-    flow_count  = hist_result.get("total_flows", 0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     # Count high-severity findings
     high_count   = sum(1 for f in findings if f["severity"] in ("HIGH", "CRITICAL"))
@@ -125,7 +159,9 @@ def build_historical_report(job_id: str) -> dict[str, Any]:
                 "filename":          filename,
                 "is_demo":           is_demo,
                 "total_packets":     pkt_count,
+                "packet_count":      pkt_count,
                 "total_flows":       flow_count,
+                "flow_count":        flow_count,
                 "duration_seconds":  duration,
                 "suspicious_events": len(sus_events),
                 "activity_pattern":  activity_pat,
@@ -151,7 +187,9 @@ def build_historical_report(job_id: str) -> dict[str, Any]:
                 "filename":           integrity.get("filename", filename),
                 "file_size":          integrity.get("file_size", 0),
                 "packet_count":       integrity.get("packet_count", pkt_count),
+                "total_packets":      pkt_count,
                 "flow_count":         integrity.get("flow_count", flow_count),
+                "total_flows":        flow_count,
                 "upload_timestamp":   integrity.get("upload_timestamp"),
                 "processing_start":   integrity.get("processing_start"),
                 "processing_completed": integrity.get("processing_completed"),
@@ -171,7 +209,9 @@ def build_historical_report(job_id: str) -> dict[str, Any]:
             "title":   "Network Activity",
             "content": {
                 "total_packets":        pkt_count,
+                "packet_count":         pkt_count,
                 "total_flows":          flow_count,
+                "flow_count":           flow_count,
                 "duration_seconds":     duration,
                 "temporal_windows":     len(windows),
                 "protocol_distribution": protocols[:10],
