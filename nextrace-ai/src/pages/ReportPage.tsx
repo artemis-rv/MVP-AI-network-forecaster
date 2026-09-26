@@ -234,6 +234,12 @@ export function ReportPage() {
           <MetaItem label="Source Type"     value={TYPE_LABEL[report.report_type]} />
           <MetaItem label="Generated"       value={tsLabel(report.generated_at)} />
           <MetaItem label="Analysis Status" value={report.metadata.analysis_status ?? report.metadata.status ?? 'completed'} />
+          {report.metadata.investigation_id && (
+            <MetaItem label="Investigation" value={<Mono>{report.metadata.investigation_id}</Mono>} />
+          )}
+          {report.metadata.entity_ip && (
+            <MetaItem label="Entity" value={<Mono>{report.metadata.entity_ip}</Mono>} />
+          )}
           {report.metadata.capture_source && (
             <MetaItem label="Capture Source" value={report.metadata.capture_source} />
           )}

@@ -2,16 +2,18 @@
 // SOC investigation workspace: entity details, attack path graph,
 // timeline, related activity, evidence, and findings.
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { generateSecurityReportPdf } from '@/utils/pdfGenerator';
 
 import {
   ArrowLeft, RefreshCw, Sparkles, FileText,
   AlertTriangle,
-  CheckCircle, Circle, X,
+  CheckCircle, Circle,
 } from 'lucide-react';
 import { useInvestigationStore } from '@/store/investigationStore';
+import { useAlertStore } from '@/store/alertStore';
+import { useFindingsStore } from '@/store/findingsStore';
+import { buildInvestigationReport } from '@/lib/reportBuilder';
 import { deriveRiskEntities } from '@/utils/entityRisk';
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
@@ -45,11 +47,15 @@ function getRiskFromLevel(level: 'High' | 'Medium' | 'Low'): { label: string; co
 export function InvestigationPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { investigation, context, findings, showFindingCard, showReportModal,
-          openInvestigation, closeInvestigation, generateFindings,
-          openReportModal, closeReportModal } = useInvestigationStore();
+  const { investigation, context, findings, showFindingCard,
+          openInvestigation, closeInvestigation, generateFindings } = useInvestigationStore();
   const { currentForecast } = useForecastStore();
-  const { session, liveNodes, liveEdges, displayEvents, activities } = useLiveStore();
+  const {
+    session, liveNodes, liveEdges, displayEvents, activities,
+    runId, runStartedAt, windowSeconds, currentTemporal, trafficSummary,
+  } = useLiveStore();
+  const { alerts } = useAlertStore();
+  const { saveLocalReport } = useFindingsStore();
   const { addToast } = useAppStore();
   const isLive = session?.running ?? false;
 
@@ -91,6 +97,22 @@ export function InvestigationPage() {
     }
   }, [context, openInvestigation, addToast]);
 
+  // Report scoped to this entity, built from the same session state shown on this page
+  const handleGenerateReport = useCallback(() => {
+    if (!investigation) return;
+    const report = buildInvestigationReport({
+      investigationId: investigation.id,
+      entityIp: investigation.selectedEntityIp,
+      entityRole: investigation.entityType,
+      openedAt: investigation.openedAt,
+      analystFindings: findings,
+      runId, runStartedAt, session, windowSeconds, activities, alerts,
+      forecast: currentForecast, temporal: currentTemporal, traffic: trafficSummary,
+    });
+    navigate(`/reports/${saveLocalReport(report)}`);
+  }, [investigation, findings, runId, runStartedAt, session, windowSeconds, activities, alerts,
+      currentForecast, currentTemporal, trafficSummary, saveLocalReport, navigate]);
+
   if (!investigation) {
     return <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>Loading investigation…</div>;
   }
@@ -118,8 +140,9 @@ export function InvestigationPage() {
   if (nodeEvents.length > 0) {
     const firstEv = nodeEvents[nodeEvents.length - 1];
     const lastEv = nodeEvents[0];
-    firstSeen = firstEv.timestamp.slice(11, 19) || new Date(firstEv.timestamp).toLocaleTimeString('en-US', { hour12: false });
-    lastSeen = lastEv.timestamp.slice(11, 19) || new Date(lastEv.timestamp).toLocaleTimeString('en-US', { hour12: false });
+    // Local time, consistent with the Attack Timeline and the rest of the app (was raw UTC)
+    firstSeen = new Date(firstEv.timestamp).toLocaleTimeString('en-US', { hour12: false });
+    lastSeen = new Date(lastEv.timestamp).toLocaleTimeString('en-US', { hour12: false });
   }
 
   return (
@@ -138,7 +161,7 @@ export function InvestigationPage() {
                 {investigation.id}
               </span>
               <StatusBadge status={investigation.status} />
-              <PriorityBadge priority={investigation.priority} />
+              <PriorityBadge priority={entityRisk ? entityRisk.riskLevel.toUpperCase() : investigation.priority} />
             </div>
             <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
               <span>Entity: <strong style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{entityIp}</strong></span>
@@ -154,7 +177,7 @@ export function InvestigationPage() {
             <ActionBtn icon={<ArrowLeft size={13} />}   label="Back"              onClick={handleBack}             variant="ghost" />
             <ActionBtn icon={<RefreshCw size={13} />}   label="Refresh"           onClick={handleRefresh}          variant="ghost" />
             <ActionBtn icon={<Sparkles size={13} />}    label="Generate Findings" onClick={handleGenerateFindings} variant="primary" />
-            <ActionBtn icon={<FileText size={13} />}    label="Generate Report"   onClick={openReportModal}        variant="secondary" />
+            <ActionBtn icon={<FileText size={13} />}    label="Generate Report"   onClick={handleGenerateReport}   variant="secondary" />
           </div>
         </div>
 
@@ -333,10 +356,6 @@ export function InvestigationPage() {
         </div>
       </div>
 
-      {/* ── Report Modal ── */}
-      {showReportModal && (
-        <ReportModal onClose={closeReportModal} investigationId={investigation.id} />
-      )}
     </div>
   );
 }
@@ -404,106 +423,6 @@ function AttackPathSummary({ isBenign, currentStage }: { isBenign: boolean; curr
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function ReportModal({ onClose, investigationId }: { onClose: () => void; investigationId: string }) {
-  const [isGenerated, setIsGenerated] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const handleGenerate = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setIsGenerated(true);
-    }, 600);
-  };
-
-  const handleExportPdf = () => {
-    generateSecurityReportPdf({
-      title: `SECURITY INVESTIGATION REPORT — ${investigationId}`,
-      reportId: investigationId,
-    });
-  };
-
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      backdropFilter: 'blur(4px)', animation: 'fadeIn 0.2s ease',
-    }} onClick={onClose}>
-      <div style={{
-        background: 'var(--bg-card)', borderRadius: 16, padding: 32, width: 520, maxWidth: '90vw',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.2)', border: '1px solid var(--border-default)',
-      }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <FileText size={20} color="var(--primary)" />
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
-              {isGenerated ? 'Security Report Ready' : 'Generate Security Report'}
-            </h2>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        {!isGenerated ? (
-          <div style={{ background: 'var(--bg-workspace)', borderRadius: 12, padding: 16, marginBottom: 20, border: '1px solid var(--border-default)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <CheckCircle size={14} color="var(--color-live)" />
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-live)' }}>Forensic Intelligence Pipeline</span>
-            </div>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-              Click <strong>Generate Report</strong> to compile the complete security report for <strong style={{ fontFamily: 'var(--font-mono)' }}>{investigationId}</strong>.
-              <br /><br />
-              The generated report includes Critical Findings, Attack Chain Mapping, Affected Assets, and Actionable Remediation recommendations.
-            </p>
-          </div>
-        ) : (
-          <div style={{ background: 'rgba(16,185,129,0.06)', borderRadius: 12, padding: 16, marginBottom: 20, border: '1px solid rgba(16,185,129,0.3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <CheckCircle size={15} color="var(--color-live)" />
-              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-live)' }}>Report Generated Successfully</span>
-            </div>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-              Target: <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary)' }}>{investigationId}</strong><br />
-              Summary: 3 Critical Findings, 5 Affected Assets, 4 Actionable Remediation Steps.
-            </p>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{
-            fontSize: 13, fontWeight: 600, padding: '8px 20px', borderRadius: 8, cursor: 'pointer',
-            background: 'var(--bg-workspace)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)',
-          }}>
-            Close
-          </button>
-
-          {!isGenerated ? (
-            <button
-              onClick={handleGenerate}
-              disabled={loading}
-              style={{
-                fontSize: 13, fontWeight: 600, padding: '8px 20px', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer',
-                background: 'var(--primary)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              <FileText size={14} />
-              {loading ? 'Generating Report...' : 'Generate Report'}
-            </button>
-          ) : (
-            <button
-              onClick={handleExportPdf}
-              className="btn-export-pdf"
-            >
-              <FileText size={15} /> Export PDF
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

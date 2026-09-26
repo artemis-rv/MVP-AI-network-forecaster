@@ -57,6 +57,8 @@ export interface ReportMetadata {
   generated_at:    number;
   analysis_status?: string;
   session_id?:     string;
+  investigation_id?: string;
+  entity_ip?:      string;
   capture_source?: string;
   /** Reports built in the browser from the current session / analysis state (not stored on the backend). */
   local?:          boolean;

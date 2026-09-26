@@ -172,7 +172,7 @@ export function buildLiveSessionReport(input: LiveReportInput): Report {
       title: 'Executive Summary',
       content: {
         summary: acts.length
-          ? `${t.suspicious.toLocaleString()} suspicious packets were grouped into ${acts.length} activities, raising ${alerts.length} alert(s). ` +
+          ? `${acts.reduce((n, a) => n + a.eventCount, 0).toLocaleString()} suspicious packets were grouped into ${acts.length} activities, raising ${alerts.length} alert(s). ` +
             `Highest severity: ${sev}. Observed progression: ${stageProgression(acts)}.`
           : `No suspicious activity was grouped during this session (${t.total.toLocaleString()} packets observed).`,
         overall_severity: sev,
@@ -293,6 +293,73 @@ export function buildLiveSessionReport(input: LiveReportInput): Report {
       analysis_status: input.session?.running ? 'session running' : 'session stopped',
       local: true,
     },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INVESTIGATION REPORT (one entity within the live session)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface InvestigationReportInput extends LiveReportInput {
+  investigationId: string;
+  entityIp: string;
+  entityRole: string;
+  openedAt: string;
+  /** Findings the analyst generated in the investigation workspace. */
+  analystFindings: { summary: string; currentStage: string; predictedNext: string; observations: { text: string }[] }[];
+}
+
+/** Same structure as the live session report, scoped to activities that involve the investigated entity. */
+export function buildInvestigationReport(input: InvestigationReportInput): Report {
+  const ip = input.entityIp;
+  const scoped = input.activities.filter(a => a.sources.includes(ip) || a.targets.includes(ip));
+  const base = buildLiveSessionReport({ ...input, activities: scoped });
+  const acts = significantActivities(scoped);
+  const entity = deriveRiskEntities(input.activities).entities.find(e => e.ip === ip);
+  const asSource = acts.filter(a => a.sources.includes(ip));
+  const asTarget = acts.filter(a => a.targets.includes(ip));
+  const peers = Array.from(new Set(acts.flatMap(a => [...a.sources, ...a.targets]).filter(h => h !== ip)));
+
+  const scope: ReportSection = {
+    order: 1,
+    title: 'Investigation Scope',
+    content: {
+      investigation_id: input.investigationId,
+      entity: `${ip} (${input.entityRole})`,
+      opened: new Date(input.openedAt).toLocaleString(),
+      risk: entity ? `${entity.riskScore}/100 (${entity.riskLevel}) — ${entity.status}` : 'Not involved in any significant suspicious activity',
+      role_in_activity: [
+        ...asSource.map(a => `Source of ${a.label} (${a.id}, ${a.eventCount} events, ${a.severity})`),
+        ...asTarget.map(a => `Target of ${a.label} from ${a.sources.join(', ')} (${a.id}, ${a.severity})`),
+      ],
+      related_hosts: peers,
+    },
+    evidence_refs: acts.map(a => a.id),
+  };
+
+  const findings: Finding[] = [
+    ...base.findings,
+    ...input.analystFindings.map((f, i) => ({
+      id: `${input.investigationId}-F${i + 1}`,
+      title: `Analyst finding: ${f.currentStage} → ${f.predictedNext}`,
+      category: 'Attack Progression' as const,
+      severity: (entity?.riskLevel === 'High' ? 'HIGH' : 'MEDIUM') as FindingSeverity,
+      confidence: entity?.riskScore ?? 50,
+      summary: f.summary,
+      evidence: f.observations.map(o => o.text),
+      source_type: 'live' as const,
+      source_id: input.investigationId,
+      created_at: nowSec(),
+    })),
+  ];
+
+  return {
+    ...base,
+    report_id: `RPT-INV-${stamp()}`,
+    title: `Investigation Report — ${input.investigationId} · ${ip}`,
+    sections: [scope, ...base.sections.map(s => ({ ...s, order: s.order + 1 }))],
+    findings,
+    metadata: { ...base.metadata, investigation_id: input.investigationId, entity_ip: ip },
   };
 }
 

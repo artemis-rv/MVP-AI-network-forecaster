@@ -49,14 +49,11 @@ interface InvestigationStore {
   context: InvestigationContext | null;
   findings: Finding[];
   showFindingCard: boolean;
-  showReportModal: boolean;
   selectedNodeIp: string | null;
 
   openInvestigation: (ctx: InvestigationContext) => void;
   closeInvestigation: () => void;
   generateFindings: () => void;
-  openReportModal: () => void;
-  closeReportModal: () => void;
   setSelectedNodeIp: (ip: string | null) => void;
 }
 
@@ -65,7 +62,6 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
   context: null,
   findings: [],
   showFindingCard: false,
-  showReportModal: false,
   selectedNodeIp: null,
 
   openInvestigation: (ctx) => {
@@ -133,7 +129,5 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
     }));
   },
 
-  openReportModal: () => set({ showReportModal: true }),
-  closeReportModal: () => set({ showReportModal: false }),
   setSelectedNodeIp: (ip) => set({ selectedNodeIp: ip }),
 }));
