@@ -138,26 +138,25 @@ _SUSPICIOUS_PATTERNS = [
 
 def generate_suspicious_event() -> dict:
     pattern = random.choice(_SUSPICIOUS_PATTERNS)
-    src     = random.choice(_SUSPICIOUS_SRC)
-
+    
     if pattern == "port_scan":
         proto = "TCP"
-        # 10.0.0.5 targets only Server 0, 10.0.0.6 targets Workstation 0 and 1
-        dst = _INTERNAL_SERVERS[0] if src == "10.0.0.5" else random.choice([_INTERNAL_HOSTS[0], _INTERNAL_HOSTS[1]])
+        src = "10.0.0.5"
+        dst = _INTERNAL_SERVERS[0]
         dport = random.choice(_SUSPICIOUS_PORTS + list(range(1, 1024)))
         sport = random.randint(40000, 60000)
         classification = "suspicious"
 
     elif pattern == "brute_force":
         proto = "TCP"
-        dst = _INTERNAL_SERVERS[0] if src == "10.0.0.5" else _INTERNAL_HOSTS[0]
+        src = "10.0.0.5"
+        dst = _INTERNAL_SERVERS[0]
         dport = 22
         sport = random.randint(40000, 60000)
         classification = "suspicious"
 
     elif pattern == "lateral_movement":
         proto = "TCP"
-        # Use one of the targets that were brute-forced
         src   = _INTERNAL_HOSTS[0]
         dst   = _INTERNAL_DB[0]
         dport = random.choice([135, 445, 3389, 5985])  # SMB/RDP/WinRM
@@ -166,14 +165,16 @@ def generate_suspicious_event() -> dict:
 
     elif pattern == "unusual_dns":
         proto = "DNS"
-        dst   = random.choice(_EXTERNAL_DNS)
+        src = "10.0.0.6"
+        dst   = _EXTERNAL_DNS[0]
         dport = 53
         sport = random.randint(40000, 60000)
         classification = "suspicious"
 
     else:  # data_staging
         proto = "TCP"
-        dst   = random.choice(_EXTERNAL_WEB)
+        src = "10.0.0.6"
+        dst   = _EXTERNAL_WEB[0]
         dport = random.choice([443, 80, 8443])
         sport = random.randint(40000, 60000)
         classification = "suspicious"

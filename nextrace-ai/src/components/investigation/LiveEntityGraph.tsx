@@ -160,7 +160,8 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
 
     const handlePointerDown = (e: PointerEvent) => {
       // Only drag if clicking on the background svg or grid rect
-      if ((e.target as Element).tagName !== 'svg' && (e.target as Element).tagName !== 'rect') return;
+      const target = e.target as Element;
+      if (target.tagName !== 'svg' && target.id !== 'bg-grid') return;
       isDragging = true;
       startX = e.clientX;
       startY = e.clientY;
@@ -247,7 +248,7 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
             <path d="M 30 0 L 0 0 0 30" fill="none" stroke="var(--border-subtle)" strokeWidth="0.5" />
           </pattern>
         </defs>
-        <rect x={vbX} y={vbY} width={vbWidth} height={vbHeight} fill="url(#lgrid)" />
+        <rect id="bg-grid" x={vbX} y={vbY} width={vbWidth} height={vbHeight} fill="url(#lgrid)" />
 
         {/* Column Header Titles */}
         <g opacity={0.6}>
@@ -324,12 +325,10 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
             >
               {node.type === 'internal' || node.type === 'external' ? (
                 <>
-                  {activeNode && <rect x={-27} y={-27} width={54} height={54} rx={8} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}
                   <rect x={activeNode ? -22 : -18} y={activeNode ? -22 : -18} width={activeNode ? 44 : 36} height={activeNode ? 44 : 36} rx={6} fill={c.bg} stroke={c.border} strokeWidth={activeNode ? 2.5 : 1.5} filter={activeNode ? `drop-shadow(0 0 8px ${c.shadow})` : 'none'} style={{ transition: 'all 0.2s' }} />
                 </>
               ) : (
                 <>
-                  {activeNode && <circle r={27} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}
                   <circle r={activeNode ? 22 : 18} fill={c.bg} stroke={c.border} strokeWidth={activeNode ? 2.5 : 1.5} filter={activeNode ? `drop-shadow(0 0 8px ${c.shadow})` : 'none'} style={{ transition: 'all 0.2s' }} />
                 </>
               )}

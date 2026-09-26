@@ -55,26 +55,25 @@ export function DashboardPage() {
   const chartData = useMemo(() => {
     if (temporalHistory.length === 0) return undefined;
     const list = temporalHistory.map((t, idx) => {
-      let dateObj = new Date();
+      let dateObj = new Date(Date.now() - (temporalHistory.length - 1 - idx) * 10000);
       if (t.window_end) {
         const raw = String(t.window_end).replace(/\+00:00Z$/, 'Z').replace(/\+00:00$/, 'Z');
         const d = new Date(raw);
         if (!isNaN(d.getTime())) {
           dateObj = d;
-        } else if (typeof t.window_end === 'number') {
-          dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
         } else {
           const num = Number(raw);
           if (!isNaN(num)) {
             dateObj = new Date(num < 1e11 ? num * 1000 : num);
           }
         }
-      } else {
-        dateObj = new Date(Date.now() - (temporalHistory.length - 1 - idx) * 10000);
       }
+      
+      const timeStr = isNaN(dateObj.getTime()) ? '--:--:--' : dateObj.toLocaleTimeString('en-US', { hour12: false });
+
       return {
         timestamp: dateObj.getTime(),
-        time: dateObj.toLocaleTimeString('en-US', { hour12: false }),
+        time: timeStr,
         total: t.packet_count,
         events: t.suspicious_count,
       };

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend,
@@ -57,22 +57,27 @@ const DEMO_SPIKES = [10, 11, 25]; // fixed spike positions for deterministic sha
 export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }: { data?: ChartDataPoint[]; isLive?: boolean } = {}) {
   const [range, setRange] = useState('Last 15 min');
 
-  // Generate demo data with CURRENT timestamps each render cycle — never frozen
-  const demoData = useMemo(() => {
-    const now = new Date();
-    return Array.from({ length: 30 }, (_, i) => {
-      const t = new Date(now.getTime() - (29 - i) * 30000);
-      const total = Math.floor(600 + Math.sin(i * 0.4) * 150 + (i % 7) * 40);
-      const isSpike = DEMO_SPIKES.includes(i);
-      const events = isSpike ? 200 + (i * 17) % 300 : 0;
-      return {
-        time: t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
-        total: total + events,
-        events,
-      };
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally [] — generate once per mount, fresh timestamps
+  const [demoData, setDemoData] = useState<ChartDataPoint[]>([]);
+
+  useEffect(() => {
+    // Generate stable baseline historical points once
+    const generateBaseline = () => {
+      const now = new Date();
+      return Array.from({ length: 30 }, (_, i) => {
+        const t = new Date(now.getTime() - (29 - i) * 60000); // 1 minute intervals
+        const total = Math.floor(620 + Math.sin(i * 0.3) * 120 + (i % 5) * 30);
+        const isSpike = DEMO_SPIKES.includes(i);
+        const events = isSpike ? 210 + (i * 19) % 200 : 0;
+        return {
+          time: t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+          total: total + events,
+          events,
+        };
+      });
+    };
+    
+    setDemoData(generateBaseline());
+  }, []);
 
   const slice = range === 'Last 5 min' ? 10 : range === 'Last 15 min' ? 20 : 30;
   

@@ -127,8 +127,7 @@ class WebSocketService {
             // Push directly into notification panel (no bottom-toast flood)
             useAppStore.getState().addAlertNotification(msg.data);
           }
-          // Refresh alert list and stats from backend
-          useAlertStore.getState().fetchAlerts();
+          // Only fetch stats automatically to keep KPIs updated, do not fetchAlerts to prevent UI jumping
           useAlertStore.getState().fetchStats();
           break;
         case 'ping':
