@@ -1,17 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 
-import { trafficData } from '@/data/mockData';
 import { AlertTriangle } from 'lucide-react';
 
 interface ChartDataPoint {
   time: string;
   total?: number;
   events?: number;
-  // mock fields
   [key: string]: unknown;
 }
 
@@ -54,11 +52,31 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   );
 };
 
+const DEMO_SPIKES = [10, 11, 25]; // fixed spike positions for deterministic shape
+
 export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }: { data?: ChartDataPoint[]; isLive?: boolean } = {}) {
   const [range, setRange] = useState('Last 15 min');
 
+  // Generate demo data with CURRENT timestamps each render cycle — never frozen
+  const demoData = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 30 }, (_, i) => {
+      const t = new Date(now.getTime() - (29 - i) * 30000);
+      const total = Math.floor(600 + Math.sin(i * 0.4) * 150 + (i % 7) * 40);
+      const isSpike = DEMO_SPIKES.includes(i);
+      const events = isSpike ? 200 + (i * 17) % 300 : 0;
+      return {
+        time: t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+        total: total + events,
+        events,
+      };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally [] — generate once per mount, fresh timestamps
+
   const slice = range === 'Last 5 min' ? 10 : range === 'Last 15 min' ? 20 : 30;
-  const sourceData = externalData ?? trafficData;
+  
+  const sourceData = (externalData && externalData.length > 0) ? externalData : demoData;
   const data = sourceData.slice(-slice);
   const isLiveDisplay = externalIsLive ?? true;
 

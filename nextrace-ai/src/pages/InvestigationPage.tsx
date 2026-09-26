@@ -184,7 +184,12 @@ export function InvestigationPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <DetailRow label="IP Address"    value={entityIp}                     mono />
               <DetailRow label="Hostname"      value={hostname}                     mono />
-              <DetailRow label="Entity Type"   value={investigation.entityType} />
+              <DetailRow label="Entity Type"   value={investigation.entityType} valueColor={
+                investigation.entityType.toLowerCase().includes('suspicious') ? '#ef4444' :
+                investigation.entityType.toLowerCase().includes('server') ? '#10b981' :
+                investigation.entityType.toLowerCase().includes('external') ? '#8b5cf6' :
+                '#3b82f6'
+              } />
               <DetailRow label="First Seen"    value={firstSeen}                    mono />
               <DetailRow label="Last Seen"     value={lastSeen}                     mono />
               <DetailRow label="Connections"   value={connCount.toString()} highlight={false} />
@@ -298,7 +303,7 @@ export function InvestigationPage() {
           <AttackStageBar currentStage={stage} predictedStage={nextStage} isBenign={currentForecast?.is_benign ?? true} />
 
           {/* Graph */}
-          <div style={{ flex: 1, minHeight: 500, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', overflow: 'hidden', position: 'relative' }}>
+          <div style={{ flex: 1, minHeight: 500, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', overflow: 'hidden', position: 'relative', marginRight: 24 }}>
             <LiveEntityGraph
               nodes={liveNodes}
               edges={liveEdges}
@@ -551,11 +556,11 @@ function ActionBtn({ icon, label, onClick, variant }: { icon: React.ReactNode; l
   );
 }
 
-function DetailRow({ label, value, mono, highlight }: { label: string; value: string; mono?: boolean; highlight?: boolean }) {
+function DetailRow({ label, value, mono, highlight, valueColor }: { label: string; value: string; mono?: boolean; highlight?: boolean; valueColor?: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
       <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: 11, fontWeight: 700, color: highlight ? 'var(--color-critical)' : 'var(--text-primary)', fontFamily: mono ? 'var(--font-mono)' : 'inherit', textAlign: 'right', wordBreak: 'break-all' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: valueColor || (highlight ? 'var(--color-critical)' : 'var(--text-primary)'), fontFamily: mono ? 'var(--font-mono)' : 'inherit', textAlign: 'right', wordBreak: 'break-all' }}>
         {value}
       </span>
     </div>

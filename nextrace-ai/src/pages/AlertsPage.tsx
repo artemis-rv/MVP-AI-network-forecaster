@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAlertStore } from '@/store/alertStore';
 import { useLiveStore } from '@/store/liveStore';
 import { ShieldAlert, AlertCircle, AlertTriangle, List, Search as SearchIcon, RefreshCw } from 'lucide-react';
@@ -13,10 +14,17 @@ export function AlertsPage() {
 
   const { session } = useLiveStore();
 
+  const [searchParams] = useSearchParams();
+
   useEffect(() => {
     fetchAlerts();
     fetchStats();
-  }, [fetchAlerts, fetchStats]);
+    
+    const statusParam = searchParams.get('filter');
+    if (statusParam) {
+      setFilter('status', statusParam.toUpperCase());
+    }
+  }, [fetchAlerts, fetchStats, searchParams, setFilter]);
 
   const activeFiltersCount = Object.values(filters).filter(v => v !== '').length;
 

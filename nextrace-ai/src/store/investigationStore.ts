@@ -139,7 +139,7 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
       sourceType: ctx.sourceType,
     };
 
-    const timeline = isLive ? buildLiveTimeline(ctx.ip) : [];
+    const timeline = buildLiveTimeline(ctx.ip);
 
     set({
       investigation: inv,
@@ -194,8 +194,7 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
   setSelectedNodeIp: (ip) => set({ selectedNodeIp: ip }),
 
   refreshTimeline: () => {
-    const { session } = useLiveStore.getState();
-    const timeline = (session?.running) ? buildLiveTimeline(get().context?.ip) : [];
+    const timeline = buildLiveTimeline(get().context?.ip);
     set({ timeline });
   },
 }));

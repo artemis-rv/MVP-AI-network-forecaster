@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { latestReports } from '@/data/mockData';
 import { ChevronRight, CheckCircle, FileText, AlertTriangle } from 'lucide-react';
 import { useFindingsStore } from '@/store/findingsStore';
 import type { ReportListItem } from '@/types/report';
@@ -86,14 +85,17 @@ export function LatestReports() {
             </tr>
           </thead>
           <tbody>
-            {hasRealReports
-              ? reportList.slice(0, 5).map((r) => (
-                  <RealReportRow key={r.report_id} report={r} onClick={() => navigate(`/reports/${r.report_id}`)} />
-                ))
-              : latestReports.map((report) => (
-                  <MockReportRow key={report.id} report={report} />
-                ))
-            }
+            {hasRealReports ? (
+              reportList.slice(0, 5).map((r) => (
+                <RealReportRow key={r.report_id} report={r} onClick={() => navigate(`/reports/${r.report_id}`)} />
+              ))
+            ) : (
+              <tr>
+                <td colSpan={4} style={{ padding: '24px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
+                  No reports generated yet.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 
@@ -151,39 +153,3 @@ function RealReportRow({ report, onClick }: { report: ReportListItem; onClick: (
   );
 }
 
-function MockReportRow({ report }: { report: typeof latestReports[0] }) {
-  return (
-    <tr
-      style={{ borderTop: '1px solid var(--border-subtle)', transition: 'background var(--transition-fast)', cursor: 'pointer' }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-workspace)')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-    >
-      <td style={{ padding: '13px 16px' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-          {report.name}
-        </span>
-      </td>
-      <td style={{ padding: '13px 16px' }}>
-        <span
-          style={{
-            fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 999,
-            background: 'var(--primary-light)', color: 'var(--primary)',
-          }}
-        >
-          {report.type}
-        </span>
-      </td>
-      <td style={{ padding: '13px 16px', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-        {report.generatedAt}
-      </td>
-      <td style={{ padding: '13px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <CheckCircle size={13} color="var(--color-live)" />
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-live)' }}>
-            {report.status}
-          </span>
-        </div>
-      </td>
-    </tr>
-  );
-}

@@ -54,17 +54,21 @@ export function LiveMonitoringPage() {
   const [stopping, setStopping] = useState(false);
 
   const [chartTimeRange, setChartTimeRange] = useState<1 | 5 | 15>(1);
-  const [activeChartIndex, setActiveChartIndex] = useState<number | null>(null);
 
   const realChartData = useMemo(() => {
     return temporalHistory.map(t => {
       let dateObj = new Date();
       if (t.window_end) {
-        if (typeof t.window_end === 'number') {
+        const d = new Date(t.window_end);
+        if (!isNaN(d.getTime())) {
+          dateObj = d;
+        } else if (typeof t.window_end === 'number') {
           dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
         } else {
-          const str = String(t.window_end);
-          dateObj = new Date(!isNaN(Number(str)) ? Number(str) * 1000 : str);
+          const num = Number(t.window_end);
+          if (!isNaN(num)) {
+            dateObj = new Date(num < 1e11 ? num * 1000 : num);
+          }
         }
       }
       return {
@@ -416,7 +420,7 @@ export function LiveMonitoringPage() {
             </div>
             
             <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }} onClick={(e) => { if(e && e.activeTooltipIndex !== undefined) setActiveChartIndex(Number(e.activeTooltipIndex)); }}>
+              <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gLivePackets" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
@@ -446,17 +450,6 @@ export function LiveMonitoringPage() {
               </AreaChart>
             </ResponsiveContainer>
             
-            {activeChartIndex !== null && chartData[activeChartIndex] && (
-              <div style={{ marginTop: 12, padding: '8px 12px', background: 'var(--bg-workspace)', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, animation: 'fade-in 0.2s' }}>
-                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{chartData[activeChartIndex].time}</span>
-                <div style={{ display: 'flex', gap: 12, color: 'var(--text-secondary)' }}>
-                  <span><span style={{ color: '#6366f1', fontWeight: 600 }}>Packets:</span> {chartData[activeChartIndex].packets}</span>
-                  <span><span style={{ color: '#10b981', fontWeight: 600 }}>Flows:</span> {chartData[activeChartIndex].flows}</span>
-                  <span><span style={{ color: '#ef4444', fontWeight: 600 }}>Suspicious:</span> {chartData[activeChartIndex].suspicious}</span>
-                </div>
-                <button onClick={() => setActiveChartIndex(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={14} /></button>
-              </div>
-            )}
           </div>
 
           {/* Temporal State Panel */}

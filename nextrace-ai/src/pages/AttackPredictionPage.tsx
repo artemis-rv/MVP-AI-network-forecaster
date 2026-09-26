@@ -401,13 +401,23 @@ function ForecastTimeline({ forecast }: { forecast: ForecastResult | null }) {
           {forecast ? 'Waiting for temporal windows…' : 'Start a live session to see the state sequence.'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, maxHeight: 280, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {seq.map((entry, i) => {
             const colors = STAGE_COLORS[entry.stage] ?? STAGE_COLORS['No Active Session'];
-            const t = typeof entry.window_end === 'number'
-              ? new Date(entry.window_end * 1000)
-              : new Date(entry.window_end as string);
-            const timeStr = t.toLocaleTimeString('en-US', { hour12: false });
+            let t: Date;
+            const raw = entry.window_end;
+            if (typeof raw === 'number') {
+              t = new Date(raw < 1e11 ? raw * 1000 : raw);
+            } else {
+              const d = new Date(raw as string);
+              if (!isNaN(d.getTime())) {
+                t = d;
+              } else {
+                const num = Number(raw);
+                t = new Date(isNaN(num) ? Date.now() : (num < 1e11 ? num * 1000 : num));
+              }
+            }
+            const timeStr = isNaN(t.getTime()) ? '--:--:--' : t.toLocaleTimeString('en-US', { hour12: false });
             const isLast = i === seq.length - 1;
 
             return (

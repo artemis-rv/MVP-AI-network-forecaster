@@ -165,8 +165,51 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
       forceRender({});
     };
 
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+
+    const handlePointerDown = (e: PointerEvent) => {
+      // Only drag if clicking on the background svg or grid rect
+      if ((e.target as Element).tagName !== 'svg' && (e.target as Element).tagName !== 'rect') return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      svg.setPointerCapture(e.pointerId);
+      svg.style.cursor = 'grabbing';
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isDragging) return;
+      const dx = (e.clientX - startX) / transformRef.current.zoom;
+      const dy = (e.clientY - startY) / transformRef.current.zoom;
+      startX = e.clientX;
+      startY = e.clientY;
+      transformRef.current.panX += dx;
+      transformRef.current.panY += dy;
+      forceRender({});
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      if (!isDragging) return;
+      isDragging = false;
+      svg.releasePointerCapture(e.pointerId);
+      svg.style.cursor = 'default';
+    };
+
     svg.addEventListener('wheel', handleWheel, { passive: false });
-    return () => svg.removeEventListener('wheel', handleWheel);
+    svg.addEventListener('pointerdown', handlePointerDown);
+    svg.addEventListener('pointermove', handlePointerMove);
+    svg.addEventListener('pointerup', handlePointerUp);
+    svg.addEventListener('pointercancel', handlePointerUp);
+    
+    return () => {
+      svg.removeEventListener('wheel', handleWheel);
+      svg.removeEventListener('pointerdown', handlePointerDown);
+      svg.removeEventListener('pointermove', handlePointerMove);
+      svg.removeEventListener('pointerup', handlePointerUp);
+      svg.removeEventListener('pointercancel', handlePointerUp);
+    };
   }, []);
 
   if (nodes.length === 0) {
@@ -205,6 +248,10 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
             @keyframes pulse-ring {
               0% { transform: scale(0.8); opacity: 0.8; stroke-width: 2px; }
               100% { transform: scale(1.8); opacity: 0; stroke-width: 1px; }
+            }
+            @keyframes dash-flow {
+              from { stroke-dashoffset: 20; }
+              to { stroke-dashoffset: 0; }
             }
           `}</style>
           <pattern id="lgrid" width="30" height="30" patternUnits="userSpaceOnUse">
@@ -259,9 +306,11 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
                 x1={from.renderX} y1={from.renderY} x2={to.renderX} y2={to.renderY}
                 stroke={isAttackPath ? '#ef4444' : (nodeHovered || isHovered ? '#6366f1' : '#cbd5e1')}
                 strokeWidth={isAttackPath ? thickness + 1 : thickness}
+                strokeDasharray={isAttackPath ? '5,5' : 'none'}
                 style={{
                   transition: 'stroke 0.2s',
-                  filter: isAttackPath ? 'drop-shadow(0 0 4px rgba(239,68,68,0.5))' : 'none'
+                  filter: isAttackPath ? 'drop-shadow(0 0 4px rgba(239,68,68,0.5))' : 'none',
+                  animation: isAttackPath ? 'dash-flow 1.5s linear infinite' : 'none'
                 }}
               />
             </g>
@@ -291,9 +340,6 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
                 }
               }}
             >
-              {isRecentAlert && (
-                <circle r={35} fill="none" stroke="#ef4444" style={{ transformOrigin: 'center', animation: 'pulse-ring 2s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
-              )}
               {node.type === 'internal' || node.type === 'external' ? (
                 <>
                   {activeNode && <rect x={-27} y={-27} width={54} height={54} rx={8} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}

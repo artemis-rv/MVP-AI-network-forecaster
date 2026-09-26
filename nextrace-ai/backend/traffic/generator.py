@@ -142,22 +142,24 @@ def generate_suspicious_event() -> dict:
 
     if pattern == "port_scan":
         proto = "TCP"
-        dst   = random.choice(_INTERNAL_SERVERS + _INTERNAL_HOSTS)
+        # 10.0.0.5 targets only Server 0, 10.0.0.6 targets Workstation 0 and 1
+        dst = _INTERNAL_SERVERS[0] if src == "10.0.0.5" else random.choice([_INTERNAL_HOSTS[0], _INTERNAL_HOSTS[1]])
         dport = random.choice(_SUSPICIOUS_PORTS + list(range(1, 1024)))
         sport = random.randint(40000, 60000)
         classification = "suspicious"
 
     elif pattern == "brute_force":
         proto = "TCP"
-        dst   = random.choice(_INTERNAL_SERVERS)
+        dst = _INTERNAL_SERVERS[0] if src == "10.0.0.5" else _INTERNAL_HOSTS[0]
         dport = 22
         sport = random.randint(40000, 60000)
         classification = "suspicious"
 
     elif pattern == "lateral_movement":
         proto = "TCP"
-        src   = random.choice(_INTERNAL_HOSTS[:5])   # compromised internal host
-        dst   = random.choice(_INTERNAL_SERVERS + _INTERNAL_DB)
+        # Use one of the targets that were brute-forced
+        src   = _INTERNAL_HOSTS[0]
+        dst   = _INTERNAL_DB[0]
         dport = random.choice([135, 445, 3389, 5985])  # SMB/RDP/WinRM
         sport = random.randint(40000, 60000)
         classification = "suspicious"

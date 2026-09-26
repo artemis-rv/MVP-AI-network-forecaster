@@ -10,6 +10,7 @@ import { LatestReports } from '@/components/dashboard/LatestReports';
 import { kpiData } from '@/data/mockData';
 import { useLiveStore } from '@/store/liveStore';
 import { useAlertStore } from '@/store/alertStore';
+import { useForecastStore } from '@/store/forecastStore';
 import { deriveDashboardEntities } from '@/utils/entityRisk';
 import {
   ShieldAlert, Shield, TrendingUp, CheckCircle
@@ -28,6 +29,7 @@ export function DashboardPage() {
   const { stats, alerts, fetchStats, fetchAlerts } = useAlertStore();
   const [entityRiskFilter, setEntityRiskFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
   const [highlightEntities, setHighlightEntities] = useState(false);
+  const { currentForecast } = useForecastStore();
   const isLive = session?.running ?? false;
 
   useEffect(() => {
@@ -45,21 +47,26 @@ export function DashboardPage() {
   const liveKpiValues = isLive && session ? [
     { value: (stats?.total ?? 0) + (session.suspicious_count > 0 ? Math.ceil(session.suspicious_count / 15) : 0) },
     { value: entityCounts.high },
-    { value: currentTemporal ? Math.ceil(currentTemporal.suspicious_ratio * 10) : 0 },
-    { value: 12 },
+    { value: currentForecast && !currentForecast.is_benign ? 1 : 0 },
+    { value: stats?.resolved ?? 0 },
   ] : null;
 
   // Chart data: use real temporal history if available, else mock
-  const chartData = (isLive && temporalHistory.length > 0)
+  const chartData = (temporalHistory.length > 0)
     ? temporalHistory.map(t => {
         let dateObj = new Date();
         if (t.window_end) {
-           if (typeof t.window_end === 'number') {
-             dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
-           } else {
-             const str = String(t.window_end);
-             dateObj = new Date(!isNaN(Number(str)) ? Number(str) * 1000 : str);
-           }
+          const d = new Date(t.window_end);
+          if (!isNaN(d.getTime())) {
+            dateObj = d;
+          } else if (typeof t.window_end === 'number') {
+            dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
+          } else {
+            const num = Number(t.window_end);
+            if (!isNaN(num)) {
+              dateObj = new Date(num < 1e11 ? num * 1000 : num);
+            }
+          }
         }
         return {
           time: dateObj.toLocaleTimeString('en-US', { hour12: false }),
@@ -68,6 +75,7 @@ export function DashboardPage() {
         };
       })
     : undefined;
+
 
   const handleKpiClick = (kpiId: string, defaultLink: string) => {
     if (kpiId === 'entities') {
@@ -79,6 +87,10 @@ export function DashboardPage() {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
       setTimeout(() => setHighlightEntities(false), 2000);
+      return;
+    }
+    if (kpiId === 'resolutions') {
+      navigate('/alerts?filter=RESOLVED');
       return;
     }
     navigate(defaultLink);
@@ -125,6 +137,33 @@ export function DashboardPage() {
                 { label: 'Total Tracked', value: entityCounts.total },
               ]
             };
+          } else if (kpi.id === 'predictions') {
+            const hasAttack = currentForecast && !currentForecast.is_benign;
+            val = hasAttack ? 1 : 0;
+            comp = 'predicted progressions';
+            change = hasAttack ? 'Active' : 'Clear';
+            changeType = hasAttack ? 'up' : 'neutral';
+            
+            if (hasAttack) {
+              hoverDetails = {
+                title: 'Active Attack Paths',
+                items: [
+                  { label: 'Active Paths', value: 1 },
+                  { label: 'Current', value: currentForecast.current_stage || 'Unknown', highlight: 'warning' as const },
+                  { label: 'Next', value: currentForecast.predicted_next_stage || 'Unknown', highlight: 'critical' as const },
+                  { label: 'Confidence', value: `${(currentForecast.confidence * 100).toFixed(0)}%`, highlight: 'live' as const },
+                  { label: 'Target', value: currentForecast.target || 'Network' },
+                ]
+              };
+            } else {
+              hoverDetails = {
+                title: 'Active Attack Paths',
+                items: [
+                  { label: 'Active Paths', value: 0 },
+                  { label: 'Status', value: 'No active attacks predicted', highlight: 'primary' as const },
+                ]
+              };
+            }
           } else if (kpi.id === 'resolutions') {
             val = stats?.resolved ?? 0;
             comp = 'resolved alerts';
