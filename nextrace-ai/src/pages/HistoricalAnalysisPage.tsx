@@ -15,6 +15,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { useHistoricalStore } from '@/store/historicalStore';
+import { useAppStore } from '@/store/appStore';
 import type {
   HistoricalResult, SuspiciousEvent, ActivityTimelineEntry,
   TemporalWindow,
@@ -888,6 +889,9 @@ const statBoxStyle: React.CSSProperties = {
 };
 
 function InvestigationDrawer({ event, onClose }: { event: SuspiciousEvent; onClose: () => void }) {
+  const addToast = useAppStore(state => state.addToast);
+  const handleIsolate = () => { addToast(`Host ${event.src_ip} has been isolated.`, 'success'); onClose(); };
+  const handleCreateRule = () => { addToast(`Rule created for port ${event.port}.`, 'info'); onClose(); };
   // Deterministic dummy generation based on event_id
   const isWeb = event.protocol === 'TCP' && (event.port === 80 || event.port === 443);
   const isDns = event.protocol === 'UDP' && event.port === 53;
@@ -925,7 +929,7 @@ function InvestigationDrawer({ event, onClose }: { event: SuspiciousEvent; onClo
         </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 24px 90px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* Core Event Info */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div style={{ background: 'var(--bg-workspace)', padding: 16, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
@@ -1008,8 +1012,8 @@ function InvestigationDrawer({ event, onClose }: { event: SuspiciousEvent; onClo
         <div style={{ marginTop: 'auto' }}>
           <h3 style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>Recommended Action</h3>
           <div style={{ display: 'flex', gap: 12 }}>
-            <button style={{ flex: 1, padding: '10px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Isolate Host ({event.src_ip})</button>
-            <button style={{ flex: 1, padding: '10px', background: 'var(--bg-workspace)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Create Rule</button>
+            <button onClick={handleIsolate} style={{ flex: 1, padding: '10px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Isolate Host ({event.src_ip})</button>
+            <button onClick={handleCreateRule} style={{ flex: 1, padding: '10px', background: 'var(--bg-workspace)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Create Rule</button>
           </div>
         </div>
       </div>
