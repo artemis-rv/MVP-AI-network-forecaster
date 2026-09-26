@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white"/>
   <img src="https://img.shields.io/badge/React%2019-Dashboard-646CFF?style=for-the-badge&logo=react&logoColor=white"/>
   <img src="https://img.shields.io/badge/TypeScript-Frontend-3178C6?style=for-the-badge&logo=typescript&logoColor=white"/>
+  <img src="https://img.shields.io/badge/100%25%20Offline-Air--Gapped%20Ready-000000?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/MITRE%20ATT%26CK-Stage%20Mapping-CC0000?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/SIH%202026-PS%2026153%20%C2%B7%20NTRO-FF6B35?style=for-the-badge"/>
 </p>
@@ -33,36 +34,54 @@
 
 **NEXTRACE AI** (*MVP AI Network Forecaster*) is a prototype web application and analytical backend designed for real-time network traffic monitoring, early-stage attack forecasting, historical PCAP forensic analysis, attack scenario simulation, automated security reporting, and alert management.
 
+Designed for **government defense and intelligence operations**, NEXTRACE AI guarantees a **100% Offline / Air-Gapped** execution environment, ensuring all processing and inference happen locally without external dependencies. This architecture guarantees **Zero Data Leakage** and **Complete Data Sovereignty**.
+
 **Traditional IDS:** “Is this individual flow malicious?”  
 **NEXTRACE AI:** “Given the current network state, what is the probability $P(S_{t+1} \mid S_t)$ of transitioning into an attack stage in the next temporal window?”
 
-NEXTRACE AI aggregates network packet streams into sliding temporal windows to detect suspicious activity, forecast upcoming attack stages before breach escalation occurs (e.g., predicting *Lateral Movement* or *Data Exfiltration* during early *Reconnaissance*), giving SOC Analysts, Incident Responders, and System Administrators proactive lead time.
+NEXTRACE AI aggregates network packet streams into sliding temporal windows, computing **Delta & Trend Features** over historical context. It detects suspicious activity and forecasts upcoming attack stages before breach escalation occurs (e.g., predicting *Lateral Movement* or *Data Exfiltration* during early *Reconnaissance*), giving SOC Analysts, Incident Responders, and System Administrators proactive lead time.
 
 ---
 
-## Core Idea & Architecture
+
+## Core Deliverables
+
+To fulfill the requirements of the NTRO for SIH26153 and stand out with "Extra Mile" implementations, this repository delivers:
+1. **AI Network State Forecasting Engine:** A model that learns network state transition dynamics rather than acting as a static classifier.
+2. **Dual Dashboards for Distinct Personas:**
+   - **SOC Command Center:** A streamlined operational view for security analysts to monitor live alerts and forecasts.
+   - **Data Scientist View:** A deep-dive interface for inspecting model feature weights, temporal trends, and tuning rules.
+3. **Multi-Horizon Forecasting:** Forecasting network states multiple steps into the future concurrently ($t+1$, $t+2$, $t+3$) for extended lead time.
+4. **Immutable Audit Ledger:** Incorporating SHA-256 cryptographic hashing for alerts and PCAP forensics to ensure tamper-proof logs, directly addressing the "Blockchain & Cybersecurity" theme.
+5. **Autoregressive Attack Trajectory Simulator:** An engine that feeds predicted states back into the model to simulate complete, multi-step attacker campaigns.
+6. **Explainable AI (XAI):** Utilizing feature weight visibility and planned SHAP/gradient attribution to explain visually *why* specific predictions are made.
+7. **Strict Data Privacy:** Full support for air-gapped deployments ensures that highly sensitive network data never leaves the host machine.
+
+---
+
+## Core Idea & Workflow
 
 Instead of evaluating packets in isolation, NEXTRACE AI models the network as a dynamic system. 
 
 ```text
 Flow / PCAP Capture
         ↓
-Feature Extraction (suspicious_ratio, connection_rate, distinct IPs/ports)
+Feature Extraction (Delta & Trend Features, connection_rate, distinct IPs/ports)
         ↓
 Temporal Network-State Windows (Sₜ)
         ↓
 State Transition / Forecasting Engine
         ├── Predicts Next Stage: P(S_{t+1} | S_t)
-        ├── Attributes Feature Weights
+        ├── Attributes Feature Weights (Explainable AI)
         └── Maps to MITRE ATT&CK
         ↓
-Security Operations Center (SOC) Dashboard
+Dual Dashboards (SOC Command Center & Data Scientist View)
 ```
 
-NEXTRACE AI solves these industry challenges through a unified architecture:
+NEXTRACE AI solves industry challenges through a unified workflow:
 - **Live Demo Monitoring & Real-Time Forecasting**: Streams synthetic network events via WebSockets, aggregates traffic into temporal sliding windows, and forecasts current and upcoming attack stages.
-- **Historical & Forensic Intelligence**: Uploads `.pcap`/`.pcapng` files, builds bidirectional network flows, and tests forensic hypotheses (evaluating anti-forensic anomalies like capture gaps or timestamp irregularities).
-- **Fixed-K Attack Simulator**: Provides an in-memory simulation engine for running step-by-step synthetic attack scenarios ($K=3..10$ steps).
+- **Historical & Forensic Intelligence**: Uploads `.pcap`/`.pcapng` files, builds bidirectional network flows, logs evidence to an **Immutable Audit Ledger**, and tests forensic hypotheses.
+- **Autoregressive Attack Trajectory Simulator**: Provides an in-memory simulation engine for running step-by-step synthetic attack scenarios and rolling them forward autoregressively.
 - **Automated Report Builder**: Converts completed analysis into structured security reports with severity breakdowns and legal disclaimers.
 
 ---
@@ -70,30 +89,20 @@ NEXTRACE AI solves these industry challenges through a unified architecture:
 ## Key Features
 
 ### Implemented Features
-- **Live Monitoring Dashboard**: Real-time packet event log table, active entity tracker, protocol distribution visualization, and session mode controls (`benign` vs. `suspicious`).
+- **Live Monitoring Dashboard**: Real-time packet event log table, active entity tracker, protocol distribution visualization, and session mode controls.
 - **Attack Stage Forecasting**: Deterministic stage progression model (*Reconnaissance* → *Initial Access* → *Lateral Movement* → *Data Exfiltration*) with feature attribution.
 - **WebSocket Feed (`/ws/live`)**: Asynchronous WebSocket streaming broadcasting packet events and forecast updates.
-- **Historical PCAP Analysis**: Background file parsing, flow extraction, SHA-256 evidence hashing, and heuristic detection for port scans, brute-force attacks, C2 backdoors, ICMP floods.
+- **Historical PCAP Analysis & Immutable Ledger**: Background file parsing, flow extraction, **SHA-256 evidence hashing (Immutable Audit Ledger)**, and heuristic detection.
 - **Forensic Reasoning Engine**: Automated analysis pipeline evaluating evidence integrity and anti-forensic indicators.
-- **Fixed-K Attack Simulator**: In-memory simulation runner supporting scenarios like `ransomware_exfil`, `apt_stealth_recon`, etc.
+- **Autoregressive Attack Trajectory Simulator**: In-memory simulation runner supporting scenarios like `ransomware_exfil`, `apt_stealth_recon`, feeding predictions back into the state to model campaigns.
 - **Automated Reporting & Alerts**: Generates multi-section reports and maintains a filterable security alerts system.
+- **100% Offline / Air-Gapped Ready**: Operates fully offline with zero external API dependencies for maximum security in defense environments.
 
 ### Future / Planned Features (Roadmap)
-- **Trained Deep Learning Sequence Model (LSTM / GNN)**: Upgrading the rule-based MVP engine to a supervised neural network trained on the **CSE-CIC-IDS2018** dataset to predict multi-horizon forecasts (e.g., 30, 60, 90 seconds).
-- **LLM-Based Natural Language Reasoning**: Integrating LLM APIs for dynamic forensic hypothesis generation and report synthesis.
+- **Trained Deep Learning Sequence Model (LSTM / GNN)**: Upgrading the rule-based MVP engine to a supervised neural network trained on the **CSE-CIC-IDS2018** dataset.
+- **Explainable AI (XAI) using SHAP**: Providing granular visual explanations for why the deep learning model made specific predictions to increase SOC analyst trust.
 - **Persistent Database Storage**: Migrating from in-memory stores to PostgreSQL.
 - **Live Interface Adapter Capture**: Capturing packets directly from physical network interfaces via PyPcap.
-
----
-
-## End-to-End Workflow
-
-```text
-User → Frontend (React) → Backend REST/WS → Feature Extraction → Rule Engine → Forensic/Simulator Engine → Reports & Alerts → Frontend
-```
-
-1. **Live Forecasting**: The analyst starts a session. Synthetic packet events stream via WebSocket (`/ws/live`). Every `window_seconds`, the backend computes temporal states (connection rates, protocol ratios, unique IP/port counts) and evaluates metrics to broadcast `forecast_update`.
-2. **Historical Investigation**: The analyst uploads a `.pcap` file. The backend computes SHA-256 hashes, parses packets, aggregates bidirectional flows, and runs heuristic detectors. The analyst triggers forensic analysis to test hypotheses (H1–H5) and generates a structured report.
 
 ---
 
@@ -110,106 +119,77 @@ User → Frontend (React) → Backend REST/WS → Feature Extraction → Rule En
 
 ---
 
-## System Architecture
+## Project Structure
 
-### Mermaid Diagram
-
-```mermaid
-flowchart TD
-    subgraph Client ["Frontend (React 19 + TypeScript + Vite)"]
-        UI["SOC Dashboard & Navigation"]
-        LM_Page["Live Monitoring Page"]
-        AF_Page["Attack Prediction Page"]
-        HA_Page["Historical Analysis Page"]
-        FA_Page["Forensic Analysis Page"]
-        SIM_Page["Simulation Page"]
-        RPT_Page["Report & Alerts Pages"]
-        Store["Zustand Stores (liveStore, forecastStore, etc.)"]
-        WS_Client["WebSocket Service (wsService)"]
-        API_Client["REST API Service (apiService)"]
-    end
-
-    subgraph Server ["Backend (FastAPI + Python 3.10+)"]
-        Main["FastAPI Entry Point (main.py)"]
-        
-        subgraph Routers ["API Endpoints"]
-            Live_API["/api/live/*"]
-            WS_API["/ws/live (WebSocket)"]
-            Forecast_API["/api/forecast/*"]
-            Hist_API["/api/historical/*"]
-            Forensic_API["/api/forensic/*"]
-            Sim_API["/api/simulator/*"]
-            Report_API["/api/reports/*"]
-            Alert_API["/api/alerts/*"]
-            Admin_API["/api/admin/*"]
-        end
-
-        subgraph Core_Services ["Services & Processing Engines"]
-            LS["Live Session Service (Singleton)"]
-            TG["Traffic Generator (Scapy / Fallback)"]
-            FE["Rule-Based Forecast Engine"]
-            HP["Historical PCAP Parser & Flow Builder"]
-            FA["Forensic Reasoning & Hypothesis Engine"]
-            SE["Fixed-K Simulator Engine"]
-            RB["Report Builder & Findings Engine"]
-            AS["Alert Store & Management"]
-        end
-    end
-
-    %% Component Links
-    UI --> LM_Page & AF_Page & HA_Page & FA_Page & SIM_Page & RPT_Page
-    LM_Page --> Store
-    AF_Page --> Store
-    Store --> WS_Client & API_Client
-
-    WS_Client <== "WebSocket Feed (JSON)" ==> WS_API
-    API_Client <== "HTTP REST (JSON / Multipart)" ==> Routers
-
-    WS_API --> LS
-    Live_API --> LS
-    Forecast_API --> LS
-    LS --> TG
-    LS --> FE
-    
-    Hist_API --> HP
-    Forensic_API --> FA
-    FA --> HP
-    
-    Sim_API --> SE
-    Report_API --> RB
-    RB --> HP
-    RB --> SE
-    Alert_API --> AS
+```text
+MVP-AI-network-forecaster/
+├── nextrace-ai/         # React 19 / Vite Frontend App
+├── backend/             # Python FastAPI Backend & Core Engine
+├── models/              # Saved AI/ML Models & Rulesets (Future)
+└── docs/                # Architecture diagrams & Screenshots
 ```
 
 ---
 
-## ML / AI Analysis & Data Storage
+## Setup & Running Locally
 
-- **Implementation**: The application currently leverages a **deterministic heuristic rule engine** to classify categorical attack stages (Reconnaissance → Initial Access → Lateral Movement → Data Exfiltration).
-- **In-Memory Storage**: Current state (jobs, alerts, simulations, reports) is maintained in-memory for the MVP prototype. Persistent storage (PostgreSQL) is planned.
-- **Data Schemas (Pydantic)**: Defines `PacketEvent`, `TemporalState` (sliding windows), and `ForecastResult` (current/next stage, confidence, and feature contributions).
-
----
-
-## Getting Started / Running Locally
+This section provides comprehensive setup instructions to deploy NEXTRACE AI on your local environment.
 
 ### Prerequisites
-- **Node.js** (v18+) & **npm**
-- **Python** (3.10+) & **pip**
+Ensure your system has the following installed:
+- **Node.js** (v18.x or higher) and **npm**
+- **Python** (3.10 or higher)
+- **Git**
 
-### 1. Start Backend Server
+### 1. Clone the Repository
 ```bash
-cd nextrace-ai/backend
+git clone https://github.com/your-username/MVP-AI-network-forecaster.git
+cd MVP-AI-network-forecaster/nextrace-ai
+```
+
+### 2. Backend Setup (FastAPI)
+The backend is powered by Python and FastAPI. We recommend using a virtual environment to manage dependencies.
+
+```bash
+cd backend
+# Create a virtual environment
+python -m venv venv
+
+# Activate the virtual environment
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Run the server
 python main.py
 ```
-*The FastAPI backend will start at `http://127.0.0.1:8000` (API docs at `http://127.0.0.1:8000/docs`).*
+*The backend API will run at `http://127.0.0.1:8000`. NEXTRACE AI provides interactive API documentation out-of-the-box. Access the Swagger UI at `http://127.0.0.1:8000/docs` to test endpoints directly.*
 
-### 2. Start Frontend App
+### 3. Frontend Setup (React/Vite)
+Open a new terminal window, navigate to the frontend directory, and start the development server.
+
 ```bash
+# From the root of the cloned repository navigate to the frontend folder
 cd nextrace-ai
+
+# Install Node dependencies
 npm install
+
+# Start the Vite development server
 npm run dev
 ```
-*The React application will launch at `http://localhost:5173`.*
+*The React application will launch at `http://localhost:5173`. Open this URL in your browser to view the dashboards.*
+
+### 4. Running Offline (Air-Gapped Environment)
+To run the application in an air-gapped environment, ensure that all `npm` and `pip` dependencies are downloaded and cached locally on a machine with internet access. You can then transfer the project folder (including `node_modules` and the python `venv`) to your offline machine. Once installed, NEXTRACE AI requires no internet connection to operate fully.
+
+---
+
+## License & Acknowledgements
+
+- **License:** This project is licensed under the MIT License - see the LICENSE file for details.
+- **Acknowledgements:** Built for the Smart India Hackathon (SIH 2026), Problem Statement 26153 (National Technical Research Organisation).
