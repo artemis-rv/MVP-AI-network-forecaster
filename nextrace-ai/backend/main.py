@@ -27,8 +27,7 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-# ── CORS — allow local Vite dev server and production frontend ────────────────────────
-# You can pass FRONTEND_URL like FRONTEND_URL="https://my-frontend.vercel.app,http://localhost:5173"
+# ── CORS — allow local dev servers, Vercel apps, and custom domains ───────
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -37,11 +36,13 @@ allowed_origins = [
     "http://localhost:4173",  # Vite preview
 ]
 if os.environ.get("FRONTEND_URL"):
-    allowed_origins.extend(os.environ.get("FRONTEND_URL", "").split(","))
+    custom_origins = [o.strip() for o in os.environ.get("FRONTEND_URL", "").split(",") if o.strip()]
+    allowed_origins.extend(custom_origins)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
