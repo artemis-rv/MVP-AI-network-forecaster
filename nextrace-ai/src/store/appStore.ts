@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { notifications as mockNotifs } from '@/data/mockData';
+import type { Alert } from '@/types/alert';
 
 export interface UserAccount {
   id: string;
@@ -60,13 +61,16 @@ export const DEFAULT_USERS: UserAccount[] = [
   },
 ];
 
-interface Notification {
+export interface AppNotification {
   id: string;
   title: string;
   desc: string;
   time: string;
   read: boolean;
   severity: string;
+  alertId?: string;
+  status?: string;
+  sourceIp?: string;
 }
 
 interface Toast {
@@ -94,8 +98,10 @@ interface AppState {
   deleteUser: (id: string) => void;
 
   // Notifications
-  notifications: Notification[];
+  notifications: AppNotification[];
   markAllRead: () => void;
+  markNotificationAsRead: (id: string) => void;
+  syncNotificationsFromAlerts: (alerts: Alert[]) => void;
   unreadCount: number;
 
   // Toast
@@ -234,13 +240,80 @@ export const useAppStore = create<AppState>()(
         }));
       },
 
-      notifications: mockNotifs,
+      notifications: mockNotifs.map((n) => ({ ...n, alertId: undefined })),
       unreadCount: mockNotifs.filter((n) => !n.read).length,
       markAllRead: () =>
         set((state) => ({
           notifications: state.notifications.map((n) => ({ ...n, read: true })),
           unreadCount: 0,
         })),
+      markNotificationAsRead: (id: string) =>
+        set((state) => {
+          const updated = state.notifications.map((n) =>
+            n.id === id ? { ...n, read: true } : n
+          );
+          return {
+            notifications: updated,
+            unreadCount: updated.filter((n) => !n.read).length,
+          };
+        }),
+      syncNotificationsFromAlerts: (alerts: Alert[]) => {
+        if (!alerts || alerts.length === 0) return;
+        const currentReadSet = new Set(
+          get().notifications.filter((n) => n.read).map((n) => n.id)
+        );
+
+        const alertNotifications: AppNotification[] = alerts.map((a) => {
+          const notifId = `alert-${a.id}`;
+          const isResolved = a.status === 'RESOLVED';
+          const isAck = a.status === 'ACKNOWLEDGED';
+          const isRead = isResolved || isAck || currentReadSet.has(notifId);
+
+          let timeStr = 'Just now';
+          if (a.created_at || a.first_seen) {
+            try {
+              const dateVal = new Date(a.created_at || a.first_seen).getTime();
+              if (!isNaN(dateVal)) {
+                const diffMs = Date.now() - dateVal;
+                const diffMin = Math.floor(diffMs / 60000);
+                if (diffMin < 1) timeStr = 'Just now';
+                else if (diffMin < 60) timeStr = `${diffMin}m ago`;
+                else {
+                  const diffHr = Math.floor(diffMin / 60);
+                  if (diffHr < 24) timeStr = `${diffHr}h ago`;
+                  else timeStr = `${Math.floor(diffHr / 24)}d ago`;
+                }
+              }
+            } catch {
+              timeStr = 'Recent';
+            }
+          }
+
+          return {
+            id: notifId,
+            alertId: a.id,
+            title: a.title,
+            desc: a.source_ip ? `${a.source_ip} · ${a.description}` : a.description,
+            time: timeStr,
+            read: isRead,
+            severity: a.severity.toLowerCase(),
+            status: a.status,
+            sourceIp: a.source_ip,
+          };
+        });
+
+        // Also keep any non-alert notifications from before
+        const nonAlertNotifs = get().notifications.filter(
+          (n) => !n.alertId && !n.id.startsWith('alert-')
+        );
+        const combined = [...alertNotifications, ...nonAlertNotifs];
+        const unreadCount = combined.filter((n) => !n.read).length;
+
+        set({
+          notifications: combined,
+          unreadCount,
+        });
+      },
 
       toasts: [],
       addToast: (message, type = 'info') => {
