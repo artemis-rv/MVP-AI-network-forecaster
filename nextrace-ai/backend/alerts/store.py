@@ -50,6 +50,13 @@ def get_stats() -> dict:
         elif severity == "LOW": stats.low += 1
     return stats.model_dump()
 
+def find_by_dedupe_key(key: str) -> Optional[dict]:
+    """Return the alert previously created for this dedupe key (grouped-activity alerts are idempotent)."""
+    for alert in _ALERTS.values():
+        if alert.get("dedupe_key") == key:
+            return alert
+    return None
+
 def create_alert(data: dict) -> dict:
     """Create and insert a new alert."""
     now = _now_iso()
@@ -82,6 +89,8 @@ def create_alert(data: dict) -> dict:
         "evidence": data.get("evidence", ["Triggered by security rules"]),
         "simulation": data.get("simulation", False),
     }
+    if data.get("dedupe_key"):
+        alert["dedupe_key"] = data["dedupe_key"]
     _ALERTS[new_id] = alert
     return alert
 
@@ -103,7 +112,12 @@ def update_alert(alert_id: str, updates: dict) -> dict:
         
     if "assigned_to" in updates:
         alert["assigned_to"] = updates["assigned_to"]
-        
+
+    # Grouped-activity alerts: further packets update the same incident instead of creating new alerts
+    for key in ("event_count", "last_seen", "confidence"):
+        if updates.get(key) is not None:
+            alert[key] = updates[key]
+
     return alert
 
 def acknowledge_alert(alert_id: str, user_id: Optional[str] = None) -> dict:

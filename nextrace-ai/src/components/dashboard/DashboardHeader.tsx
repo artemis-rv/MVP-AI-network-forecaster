@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
+import { useLiveStore } from '@/store/liveStore';
 
 export function DashboardHeader() {
   const [now, setNow] = useState(new Date());
@@ -8,6 +9,9 @@ export function DashboardHeader() {
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const activities = useLiveStore(state => state.activities);
+  const suspicious = activities.filter(a => a.significant).length;
 
   const hour = now.getHours();
   const greeting =
@@ -40,7 +44,9 @@ export function DashboardHeader() {
           {greeting}, SOC Analyst
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', fontWeight: 400 }}>
-          Your network is protected. Here's what's happening right now.
+          {suspicious > 0
+            ? `${suspicious} suspicious activit${suspicious === 1 ? 'y' : 'ies'} observed in the current session. Here's what's happening right now.`
+            : "No suspicious activity observed. Here's what's happening right now."}
         </p>
       </div>
 

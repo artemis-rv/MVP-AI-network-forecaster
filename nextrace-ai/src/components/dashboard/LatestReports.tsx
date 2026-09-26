@@ -132,7 +132,7 @@ function RealReportRow({ report, onClick }: { report: ReportListItem; onClick: (
             color: isSim ? '#dc2626' : 'var(--primary)',
           }}
         >
-          {isSim ? 'SIMULATION' : 'HISTORICAL'}
+          {report.report_type === 'live' ? 'LIVE SESSION' : isSim ? 'SIMULATION' : 'HISTORICAL'}
         </span>
       </td>
       <td style={{ padding: '13px 16px', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>

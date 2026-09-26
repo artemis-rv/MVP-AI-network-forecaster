@@ -11,7 +11,7 @@ import { kpiData } from '@/data/mockData';
 import { useLiveStore } from '@/store/liveStore';
 import { useAlertStore } from '@/store/alertStore';
 import { useForecastStore } from '@/store/forecastStore';
-import { deriveDashboardEntities } from '@/utils/entityRisk';
+import { deriveRiskEntities } from '@/utils/entityRisk';
 import {
   ShieldAlert, Shield, TrendingUp, CheckCircle
 } from 'lucide-react';
@@ -25,7 +25,7 @@ const kpiIcons = [
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { session, temporalHistory, liveNodes } = useLiveStore();
+  const { session, temporalHistory, activities, runId } = useLiveStore();
   const { stats, alerts, fetchStats, fetchAlerts } = useAlertStore();
   const [entityRiskFilter, setEntityRiskFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
   const [highlightEntities, setHighlightEntities] = useState(false);
@@ -37,19 +37,8 @@ export function DashboardPage() {
     fetchAlerts();
   }, [fetchStats, fetchAlerts]);
 
-  // Derive dynamic network entities and exact risk counts
-  const { entities, counts: entityCounts } = deriveDashboardEntities(
-    liveNodes.length > 0 ? liveNodes : undefined,
-    alerts
-  );
-
-  // Derive live KPI values when a session is active
-  const liveKpiValues = isLive && session ? [
-    { value: (stats?.total ?? 0) + (session.suspicious_count > 0 ? Math.ceil(session.suspicious_count / 15) : 0) },
-    { value: entityCounts.high },
-    { value: currentForecast && !currentForecast.is_benign ? 1 : 0 },
-    { value: stats?.resolved ?? 0 },
-  ] : null;
+  // Top Risk Entities: derived only from grouped activities observed in the current live session
+  const { entities, counts: entityCounts } = useMemo(() => deriveRiskEntities(activities), [activities]);
 
   // Chart data: use real temporal history if available, else mock
   const chartData = useMemo(() => {
@@ -137,7 +126,7 @@ export function DashboardPage() {
           let hoverDetails = kpi.hoverDetails;
 
           if (kpi.id === 'alerts') {
-            val = liveKpiValues ? liveKpiValues[0].value : (stats?.total ?? alerts.length ?? kpi.value);
+            val = stats?.total ?? alerts.length;
             comp = `${(stats?.open ?? 0) + (stats?.in_progress ?? 0)} unresolved threats`;
           } else if (kpi.id === 'entities') {
             // Dynamically map to Top Risk Entities!
@@ -149,8 +138,8 @@ export function DashboardPage() {
               title: 'Top Risk Entities',
               items: [
                 { label: 'High-Risk Entities', value: entityCounts.high },
-                { label: 'Threats Detected', value: entities.filter(e => e.status.includes('Threat')).length, highlight: 'critical' as const },
-                { label: 'Targeted Assets', value: entities.filter(e => e.status.includes('Targeted')).length, highlight: 'warning' as const },
+                { label: 'Suspicious Sources', value: entities.filter(e => e.status !== 'Targeted asset').length, highlight: 'critical' as const },
+                { label: 'Targeted Assets', value: entities.filter(e => e.status === 'Targeted asset').length, highlight: 'warning' as const },
                 { label: 'Top Entity IP', value: entities.find(e => e.riskLevel === 'High')?.ip || 'None', highlight: 'primary' as const },
                 { label: 'Total Tracked', value: entityCounts.total },
               ]
@@ -193,8 +182,6 @@ export function DashboardPage() {
                 { label: 'Total Resolved', value: String(stats?.resolved ?? 0), highlight: 'live' as const }
               ]
             };
-          } else if (liveKpiValues) {
-            val = liveKpiValues[i].value;
           }
 
           return (
@@ -239,6 +226,7 @@ export function DashboardPage() {
       >
         <NetworkEntities
           entities={entities}
+          sessionLabel={runId ? `${runId}${isLive ? '' : ' (stopped)'}` : null}
           riskFilter={entityRiskFilter}
           onRiskFilterChange={setEntityRiskFilter}
           highlighted={highlightEntities}

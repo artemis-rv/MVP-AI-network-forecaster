@@ -5,24 +5,42 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { PacketEvent, TemporalState, SessionStatus, LiveNode, LiveEdge, DemoMode, WindowSecs } from '@/types/live';
 import { useForecastStore } from '@/store/forecastStore';
+import { ingest, fromPacket, GROUPING, type GroupedActivity } from '@/lib/activityGrouping';
+import { raiseActivityAlerts, syncActivityAlerts, resetActivityAlertSync } from '@/services/activityAlerts';
 
 const MAX_EVENTS  = 200;   // max events kept in the all-events buffer
 const MAX_TEMPORAL = 60;   // max temporal states kept in history
 
-// ─── IP classification helpers ────────────────────────────────────────────────
-function classifyIp(ip: string): LiveNode['type'] {
-  if (ip.startsWith('10.0.0.')) return 'suspicious';
-  if (ip === '8.8.8.8' || ip === '1.1.1.1' || ip.startsWith('203.0.113') || ip.startsWith('198.51.100')) return 'external';
+// ─── IP role helpers ──────────────────────────────────────────────────────────
+// Role only (workstation / server / external). Whether a node is *suspicious* is decided by
+// observed behaviour — being the source of a significant grouped activity — never by its address.
+function classifyIp(ip: string): Exclude<LiveNode['type'], 'suspicious'> {
+  if (!/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip)) return 'external';
   const last = parseInt(ip.split('.')[3] ?? '0');
   if (last >= 100) return 'server';
   return 'internal';
 }
 
-// Position is now determined dynamically inside updateEntities based on type count
-
 function ipToLabel(ip: string): string {
-  const type = classifyIp(ip);
-  return { suspicious: 'Suspicious', internal: 'Workstation', server: 'Server', external: 'External' }[type];
+  return { internal: 'Workstation', server: 'Server', external: 'External' }[classifyIp(ip)];
+}
+
+/** Statistical summary of all traffic in the session (normal traffic is summarised, not listed). */
+export interface TrafficSummary {
+  total: number;
+  benign: number;
+  suspicious: number;
+  bytes: number;
+  protocols: Record<string, number>;
+  firstTs: number | null;
+  lastTs: number | null;
+}
+
+const EMPTY_SUMMARY: TrafficSummary = { total: 0, benign: 0, suspicious: 0, bytes: 0, protocols: {}, firstTs: null, lastTs: null };
+
+function runIdFor(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `LIVE-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
 // ─── Store interface ──────────────────────────────────────────────────────────
@@ -47,6 +65,12 @@ interface LiveStore {
   liveNodes: LiveNode[];
   liveEdges: LiveEdge[];
 
+  // Grouped activities — the single source of truth for alerts, timeline, risk entities and reports
+  activities: GroupedActivity[];
+  trafficSummary: TrafficSummary;
+  runId: string | null;
+  runStartedAt: number | null;
+
   // Search Filter
   searchQuery: string;
 
@@ -68,6 +92,8 @@ interface LiveStore {
   setWindowSeconds: (w: WindowSecs) => void;
   setMode: (m: DemoMode) => void;
   updateEntities: (event: PacketEvent) => void;
+  beginRun: () => void;
+  attachAlert: (activityId: string, alertId: string) => void;
 }
 
 // ─── Store implementation ─────────────────────────────────────────────────────
@@ -88,6 +114,11 @@ export const useLiveStore = create<LiveStore>()(
       liveNodes: [],
       liveEdges: [],
 
+      activities: [],
+      trafficSummary: EMPTY_SUMMARY,
+      runId: null,
+      runStartedAt: null,
+
       searchQuery: '',
 
       windowSeconds: 15,
@@ -104,7 +135,11 @@ export const useLiveStore = create<LiveStore>()(
       },
 
       clearEvents: () => {
-        set({ allEvents: [], displayEvents: [], liveNodes: [], liveEdges: [], temporalHistory: [], currentTemporal: null });
+        set({
+          allEvents: [], displayEvents: [], liveNodes: [], liveEdges: [], temporalHistory: [], currentTemporal: null,
+          activities: [], trafficSummary: EMPTY_SUMMARY,
+        });
+        resetActivityAlertSync();
         // Also reset forecast state so sessions don't contaminate each other
         useForecastStore.getState().clearForecast();
       },
@@ -115,8 +150,27 @@ export const useLiveStore = create<LiveStore>()(
         get().addEventsBatched([event]);
       },
 
+      beginRun: () => {
+        get().clearEvents();
+        const now = new Date();
+        set({ runId: runIdFor(now), runStartedAt: now.getTime() });
+      },
+
+      attachAlert: (activityId, alertId) => {
+        set((state) => ({
+          activities: state.activities.map(a =>
+            a.id === activityId && !a.alertIds.includes(alertId) ? { ...a, alertIds: [...a.alertIds, alertId] } : a,
+          ),
+        }));
+      },
+
       addEventsBatched: (events) => {
         if (events.length === 0) return;
+
+        // Packets → activity normalization → similarity grouping (suspicious traffic only)
+        const suspicious = events.filter(e => e.classification === 'suspicious');
+        const grouped = ingest(get().activities, suspicious.map(fromPacket), { gapMs: GROUPING.liveGapMs });
+        const actorIps = new Set(grouped.activities.filter(a => a.significant).flatMap(a => a.sources));
 
         set((state) => {
           // Process events
@@ -141,8 +195,8 @@ export const useLiveStore = create<LiveStore>()(
               const type = classifyIp(ip);
               if (type === 'external') return;
               
-              const count = Array.from(nodesMap.values()).filter(n => n.type === type).length;
-              const x = { suspicious: 120, internal: 350, server: 580, external: -100 }[type] as number;
+              const count = Array.from(nodesMap.values()).filter(n => classifyIp(n.ip) === type).length;
+              const x = { internal: 350, server: 580 }[type];
               const y = 80 + (count * 70);
               
               nodesMap.set(ip, {
@@ -171,11 +225,46 @@ export const useLiveStore = create<LiveStore>()(
             }
           }
 
-          const liveNodes = Array.from(nodesMap.values());
+          // Behaviour-derived risk marking: only hosts that originated a significant activity
+          const liveNodes = Array.from(nodesMap.values()).map(n => {
+            const type: LiveNode['type'] = actorIps.has(n.ip) ? 'suspicious' : classifyIp(n.ip);
+            if (n.type === type) return n;
+            return { ...n, type, label: type === 'suspicious' ? `${ipToLabel(n.ip)} (suspicious)` : ipToLabel(n.ip) };
+          });
           const liveEdges = Array.from(edgesMap.values()).slice(-50);
 
-          return { allEvents, displayEvents, liveNodes, liveEdges };
+          const summary = state.trafficSummary;
+          const protocols = { ...summary.protocols };
+          let bytes = summary.bytes;
+          let firstTs = summary.firstTs;
+          let lastTs = summary.lastTs;
+          for (const ev of events) {
+            protocols[ev.protocol] = (protocols[ev.protocol] ?? 0) + 1;
+            bytes += ev.packet_size || 0;
+            const ts = Date.parse(ev.timestamp);
+            if (!Number.isNaN(ts)) {
+              firstTs = firstTs === null ? ts : Math.min(firstTs, ts);
+              lastTs = lastTs === null ? ts : Math.max(lastTs, ts);
+            }
+          }
+          const trafficSummary: TrafficSummary = {
+            total: summary.total + events.length,
+            benign: summary.benign + (events.length - suspicious.length),
+            suspicious: summary.suspicious + suspicious.length,
+            bytes, protocols, firstTs, lastTs,
+          };
+
+          return { allEvents, displayEvents, liveNodes, liveEdges, activities: grouped.activities, trafficSummary };
         });
+
+        // Grouped activity → alert (+ popup + notification); growth only updates the existing alert.
+        // Only the tab that started this run (it owns runId) proposes alerts; other tabs receive the broadcast.
+        const runId = get().runId;
+        if (runId && grouped.triggers.length > 0) {
+          raiseActivityAlerts(grouped.triggers, runId, (activityId, alertId) => get().attachAlert(activityId, alertId));
+        }
+        const recent = Date.now() - 2 * GROUPING.liveGapMs / 3;
+        syncActivityAlerts(grouped.activities.filter(a => a.alertIds.length > 0 && a.lastSeen >= recent));
       },
 
       setTemporal: (t) => {
@@ -196,6 +285,8 @@ export const useLiveStore = create<LiveStore>()(
     {
       name: 'live-storage',
       storage: createJSONStorage(() => sessionStorage),
+      // Connection flags describe this page instance only; persisting them made a reload skip reconnecting.
+      partialize: ({ wsConnected: _ws, backendAvailable: _be, ...rest }) => rest,
     }
   )
 );

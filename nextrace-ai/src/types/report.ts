@@ -15,7 +15,7 @@ export type FindingCategory =
   | 'Forecast'
   | 'Simulation';
 
-export type FindingSourceType = 'historical' | 'simulation';
+export type FindingSourceType = 'historical' | 'simulation' | 'live';
 
 export interface Finding {
   id:          string;
@@ -42,7 +42,7 @@ export interface ReportSection {
 
 // ── Report ────────────────────────────────────────────────────────────────────
 
-export type ReportType   = 'historical' | 'simulation';
+export type ReportType   = 'historical' | 'simulation' | 'live';
 export type ReportStatus = 'GENERATED' | 'FAILED';
 
 export interface ReportMetadata {
@@ -56,6 +56,10 @@ export interface ReportMetadata {
   status?:         string;
   generated_at:    number;
   analysis_status?: string;
+  session_id?:     string;
+  capture_source?: string;
+  /** Reports built in the browser from the current session / analysis state (not stored on the backend). */
+  local?:          boolean;
 }
 
 export interface Report {

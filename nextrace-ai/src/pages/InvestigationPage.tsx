@@ -12,6 +12,7 @@ import {
   CheckCircle, Circle, X,
 } from 'lucide-react';
 import { useInvestigationStore } from '@/store/investigationStore';
+import { deriveRiskEntities } from '@/utils/entityRisk';
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
 import { useAppStore } from '@/store/appStore';
@@ -26,7 +27,6 @@ const HOSTNAME_MAP: Record<string, string> = {
   '192.168.1.10':  'WS-ANALYST-01',
   '192.168.1.25':  'APP-SERVER-01',
   '192.168.1.50':  'DB-SERVER-01',
-  '10.0.0.5':      'SUSPECT-HOST',
   '8.8.8.8':       'dns.google',
   '203.0.113.5':   'external-c2.demo',
 };
@@ -35,16 +35,10 @@ function getHostname(ip: string): string {
   return HOSTNAME_MAP[ip] ?? `host-${ip.split('.').pop()}`;
 }
 
-function getRiskFromStage(stage: string): { label: string; color: string; bg: string } {
-  const map: Record<string, { label: string; color: string; bg: string }> = {
-    'Data Exfiltration': { label: 'CRITICAL', color: '#dc2626', bg: '#fee2e2' },
-    'Lateral Movement':  { label: 'HIGH',     color: '#ef4444', bg: '#fee2e2' },
-    'Initial Access':    { label: 'HIGH',     color: '#f97316', bg: '#ffedd5' },
-    'Reconnaissance':    { label: 'MEDIUM',   color: '#f59e0b', bg: '#fef3c7' },
-    'Normal Activity':   { label: 'LOW',      color: '#10b981', bg: '#d1fae5' },
-    'No Active Session': { label: 'NONE',     color: '#94a3b8', bg: 'var(--bg-input)' },
-  };
-  return map[stage] ?? { label: 'NONE', color: '#94a3b8', bg: 'var(--bg-input)' };
+function getRiskFromLevel(level: 'High' | 'Medium' | 'Low'): { label: string; color: string; bg: string } {
+  if (level === 'High') return { label: 'HIGH RISK', color: '#dc2626', bg: '#fee2e2' };
+  if (level === 'Medium') return { label: 'MEDIUM RISK', color: '#d97706', bg: '#fef3c7' };
+  return { label: 'LOW RISK', color: '#059669', bg: '#d1fae5' };
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -53,9 +47,9 @@ export function InvestigationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { investigation, context, findings, showFindingCard, showReportModal,
           openInvestigation, closeInvestigation, generateFindings,
-          openReportModal, closeReportModal, refreshTimeline } = useInvestigationStore();
+          openReportModal, closeReportModal } = useInvestigationStore();
   const { currentForecast } = useForecastStore();
-  const { session, liveNodes, liveEdges, displayEvents } = useLiveStore();
+  const { session, liveNodes, liveEdges, displayEvents, activities } = useLiveStore();
   const { addToast } = useAppStore();
   const isLive = session?.running ?? false;
 
@@ -93,10 +87,9 @@ export function InvestigationPage() {
   const handleRefresh = useCallback(() => {
     if (context) {
       openInvestigation(context);
-      refreshTimeline();
       addToast('Investigation refreshed.', 'info');
     }
-  }, [context, openInvestigation, refreshTimeline, addToast]);
+  }, [context, openInvestigation, addToast]);
 
   if (!investigation) {
     return <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>Loading investigation…</div>;
@@ -104,8 +97,12 @@ export function InvestigationPage() {
 
   const stage     = isLive ? (currentForecast?.current_stage ?? 'Normal Activity') : 'No Active Session';
   const nextStage = isLive ? (currentForecast?.predicted_next_stage ?? 'N/A') : 'N/A';
-  const risk      = getRiskFromStage(stage);
   const entityIp  = investigation.selectedEntityIp;
+  // Entity risk comes from grouped activities involving this host (same scoring as Top Risk Entities)
+  const entityRisk = deriveRiskEntities(activities).entities.find(e => e.ip === entityIp) ?? null;
+  const risk      = entityRisk
+    ? getRiskFromLevel(entityRisk.riskLevel)
+    : { label: 'NO FINDINGS', color: '#10b981', bg: '#d1fae5' };
   const hostname  = getHostname(entityIp);
   
   const entityNode = liveNodes.find(n => n.ip === entityIp);
@@ -197,6 +194,8 @@ export function InvestigationPage() {
               <DetailRow label="Last Seen"     value={lastSeen}                     mono />
               <DetailRow label="Connections"   value={connCount.toString()} highlight={false} />
               <DetailRow label="Suspicious"    value={suspCount.toString()} highlight={suspCount > 5} />
+              <DetailRow label="Risk Score"    value={entityRisk ? `${entityRisk.riskScore}/100 · ${entityRisk.status}` : 'Not involved in suspicious activity'} highlight={entityRisk?.riskLevel === 'High'} />
+              {entityRisk && <DetailRow label="Activities" value={entityRisk.reasons.join('; ')} />}
               <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 8, marginTop: 2 }}>
                 <DetailRow label="Current Stage"  value={stage}    highlight={!currentForecast?.is_benign} />
                 <DetailRow label="Predicted Next" value={nextStage} highlight={!currentForecast?.is_benign} />

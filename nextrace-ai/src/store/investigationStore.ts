@@ -5,7 +5,6 @@
 import { create } from 'zustand';
 import type {
   Investigation, InvestigationContext, Finding,
-  TimelineEntry,
 } from '@/types/investigation';
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
@@ -24,10 +23,9 @@ function isoNow(): string {
   return new Date().toISOString();
 }
 
-// ── Entity classification helpers ─────────────────────────────────────────────
+// ── Entity role helper (role only — suspicion comes from observed activity) ────
 function classifyEntityType(ip: string): string {
-  if (ip.startsWith('10.0.0.'))   return 'Suspicious Host';
-  if (ip === '8.8.8.8' || ip === '1.1.1.1' || ip.startsWith('203.0.113') || ip.startsWith('198.51.100')) return 'External Destination';
+  if (!/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip)) return 'External Destination';
   const last = parseInt(ip.split('.')[3] ?? '0');
   if (last >= 100)  return 'Application Server';
   if (last >= 50)   return 'Database Server';
@@ -45,57 +43,10 @@ function priorityFromForecast(stage: string): Investigation['priority'] {
 }
 
 
-// ── Build timeline from live state ────────────────────────────────────────────
-function buildLiveTimeline(entityIp?: string): TimelineEntry[] {
-  const { displayEvents } = useLiveStore.getState();
-  const { currentForecast } = useForecastStore.getState();
-
-  const entries: TimelineEntry[] = displayEvents
-    .filter(e => e.classification === 'suspicious' && (!entityIp || e.src_ip === entityIp || e.dst_ip === entityIp))
-    .slice(0, 12)
-    .reverse()
-    .map((e, i) => ({
-      id: `ev-${i}`,
-      timestamp: e.timestamp.slice(11, 19) || nowHHMMSS(),
-      event: `${e.protocol} suspicious packet: ${e.src_ip} → ${e.dst_ip}:${e.dst_port}`,
-      type: 'observed' as const,
-    }));
-
-  // Append forecast sequence entries
-  if (currentForecast?.state_sequence) {
-    currentForecast.state_sequence.slice(-4).forEach((s, i) => {
-      const t = typeof s.window_end === 'number'
-        ? new Date(s.window_end * 1000).toLocaleTimeString('en-US', { hour12: false })
-        : String(s.window_end).slice(11, 19);
-      entries.push({
-        id: `seq-${i}`,
-        timestamp: t,
-        event: `Attack stage classified: ${s.stage}`,
-        type: 'observed',
-        stage: s.stage,
-      });
-    });
-  }
-
-  // Predicted next
-  if (currentForecast && !currentForecast.is_benign) {
-    entries.push({
-      id: 'predicted-next',
-      timestamp: '→ Next predicted',
-      event: `Potential next stage: ${currentForecast.predicted_next_stage}`,
-      type: 'predicted',
-      stage: currentForecast.predicted_next_stage,
-    });
-  }
-
-  return entries;
-}
-
 // ── Store ──────────────────────────────────────────────────────────────────────
 interface InvestigationStore {
   investigation: Investigation | null;
   context: InvestigationContext | null;
-  timeline: TimelineEntry[];
   findings: Finding[];
   showFindingCard: boolean;
   showReportModal: boolean;
@@ -107,13 +58,11 @@ interface InvestigationStore {
   openReportModal: () => void;
   closeReportModal: () => void;
   setSelectedNodeIp: (ip: string | null) => void;
-  refreshTimeline: () => void;
 }
 
 export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
   investigation: null,
   context: null,
-  timeline: [],
   findings: [],
   showFindingCard: false,
   showReportModal: false,
@@ -137,19 +86,16 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
       sourceType: ctx.sourceType,
     };
 
-    const timeline = buildLiveTimeline(ctx.ip);
-
     set({
       investigation: inv,
       context: { ...ctx, entityType },
-      timeline,
       findings: [],
       showFindingCard: false,
       selectedNodeIp: ctx.ip,
     });
   },
 
-  closeInvestigation: () => set({ investigation: null, context: null, timeline: [], findings: [], showFindingCard: false }),
+  closeInvestigation: () => set({ investigation: null, context: null, findings: [], showFindingCard: false }),
 
   generateFindings: () => {
     const { investigation } = get();
@@ -190,9 +136,4 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
   openReportModal: () => set({ showReportModal: true }),
   closeReportModal: () => set({ showReportModal: false }),
   setSelectedNodeIp: (ip) => set({ selectedNodeIp: ip }),
-
-  refreshTimeline: () => {
-    const timeline = buildLiveTimeline(get().context?.ip);
-    set({ timeline });
-  },
 }));

@@ -27,15 +27,6 @@ STAGES = [
 
 STAGE_IDX = {s: i for i, s in enumerate(STAGES)}
 
-# ─── Typical IP targets used in the demo ──────────────────────────────────────
-_DEMO_TARGETS = [
-    "192.168.1.25",
-    "192.168.1.50",
-    "192.168.1.100",
-    "10.0.0.12",
-]
-
-
 # ─── Abstract base ────────────────────────────────────────────────────────────
 class ForecastEngine(ABC):
     """
@@ -46,7 +37,8 @@ class ForecastEngine(ABC):
     """
 
     @abstractmethod
-    def predict(self, temporal_state: dict[str, Any], mode: str = "benign") -> dict[str, Any]:
+    def predict(self, temporal_state: dict[str, Any], mode: str = "benign",
+                observed_target: str | None = None) -> dict[str, Any]:
         """Return a ForecastResult dict for the given temporal state."""
         ...
 
@@ -102,8 +94,13 @@ class RuleBasedForecastEngine(ForecastEngine):
         self._current_stage_idx = -1
         self._locked_target = None
 
-    def predict(self, temporal_state: dict[str, Any], mode: str = "benign") -> dict[str, Any]:
-        """Return a ForecastResult dict."""
+    def predict(self, temporal_state: dict[str, Any], mode: str = "benign",
+                observed_target: str | None = None) -> dict[str, Any]:
+        """Return a ForecastResult dict.
+
+        observed_target: the host most targeted by suspicious traffic in this window, so the
+        forecast names a host that was actually observed rather than an arbitrary address.
+        """
         ts = time.time()
 
         # ── Benign mode → Normal Activity ─────────────────────────
@@ -142,9 +139,9 @@ class RuleBasedForecastEngine(ForecastEngine):
         next_idx = min(effective_idx + 1, len(STAGES) - 1)
         predicted_next = STAGES[next_idx]
 
-        # Lock target on first internal-facing suspicious connection
-        if self._locked_target is None:
-            self._locked_target = random.choice(_DEMO_TARGETS)
+        # Lock target on the first observed suspicious destination
+        if self._locked_target is None and observed_target:
+            self._locked_target = observed_target
 
         # Build state sequence entry
         entry = {
@@ -165,7 +162,7 @@ class RuleBasedForecastEngine(ForecastEngine):
             "predicted_next_stage": predicted_next,
             "confidence":         confidence,
             "time_window":        self._time_window(effective_idx),
-            "target":             self._locked_target,
+            "target":             self._locked_target or "None detected",
             "supporting_features": features,
             "feature_contributions": contributions,
             "state_sequence":     self._state_sequence[-10:],

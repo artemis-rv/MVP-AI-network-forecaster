@@ -12,6 +12,7 @@ from backend.alerts.store import (
     get_alert,
     get_stats,
     create_alert,
+    find_by_dedupe_key,
     update_alert,
     acknowledge_alert,
     resolve_alert,
@@ -24,6 +25,10 @@ router = APIRouter(prefix="/alerts", tags=["Alerts"])
 class UpdateAlertRequest(BaseModel):
     status: Optional[str] = None
     assigned_to: Optional[str] = None
+    # Grouped-activity alerts grow as more packets join the activity
+    event_count: Optional[int] = None
+    last_seen: Optional[str] = None
+    confidence: Optional[int] = None
 
 class CreateAlertRequest(BaseModel):
     title: str = "Suspicious Network Anomaly"
@@ -36,9 +41,13 @@ class CreateAlertRequest(BaseModel):
     protocol: Optional[str] = "TCP"
     event_count: int = 15
     confidence: int = 88
+    first_seen: Optional[str] = None
+    last_seen: Optional[str] = None
     tags: Optional[List[str]] = None
     evidence: Optional[List[str]] = None
     simulation: bool = False
+    # Grouped-activity alerts: repeated submissions with the same key return the existing alert
+    dedupe_key: Optional[str] = None
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -87,9 +96,17 @@ async def get_alerts_endpoint(
 
 @router.post("")
 async def create_alert_endpoint(body: CreateAlertRequest):
-    """Create a new alert."""
-    data = body.model_dump()
-    return create_alert(data)
+    """Create a new alert (idempotent when a dedupe_key is supplied)."""
+    if body.dedupe_key:
+        existing = find_by_dedupe_key(body.dedupe_key)
+        if existing:
+            return existing
+    alert = create_alert(body.model_dump(exclude_none=True))
+    # Push to every connected live client so all open views show the same popup / notification
+    from backend.services.live_session import live_session
+    if live_session.running:
+        live_session.broadcast_alert(alert)
+    return alert
 
 
 @router.get("/stats")

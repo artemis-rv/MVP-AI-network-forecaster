@@ -35,10 +35,14 @@ function safeFilename(s: string): string {
 
 // ── Export helpers ─────────────────────────────────────────────────────────────
 
+const TYPE_LABEL: Record<Report['report_type'], string> = {
+  historical: 'Historical Forensic',
+  simulation: 'Simulation',
+  live:       'Live Session',
+};
+
 function exportJSON(report: Report) {
-  const prefix = report.report_type === 'historical'
-    ? `nextrace-historical-${report.source_id}`
-    : `nextrace-simulation-${report.source_id}`;
+  const prefix = `nextrace-${report.report_type}-${report.source_id}`;
   const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -50,7 +54,7 @@ function exportJSON(report: Report) {
 
 function exportMarkdown(report: Report) {
   const isSim = report.report_type === 'simulation';
-  const typeStr = isSim ? 'Simulation' : 'Historical Forensic';
+  const typeStr = TYPE_LABEL[report.report_type];
 
   const critical = report.findings.filter(f => f.severity === 'CRITICAL');
   const high     = report.findings.filter(f => f.severity === 'HIGH');
@@ -112,9 +116,7 @@ function exportMarkdown(report: Report) {
   ];
 
   const md   = lines.join('\n');
-  const prefix = report.report_type === 'historical'
-    ? `nextrace-historical-${report.source_id}`
-    : `nextrace-simulation-${report.source_id}`;
+  const prefix = `nextrace-${report.report_type}-${report.source_id}`;
   const blob = new Blob([md], { type: 'text/markdown' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -152,7 +154,6 @@ export function ReportPage() {
     filterCategory,
   }) : [];
 
-  const isHistorical = report?.report_type === 'historical';
   const isSim        = report?.report_type === 'simulation';
 
   if (loading) return <LoadingState />;
@@ -230,9 +231,12 @@ export function ReportPage() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
           <MetaItem label="Source ID"       value={<Mono>{report.source_id}</Mono>} />
-          <MetaItem label="Source Type"     value={isHistorical ? 'Historical Forensic' : 'Simulation'} />
+          <MetaItem label="Source Type"     value={TYPE_LABEL[report.report_type]} />
           <MetaItem label="Generated"       value={tsLabel(report.generated_at)} />
           <MetaItem label="Analysis Status" value={report.metadata.analysis_status ?? report.metadata.status ?? 'completed'} />
+          {report.metadata.capture_source && (
+            <MetaItem label="Capture Source" value={report.metadata.capture_source} />
+          )}
           {report.metadata.filename && (
             <MetaItem label="File" value={report.metadata.filename} />
           )}
@@ -353,7 +357,7 @@ export function ReportPage() {
             : <Info size={15} color="var(--primary)" />
           }
           <span style={{ fontSize: 12, fontWeight: 700, color: isSim ? '#dc2626' : 'var(--primary)' }}>
-            {isSim ? 'SIMULATION DISCLAIMER' : 'PROTOTYPE FORENSIC DISCLAIMER'}
+            {isSim ? 'SIMULATION DISCLAIMER' : report.report_type === 'live' ? 'PROTOTYPE SESSION DISCLAIMER' : 'PROTOTYPE FORENSIC DISCLAIMER'}
           </span>
         </div>
         <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
@@ -678,16 +682,16 @@ function Mono({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TypeBadge({ type }: { type: 'historical' | 'simulation' }) {
-  const isHist = type === 'historical';
+function TypeBadge({ type }: { type: Report['report_type'] }) {
+  const isSim = type === 'simulation';
   return (
     <span style={{
       fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
-      background: isHist ? 'rgba(99,102,241,0.1)' : 'rgba(239,68,68,0.1)',
-      color: isHist ? 'var(--primary)' : '#dc2626',
-      border: `1px solid ${isHist ? 'rgba(99,102,241,0.3)' : 'rgba(239,68,68,0.3)'}`,
+      background: isSim ? 'rgba(239,68,68,0.1)' : 'rgba(99,102,241,0.1)',
+      color: isSim ? '#dc2626' : 'var(--primary)',
+      border: `1px solid ${isSim ? 'rgba(239,68,68,0.3)' : 'rgba(99,102,241,0.3)'}`,
     }}>
-      {isHist ? 'HISTORICAL FORENSIC' : 'SIMULATION'}
+      {TYPE_LABEL[type].toUpperCase()}
     </span>
   );
 }

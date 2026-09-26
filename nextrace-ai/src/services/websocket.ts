@@ -5,8 +5,7 @@ import type { WSMessage, PacketEvent, TemporalState, SessionStatus } from '@/typ
 import type { ForecastResult } from '@/types/forecast';
 import { useLiveStore } from '@/store/liveStore';
 import { useForecastStore } from '@/store/forecastStore';
-import { useAlertStore } from '@/store/alertStore';
-import { useAppStore } from '@/store/appStore';
+import { receiveAlert } from '@/services/activityAlerts';
 
 const WS_BASE = import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000';
 const WS_URL  = `${WS_BASE}/ws/live`;
@@ -116,19 +115,8 @@ class WebSocketService {
           useForecastStore.getState().setForecast(msg.data as unknown as ForecastResult);
           break;
         case 'new_alert':
-          if (msg.data && msg.data.id) {
-            const currentAlerts = useAlertStore.getState().alerts;
-            if (!currentAlerts.some(a => a.id === msg.data.id)) {
-              useAlertStore.setState({
-                alerts: [msg.data, ...currentAlerts],
-                totalAlerts: (useAlertStore.getState().totalAlerts || 0) + 1,
-              });
-            }
-            // Push directly into notification panel (no bottom-toast flood)
-            useAppStore.getState().addAlertNotification(msg.data);
-          }
-          // Only fetch stats automatically to keep KPIs updated, do not fetchAlerts to prevent UI jumping
-          useAlertStore.getState().fetchStats();
+          // One message per grouped-activity alert (never per packet): popup + notification, deduped by id
+          if (msg.data && msg.data.id) receiveAlert(msg.data);
           break;
         case 'ping':
           break;

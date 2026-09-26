@@ -10,9 +10,14 @@ import {
 } from 'recharts';
 import { useLiveStore } from '@/store/liveStore';
 import { useAppStore } from '@/store/appStore';
+import { useForecastStore } from '@/store/forecastStore';
 import { apiService } from '@/services/api';
 import { wsService } from '@/services/websocket';
 import type { DemoMode, WindowSecs } from '@/types/live';
+import { significantActivities } from '@/lib/activityGrouping';
+import { ActivityList } from '@/components/activity/ActivityList';
+import { ActivityTimeline } from '@/components/activity/ActivityTimeline';
+import { ActivityInspector } from '@/components/activity/ActivityInspector';
 
 
 const WINDOW_OPTIONS: WindowSecs[] = [5, 10, 15, 30, 60];
@@ -40,6 +45,7 @@ function generateZeroChartData(rangeMinutes: number) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export function LiveMonitoringPage() {
+  const navigate = useNavigate();
   const { addToast } = useAppStore();
   const {
     wsConnected, session, backendAvailable, setBackendAvailable,
@@ -47,7 +53,13 @@ export function LiveMonitoringPage() {
     currentTemporal, temporalHistory,
     searchQuery, setSearchQuery,
     windowSeconds, mode, setWindowSeconds, setMode,
+    activities, trafficSummary, runId,
   } = useLiveStore();
+  const { currentForecast } = useForecastStore();
+  const [inspectId, setInspectId] = useState<string | null>(null);
+  const grouped = useMemo(() => significantActivities(activities), [activities]);
+  const inspected = inspectId ? activities.find(a => a.id === inspectId) ?? null : null;
+  const alertCount = grouped.reduce((n, a) => n + a.alertIds.length, 0);
 
   const isRunning = session?.running ?? false;
   const [starting, setStarting] = useState(false);
@@ -143,6 +155,8 @@ export function LiveMonitoringPage() {
   async function handleStart() {
     setStarting(true);
     try {
+      // Every start is a new session run: activities, alerts context and forecast begin empty.
+      useLiveStore.getState().beginRun();
       const res = await apiService.startLive({ mode, window_seconds: windowSeconds });
       useLiveStore.getState().setSession(res.status);
       wsService.connect();
@@ -331,7 +345,7 @@ export function LiveMonitoringPage() {
           {/* Session stats */}
           {session && (
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-              <StatChip label="Session ID" value={session.session_id} mono />
+              <StatChip label="Session" value={runId ?? session.session_id} mono />
               <StatChip label="Packets" value={session.packet_count.toLocaleString()} />
               <StatChip label="Benign" value={session.benign_count.toLocaleString()} color="var(--color-live)" />
               <StatChip label="Suspicious" value={session.suspicious_count.toLocaleString()} color="var(--color-critical)" />
@@ -339,6 +353,44 @@ export function LiveMonitoringPage() {
               <StatChip label="Window" value={`${session.window_seconds}s`} />
             </div>
           )}
+        </div>
+
+        {/* ── Grouped activities + Attack Timeline ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: 20 }}>
+          <div style={panelStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Detected Activities</h3>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {trafficSummary.suspicious.toLocaleString()} suspicious packets grouped into {grouped.length} activit{grouped.length === 1 ? 'y' : 'ies'} · {alertCount} alert{alertCount === 1 ? '' : 's'}
+                </div>
+              </div>
+              {isRunning && <PulseDot color="var(--color-live)" label="LIVE" />}
+            </div>
+            <ActivityList
+              activities={grouped}
+              live
+              onSelect={a => setInspectId(a.id)}
+              maxHeight={320}
+              emptyText={isRunning ? 'No suspicious activity grouped yet — benign traffic is summarised in the chart below.' : 'Start a live session to group suspicious traffic into activities.'}
+            />
+          </div>
+
+          <div style={{ ...panelStyle, padding: '14px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Attack Timeline</h3>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Activity-level events · newest at bottom</span>
+            </div>
+            <ActivityTimeline
+              activities={grouped}
+              onSelect={a => setInspectId(a.id)}
+              predicted={currentForecast && !currentForecast.is_benign && isRunning
+                ? { stage: currentForecast.predicted_next_stage, target: currentForecast.target }
+                : null}
+              maxHeight={320}
+              emptyText="Major events appear here when an activity is detected, escalates or changes shape."
+            />
+          </div>
         </div>
 
         {/* ── Filters + Packet Table ── */}
@@ -407,7 +459,7 @@ export function LiveMonitoringPage() {
         </div>
 
         {/* ── Two-column: Chart + Temporal State ── */}
-        <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+        <div style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 20 }}>
           {/* Live Chart */}
           <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
@@ -478,9 +530,26 @@ export function LiveMonitoringPage() {
         </div>
 
       </div>
+
+      {inspected && (
+        <ActivityInspector
+          activity={inspected}
+          allActivities={grouped}
+          live
+          sourceNote="Traffic comes from the live demo generator (synthetic packets)."
+          onSelect={a => setInspectId(a.id)}
+          onInvestigate={ip => navigate(`/investigation?ip=${encodeURIComponent(ip)}&source=entity`)}
+          onClose={() => setInspectId(null)}
+        />
+      )}
     </div>
   );
 }
+
+const panelStyle: React.CSSProperties = {
+  background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)',
+  boxShadow: 'var(--shadow-sm)', overflow: 'hidden', minWidth: 0,
+};
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 

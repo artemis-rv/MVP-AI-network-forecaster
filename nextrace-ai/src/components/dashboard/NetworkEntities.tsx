@@ -1,22 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, Shield, Server, Activity } from 'lucide-react';
-import type { LiveNode } from '@/types/live';
-import { useAlertStore } from '@/store/alertStore';
-import { deriveDashboardEntities, DashboardEntity, EntityRiskLevel } from '@/utils/entityRisk';
+import { ShieldAlert, Shield, Server, Activity, ShieldCheck } from 'lucide-react';
+import type { DashboardEntity, EntityRiskLevel } from '@/utils/entityRisk';
 
 export interface NetworkEntitiesProps {
-  nodes?: LiveNode[];
-  edges?: any[];
-  entities?: DashboardEntity[];
+  /** Entities derived from grouped activities of the current live session (see utils/entityRisk). */
+  entities: DashboardEntity[];
+  sessionLabel?: string | null;
   riskFilter?: 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW';
   onRiskFilterChange?: (filter: 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW') => void;
   highlighted?: boolean;
 }
 
 export function NetworkEntities({
-  nodes: propNodes,
-  entities: propEntities,
+  entities,
+  sessionLabel,
   riskFilter: externalFilter,
   onRiskFilterChange,
   highlighted,
@@ -24,24 +22,16 @@ export function NetworkEntities({
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [internalFilter, setInternalFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
-  const { alerts } = useAlertStore();
 
   const activeFilter = externalFilter !== undefined ? externalFilter : internalFilter;
   const setFilter = onRiskFilterChange || setInternalFilter;
 
-  // Derive entities dynamically from live nodes and alerts if not passed directly
-  const derived = propEntities ? {
-    entities: propEntities,
-    counts: {
-      total: propEntities.length,
-      high: propEntities.filter(e => e.riskLevel === 'High').length,
-      medium: propEntities.filter(e => e.riskLevel === 'Medium').length,
-      low: propEntities.filter(e => e.riskLevel === 'Low').length,
-    }
-  } : deriveDashboardEntities(propNodes, alerts);
-
-  const { entities, counts } = derived;
-  const isLiveData = !!propNodes && propNodes.length > 0;
+  const counts = {
+    total: entities.length,
+    high: entities.filter(e => e.riskLevel === 'High').length,
+    medium: entities.filter(e => e.riskLevel === 'Medium').length,
+    low: entities.filter(e => e.riskLevel === 'Low').length,
+  };
 
   // Filter by risk and search
   const filteredNodes = entities.filter(n => {
@@ -63,6 +53,27 @@ export function NetworkEntities({
       case 'internal': default: return <Shield size={14} color="var(--primary)" />;
     }
   };
+
+  if (entities.length === 0) {
+    return (
+      <div id="top-risk-entities" style={{
+        background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', padding: '20px',
+        border: highlighted ? '1.5px solid var(--color-critical)' : '1px solid var(--border-default)',
+        boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 420,
+      }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Top Risk Entities</h3>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-muted)', padding: '32px 0', textAlign: 'center' }}>
+          <ShieldCheck size={28} color="var(--color-live)" />
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>No suspicious entities detected</div>
+          <div style={{ fontSize: 12, maxWidth: 300 }}>
+            {sessionLabel
+              ? 'Hosts appear here only after they take part in a grouped suspicious activity.'
+              : 'Start Live Monitoring — entities are scored from observed suspicious activity, not from the topology.'}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const getRiskBadge = (level: EntityRiskLevel) => {
     if (level === 'High') {
@@ -131,7 +142,7 @@ export function NetworkEntities({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-              {isLiveData ? 'Active Network Entities' : 'Top Risk Entities'}
+              Top Risk Entities
             </h3>
             {counts.high > 0 && (
               <span style={{
@@ -147,9 +158,9 @@ export function NetworkEntities({
             )}
           </div>
           <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-            {counts.high > 0
-              ? `${counts.high} high-risk ${counts.high === 1 ? 'entity' : 'entities'} requiring immediate attention`
-              : 'Highest priority entities requiring attention'}
+            {sessionLabel
+              ? `Scored from observed activity · session ${sessionLabel}`
+              : 'Scored from observed activity in the live session'}
           </p>
         </div>
 
@@ -223,9 +234,9 @@ export function NetworkEntities({
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
               <th style={{ padding: '8px 12px', fontWeight: 600 }}>Entity (IP)</th>
-              <th style={{ padding: '8px 12px', fontWeight: 600 }}>Role</th>
               <th style={{ padding: '8px 12px', fontWeight: 600 }}>Risk</th>
               <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
+              <th style={{ padding: '8px 12px', fontWeight: 600 }}>Evidence</th>
             </tr>
           </thead>
           <tbody>
@@ -247,8 +258,10 @@ export function NetworkEntities({
                     <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{node.ip}</span>
                   </div>
                 </td>
-                <td style={{ padding: '9px 12px', color: 'var(--text-secondary)' }}>{node.label}</td>
-                <td style={{ padding: '9px 12px' }}>{getRiskBadge(node.riskLevel)}</td>
+                <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                  {getRiskBadge(node.riskLevel)}
+                  <span style={{ marginLeft: 6, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{node.riskScore}</span>
+                </td>
                 <td style={{ padding: '9px 12px' }}>
                   <span style={{ 
                     fontSize: 11, 
@@ -258,11 +271,15 @@ export function NetworkEntities({
                     {node.status}
                   </span>
                 </td>
+                <td style={{ padding: '9px 12px', fontSize: 11, color: 'var(--text-secondary)' }} title={node.reasons.join('\n')}>
+                  {node.topActivity}
+                  {node.threatCount > 1 && <span style={{ color: 'var(--text-muted)' }}> +{node.threatCount - 1}</span>}
+                </td>
               </tr>
             )) : (
               <tr>
                 <td colSpan={4} style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  No entities found {activeFilter !== 'ALL' ? `with ${activeFilter.toLowerCase()} risk` : ''} {searchTerm ? `matching "${searchTerm}"` : ''}
+                  No suspicious entities {activeFilter !== 'ALL' ? `with ${activeFilter.toLowerCase()} risk` : ''} {searchTerm ? `matching "${searchTerm}"` : ''}
                 </td>
               </tr>
             )}

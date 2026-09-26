@@ -1,21 +1,42 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Target, Clock, Shield,
+  Target, Clock, Shield, FileText, Radio,
   ChevronRight, AlertTriangle, Search, Key, ArrowLeftRight, UploadCloud, CheckCircle2, Pause, TrendingUp,
 } from 'lucide-react';
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
+import { useAlertStore } from '@/store/alertStore';
+import { useFindingsStore } from '@/store/findingsStore';
 import { apiService } from '@/services/api';
 import type { ForecastResult } from '@/types/forecast';
 import { ATTACK_STAGES, STAGE_COLORS } from '@/types/forecast';
+import { significantActivities } from '@/lib/activityGrouping';
+import { buildLiveSessionReport } from '@/lib/reportBuilder';
+import { ActivityList } from '@/components/activity/ActivityList';
+import { ActivityInspector } from '@/components/activity/ActivityInspector';
 
 // ─────────────────────────────────────────────────────────────────────────────
 export function AttackPredictionPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentForecast, selectedStage, setSelectedStage, setForecast, setLoading } = useForecastStore();
-  const { session } = useLiveStore();
+  const { session, runId, activities, currentTemporal, trafficSummary, windowSeconds, runStartedAt } = useLiveStore();
+  const { alerts } = useAlertStore();
+  const { saveLocalReport } = useFindingsStore();
   const isLive = session?.running ?? false;
+  const grouped = useMemo(() => significantActivities(activities), [activities]);
+  const [inspectId, setInspectId] = useState<string | null>(null);
+  const inspected = inspectId ? grouped.find(a => a.id === inspectId) ?? null : null;
+  const requestedSession = searchParams.get('session');
+
+  function handleGenerateReport() {
+    const report = buildLiveSessionReport({
+      runId, runStartedAt, session, windowSeconds, activities, alerts,
+      forecast: currentForecast, temporal: currentTemporal, traffic: trafficSummary,
+    });
+    navigate(`/reports/${saveLocalReport(report)}`);
+  }
 
   // Fetch forecast on mount (REST fallback before WS fires)
   useEffect(() => {
@@ -45,8 +66,20 @@ export function AttackPredictionPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <DemoBadge label="SIMULATED ANALYTICS" color="var(--color-warning)" />
           <DemoBadge label={forecast?.demo_label ?? 'Deterministic demo prediction — not a trained ML model'} color="var(--text-muted)" small />
+          <button
+            id="generate-live-report-btn"
+            onClick={handleGenerateReport}
+            disabled={!runId}
+            title={runId ? 'Build a report from the current session state' : 'Start a live session first'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700,
+              padding: '8px 16px', borderRadius: 8, border: 'none', color: 'white',
+              background: 'var(--primary)', cursor: runId ? 'pointer' : 'not-allowed', opacity: runId ? 1 : 0.5,
+            }}
+          >
+            <FileText size={13} /> Generate Report
+          </button>
         </div>
       </div>
 
@@ -59,8 +92,8 @@ export function AttackPredictionPage() {
           <p style={{ textAlign: 'center', maxWidth: 450, lineHeight: 1.6, fontSize: 14 }}>
             To view attack predictions, please start the live monitoring network first. The prediction engine requires real-time traffic features to forecast the next stage of an attack.
           </p>
-          <button 
-            onClick={() => window.location.href='/live'} 
+          <button
+            onClick={() => navigate('/live-monitoring')}
             style={{ marginTop: 12, padding: '10px 20px', borderRadius: 8, background: 'var(--primary)', color: 'white', fontWeight: 600, border: 'none', cursor: 'pointer' }}
           >
             Go to Live Monitoring
@@ -68,6 +101,20 @@ export function AttackPredictionPage() {
         </div>
       ) : (
         <>
+          {/* ── Session context: the same observed state that drives the dashboard, alerts and reports ── */}
+          <div style={{ ...cardStyle, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Radio size={15} color={isLive ? 'var(--color-live)' : 'var(--text-muted)'} />
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, flex: 1, minWidth: 240 }}>
+              Prediction based on the latest observed network state of session{' '}
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>{runId ?? session?.session_id ?? '—'}</strong>
+              {isLive ? '' : ' (stopped)'} · {trafficSummary.total.toLocaleString()} packets observed ·{' '}
+              {grouped.length} grouped activit{grouped.length === 1 ? 'y' : 'ies'}
+              {requestedSession && runId && requestedSession !== runId && (
+                <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}> · note: opened for {requestedSession}, a newer session is now active</span>
+              )}
+            </span>
+          </div>
+
           {/* ── Attack Path Forecaster Forward Simulation Callout ── */}
           <div style={{
             background: 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.06))',
@@ -132,9 +179,37 @@ export function AttackPredictionPage() {
             <ForecastTimeline forecast={forecast} />
             <EvidencePanel forecast={forecast} isBenign={isBenign} />
           </div>
+
+          {/* ── Observed activities feeding the forecast ── */}
+          <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Observed Activities</h3>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                Grouped suspicious activity from the same session — click for deep inspection
+              </div>
+            </div>
+            <ActivityList
+              activities={grouped}
+              live
+              onSelect={a => setInspectId(a.id)}
+              maxHeight={260}
+              emptyText="No suspicious activity observed in this session."
+            />
+          </div>
         </>
       )}
       </div>
+
+      {inspected && (
+        <ActivityInspector
+          activity={inspected}
+          allActivities={grouped}
+          live
+          onSelect={a => setInspectId(a.id)}
+          onInvestigate={ip => navigate(`/investigation?ip=${encodeURIComponent(ip)}&source=forecast`)}
+          onClose={() => setInspectId(null)}
+        />
+      )}
     </div>
   );
 }

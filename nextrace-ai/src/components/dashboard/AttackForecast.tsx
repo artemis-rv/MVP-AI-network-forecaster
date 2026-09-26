@@ -1,27 +1,31 @@
+import { useNavigate } from 'react-router-dom';
 import { useForecastStore } from '@/store/forecastStore';
 import { useLiveStore } from '@/store/liveStore';
-import { forecastStages, forecastSummary } from '@/data/mockData';
-import { ArrowRight, Target, Clock, BarChart2, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Target, Clock, BarChart2, AlertTriangle, ArrowRight, Radio } from 'lucide-react';
 import type { ForecastResult } from '@/types/forecast';
 import { STAGE_COLORS } from '@/types/forecast';
 
+// Dashboard summary of the single forecasting implementation (backend engine → forecastStore).
+// The full view is the Attack Prediction page; this card links there with the session context.
 export function AttackForecast() {
   const { currentForecast } = useForecastStore();
-  const { session } = useLiveStore();
-  const isLive = session?.running ?? false;
+  const { session, runId } = useLiveStore();
+  const hasForecast = !!currentForecast && currentForecast.current_stage !== 'No Active Session';
 
-  // Use live forecast when a session is active, else fall back to static demo data
-  if (isLive && currentForecast) {
-    return <LiveAttackForecast forecast={currentForecast} />;
+  if (runId && hasForecast) {
+    return <LiveAttackForecast forecast={currentForecast} runId={runId} running={session?.running ?? false} />;
   }
-  return <MockAttackForecast />;
+  return <NoForecast />;
 }
 
 // ─── Live forecast (from backend engine) ──────────────────────────────────────
-function LiveAttackForecast({ forecast }: { forecast: ForecastResult }) {
+function LiveAttackForecast({ forecast, runId, running }: { forecast: ForecastResult; runId: string; running: boolean }) {
+  const navigate = useNavigate();
+  const { currentTemporal } = useLiveStore();
   const { current_stage, predicted_next_stage, confidence, target, time_window, is_benign, stage_probabilities } = forecast;
   const currentColors = STAGE_COLORS[current_stage] ?? STAGE_COLORS['No Active Session'];
   const nextColors    = STAGE_COLORS[predicted_next_stage] ?? STAGE_COLORS['No Active Session'];
+  const windowLabel = windowEndLabel(currentTemporal?.window_end);
 
   return (
     <div style={containerStyle}>
@@ -30,15 +34,16 @@ function LiveAttackForecast({ forecast }: { forecast: ForecastResult }) {
         <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
           Attack Forecast (Next Steps)
         </h3>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <LiveBadge />
-          <DemoBadge />
-        </div>
+        {running ? <LiveBadge /> : <StoppedBadge />}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-        <AlertTriangle size={11} style={{ flexShrink: 0 }} />
-        <span>Deterministic demo prediction — not a real ML model output</span>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+        <Radio size={11} style={{ flexShrink: 0, marginTop: 2 }} />
+        <span>
+          Based on the latest observed network state of session{' '}
+          <strong style={{ fontFamily: 'var(--font-mono)' }}>{runId}</strong>
+          {windowLabel ? ` (window ending ${windowLabel})` : ''} · rule-based forecast
+        </span>
       </div>
 
       {/* Current + Next */}
@@ -86,84 +91,46 @@ function LiveAttackForecast({ forecast }: { forecast: ForecastResult }) {
         <SumCard icon={<Clock size={13} />} label="Time Window" value={time_window} />
         <SumCard icon={<BarChart2 size={13} />} label="Confidence" value={`${Math.round(confidence * 100)}%`} />
       </div>
+
+      <button onClick={() => navigate(`/attack-prediction?session=${encodeURIComponent(runId)}`)} style={ctaStyle}>
+        View Attack Prediction <ArrowRight size={14} />
+      </button>
     </div>
   );
 }
 
-// ─── Mock / fallback (no live session) ────────────────────────────────────────
-function MockAttackForecast() {
+// ─── No live session yet — never show a fabricated forecast ──────────────────
+function NoForecast() {
+  const navigate = useNavigate();
   return (
     <div style={containerStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
-          Attack Forecast (Next Steps)
-        </h3>
-        <DemoBadge />
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-        <AlertTriangle size={11} style={{ flexShrink: 0 }} />
-        <span>Deterministic demo prediction — not a real ML model output</span>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'nowrap', overflowX: 'auto', padding: '4px 0' }}>
-        {forecastStages.map((stage, i) => (
-          <div key={stage.id} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <ForecastStageBubble stage={stage} />
-            {i < forecastStages.length - 1 && (
-              <ArrowRight
-                size={16}
-                color={stage.current || stage.completed ? 'var(--color-critical)' : 'var(--border-default)'}
-                style={{
-                  flexShrink: 0, margin: '0 4px',
-                  filter: stage.current || stage.completed ? 'drop-shadow(0 0 6px var(--color-critical-glow))' : 'none',
-                  animation: stage.current ? 'pulse-glow 2s infinite' : 'none'
-                }}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {forecastStages.map((stage) => (
-          <div key={stage.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{stage.label}</span>
-              <span style={{ fontWeight: 700, color: stage.current ? 'var(--color-critical)' : stage.completed ? 'var(--color-warning)' : 'var(--text-muted)' }}>
-                {stage.probability}%
-              </span>
-            </div>
-            <div style={{ height: 6, background: 'var(--bg-input)', borderRadius: 999, overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', width: `${stage.probability}%`, borderRadius: 999,
-                background: stage.current || stage.completed
-                  ? 'var(--color-critical)'
-                  : 'var(--border-default)',
-                transition: 'width 1s ease',
-              }} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 12, padding: '14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <SumCard icon={<BarChart2 size={13} />} label="Highest Risk Path" value={`Lateral Movement → Data Exfil`} critical />
-          <SumCard icon={<Target size={13} />} label="Likely Target" value={forecastSummary.target} />
+      <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+        Attack Forecast (Next Steps)
+      </h3>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, textAlign: 'center', color: 'var(--text-muted)', padding: '24px 0' }}>
+        <AlertTriangle size={26} color="var(--color-warning)" />
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>No forecast yet</div>
+        <div style={{ fontSize: 12, maxWidth: 320, lineHeight: 1.5 }}>
+          Predictions are computed from the latest observed network state. Start Live Monitoring and wait for the first temporal window.
         </div>
-        <div style={{ background: 'rgba(239,68,68,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <ShieldAlert size={12} color="var(--color-critical)" />
-            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-critical)', textTransform: 'uppercase' }}>Recommended Action</span>
-          </div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-            Isolate target ({forecastSummary.target}) and revoke active session tokens immediately.
-          </div>
-        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <button onClick={() => navigate('/live-monitoring')} style={{ ...ctaStyle, background: 'var(--bg-workspace)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', boxShadow: 'none' }}>
+          Go to Live Monitoring
+        </button>
+        <button onClick={() => navigate('/attack-prediction')} style={ctaStyle}>
+          View Attack Prediction <ArrowRight size={14} />
+        </button>
       </div>
     </div>
   );
+}
+
+function windowEndLabel(raw: number | string | undefined): string | null {
+  if (raw === undefined || raw === null) return null;
+  const num = Number(raw);
+  const d = Number.isNaN(num) ? new Date(String(raw)) : new Date(num < 1e11 ? num * 1000 : num);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleTimeString('en-US', { hour12: false });
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -175,31 +142,6 @@ function StageChip({ label, stage, colors, isPredicted }: { label: string; stage
         {isPredicted && <span style={{ fontSize: 10 }}>→</span>}
         <span style={{ fontSize: 12, fontWeight: 800, color: colors.text, lineHeight: 1.2 }}>{stage}</span>
       </div>
-    </div>
-  );
-}
-
-function ForecastStageBubble({ stage }: { stage: typeof forecastStages[0] }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 80 }}>
-      <div style={{
-        width: 36, height: 36, borderRadius: '50%',
-        border: `2px solid ${stage.current || stage.completed ? 'var(--color-critical)' : 'var(--border-default)'}`,
-        background: stage.current || stage.completed ? 'var(--color-critical-light)' : 'white',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: stage.current || stage.completed ? '0 0 12px var(--color-critical-glow)' : 'none',
-        transition: 'all 0.3s', position: 'relative',
-      }}>
-        {stage.current && (
-          <div style={{ position: 'absolute', inset: -4, borderRadius: '50%', border: '2px solid rgba(239,68,68,0.3)', animation: 'pulse-glow 2s infinite' }} />
-        )}
-        <span style={{ fontSize: 10, fontWeight: 800, color: stage.current || stage.completed ? 'var(--color-critical)' : 'var(--text-muted)' }}>
-          {stage.probability}%
-        </span>
-      </div>
-      <span style={{ fontSize: 10, fontWeight: stage.current || stage.completed ? 700 : 500, color: stage.current || stage.completed ? 'var(--color-critical)' : 'var(--text-muted)', textAlign: 'center', lineHeight: 1.3 }}>
-        {stage.label}
-      </span>
     </div>
   );
 }
@@ -226,13 +168,20 @@ function LiveBadge() {
   );
 }
 
-function DemoBadge() {
+function StoppedBadge() {
   return (
-    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', color: 'var(--color-warning)', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 999, padding: '2px 8px' }}>
-      DEMO
+    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: 'var(--bg-input)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
+      SESSION STOPPED
     </span>
   );
 }
+
+const ctaStyle: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  padding: '9px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+  background: 'linear-gradient(135deg, var(--primary), var(--secondary))', color: 'white',
+  fontSize: 12, fontWeight: 700, boxShadow: '0 2px 10px rgba(99,102,241,0.3)',
+};
 
 const containerStyle: React.CSSProperties = {
   background: 'var(--bg-card)',

@@ -4,6 +4,8 @@ import { Search, Bell, ChevronDown, Moon, Sun, X, User, Settings, LogOut, ArrowR
 import { useAppStore, AppNotification } from '@/store/appStore';
 import { useLiveStore } from '@/store/liveStore';
 import { useAlertStore } from '@/store/alertStore';
+import { apiService } from '@/services/api';
+import { wsService } from '@/services/websocket';
 
 export function TopBar() {
   const navigate = useNavigate();
@@ -26,8 +28,15 @@ export function TopBar() {
   const { session } = useLiveStore();
   const isLiveRunning = session?.running ?? false;
 
-  // Load alerts and sync notifications once on mount
+  // Load alerts and sync notifications once on mount; rejoin a running live session after a page reload
   useEffect(() => {
+    apiService.getLiveStatus()
+      .then((status) => {
+        useLiveStore.getState().setSession(status);
+        // TopBar mounts once per page load, so no socket exists yet — connect whenever a session is running
+        if (status.running) wsService.connect();
+      })
+      .catch(() => { /* backend offline — Live Monitoring shows the retry banner */ });
     fetchAlerts().then(() => {
       const loaded = useAlertStore.getState().alerts;
       if (loaded.length > 0) {

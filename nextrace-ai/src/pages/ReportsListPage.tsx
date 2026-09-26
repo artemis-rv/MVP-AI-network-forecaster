@@ -44,7 +44,7 @@ export function ReportsListPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                     <AlertCircle size={32} color="var(--border-default)" />
                     <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)' }}>No reports generated</div>
-                    <div style={{ fontSize: 13 }}>Run a simulation or historical analysis to generate reports.</div>
+                    <div style={{ fontSize: 13 }}>Generate a report from Attack Prediction, Historical PCAP Analysis or Forensic Analysis.</div>
                   </div>
                 </td>
               </tr>
@@ -52,10 +52,10 @@ export function ReportsListPage() {
               reportList.map((r, i) => (
                 <tr key={r.report_id} style={{ borderBottom: i === reportList.length - 1 ? 'none' : '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
                   <td style={{ padding: '16px', fontWeight: 700, color: 'var(--primary)' }}>{r.report_id}</td>
-                  <td style={{ padding: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.title || (r.report_type === 'simulation' ? 'Simulation Report' : 'Historical Analysis Report')}</td>
+                  <td style={{ padding: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.title || (r.report_type === 'simulation' ? 'Simulation Report' : r.report_type === 'live' ? 'Live Session Report' : 'Historical Analysis Report')}</td>
                   <td style={{ padding: '16px' }}>
                     <span style={{ background: 'var(--bg-workspace)', padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      {r.report_type}
+                      {r.report_type === 'live' ? 'live session' : r.report_type}
                     </span>
                   </td>
                   <td style={{ padding: '16px', color: 'var(--text-muted)' }}>
@@ -74,6 +74,11 @@ export function ReportsListPage() {
                       </button>
                       <button
                         onClick={async () => {
+                          const local = useFindingsStore.getState().localReports[r.report_id];
+                          if (local) {
+                            generateSecurityReportPdf(local);
+                            return;
+                          }
                           try {
                             const fullReport = await apiService.getReport(r.report_id);
                             generateSecurityReportPdf(fullReport);

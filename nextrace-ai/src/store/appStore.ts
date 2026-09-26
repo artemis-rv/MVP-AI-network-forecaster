@@ -356,7 +356,7 @@ export const useAppStore = create<AppState>()(
       toasts: [],
       addToast: (message, type = 'info') => {
         const id = Math.random().toString(36).slice(2);
-        set((state) => ({ toasts: [...state.toasts, { id, message, type }] }));
+        set((state) => ({ toasts: [...state.toasts, { id, message, type }].slice(-4) }));
         setTimeout(() => get().removeToast(id), 4000);
       },
       removeToast: (id) =>

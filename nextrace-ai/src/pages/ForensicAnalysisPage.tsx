@@ -12,6 +12,9 @@ import {
 } from 'lucide-react';
 import { useForensicStore } from '@/store/forensicStore';
 import { useFindingsStore } from '@/store/findingsStore';
+import { useHistoricalStore } from '@/store/historicalStore';
+import { groupHistoricalEvents } from '@/lib/activityGrouping';
+import { buildHistoricalReport, forensicPartFrom } from '@/lib/reportBuilder';
 import type {
   EvidenceIntegrity, AntiForensicIndicator,
   Hypothesis, FinalAssessment, EvidenceSummary,
@@ -81,7 +84,7 @@ export function ForensicAnalysisPage() {
   const {
     status, progress, currentStage, error,
     integrity, evidenceSummary, antiForensicIndicators,
-    hypotheses, finalAssessment, isDemo, prototypeDisclaimer,
+    hypotheses, finalAssessment, isDemo,
     forensicId, startAnalysis, reset,
   } = useForensicStore();
 
@@ -104,12 +107,27 @@ export function ForensicAnalysisPage() {
     navigate('/historical-pcap');
   }
 
-  const { generateHistoricalReport, loading: reportLoading } = useFindingsStore();
+  const { generateHistoricalReport, saveLocalReport, loading: reportLoading } = useFindingsStore();
   const [reportError, setReportError] = useState<string | null>(null);
 
   async function handleGenerateReport() {
     if (!jobId) return;
     setReportError(null);
+    // Preferred: one structured report from the grouped evidence + forensic reasoning shown in the app.
+    const hist = useHistoricalStore.getState();
+    if (hist.currentJobId === jobId && hist.result) {
+      const report = buildHistoricalReport({
+        jobId,
+        filename: hist.jobMeta?.filename ?? integrity?.filename ?? '',
+        isDemo: hist.isDemo,
+        result: hist.result,
+        activities: groupHistoricalEvents(hist.result.suspicious_events),
+        forensic: forensicPartFrom(useForensicStore.getState(), jobId),
+      });
+      navigate(`/reports/${saveLocalReport(report)}`);
+      return;
+    }
+    // Fallback (e.g. page reloaded, historical result no longer in memory): backend-built report.
     const reportId = await generateHistoricalReport(jobId);
     if (reportId) {
       navigate(`/reports/${reportId}`);
@@ -183,9 +201,9 @@ export function ForensicAnalysisPage() {
       <div style={{ background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 10, padding: '10px 16px', fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 16 }}>
         <Info size={14} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 1 }}/>
         <span>
-          <strong style={{ color: 'var(--primary)' }}>Prototype Forensic Reasoning</strong> — All findings are deterministic heuristic indicators only.
-          Language is deliberately cautious. This is NOT a legally admissible report. Expert human review is required before acting on any finding.
-          {prototypeDisclaimer && <> {prototypeDisclaimer}</>}
+          <strong style={{ color: 'var(--primary)' }}>Prototype forensic reasoning</strong> — deterministic heuristics over the historical analysis.
+          Not legally admissible; expert review is required before acting on any finding.
+          {isDemo && <> Evidence comes from the synthetic demo capture.</>}
         </span>
       </div>
 
@@ -204,7 +222,6 @@ export function ForensicAnalysisPage() {
             indicators={antiForensicIndicators}
             hypotheses={hypotheses}
             finalAssessment={finalAssessment}
-            isDemo={isDemo}
           />
         )}
       </div>
@@ -278,67 +295,55 @@ function ForensicErrorView({ error, onBack }: { error: string | null; onBack: ()
 
 function ForensicResultView({
   integrity, evidenceSummary, indicators,
-  hypotheses, finalAssessment, isDemo,
+  hypotheses, finalAssessment,
 }: {
   integrity: EvidenceIntegrity;
   evidenceSummary: EvidenceSummary;
   indicators: AntiForensicIndicator[];
   hypotheses: Hypothesis[];
   finalAssessment: FinalAssessment;
-  isDemo: boolean;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 40 }}>
+      {/* Ordered for the responder: conclusion first, then reasoning, evidence, limitations, provenance. */}
 
-      {/* Demo/Simulated banner */}
-      {isDemo && (
-        <div style={{ background: 'rgba(245,158,11,0.08)', border: '1.5px solid rgba(245,158,11,0.4)', borderRadius: 12, padding: '12px 16px', fontSize: 12, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }}/>
-          <div>
-            <strong>SIMULATED EVIDENCE</strong> — All data in this forensic analysis is synthetically generated.
-            This does not represent a real incident, real network traffic, or real captured evidence.
-            No real packet captures, victims, or attackers are implied.
-          </div>
-        </div>
-      )}
-
-      {/* Section 1 — Evidence Integrity */}
-      <ForensicSection title="Evidence Integrity" icon={<Shield size={16}/>} subtitle="Cryptographic provenance metadata for this analysis">
-        <EvidenceIntegritySection integrity={integrity}/>
+      {/* 1 — Assessment (what happened, how confident) */}
+      <ForensicSection
+        title="Forensic Assessment"
+        icon={<CheckCircle size={16}/>}
+        subtitle="Overall conclusion, confidence and the evidence it rests on"
+      >
+        <FinalAssessmentSection assessment={finalAssessment}/>
       </ForensicSection>
 
-      {/* Section 2 — Evidence Summary */}
-      <ForensicSection title="Evidence Summary" icon={<FileText size={16}/>} subtitle="Observed network, temporal, and entity evidence derived from the historical result">
+      {/* 2 — Hypotheses (why) */}
+      <ForensicSection
+        title="Forensic Hypotheses"
+        icon={<Activity size={16}/>}
+        subtitle="Evidence-weighted hypotheses · expand for supporting and contradicting evidence"
+        badge={hypotheses.length > 0 ? { label: `${hypotheses.length} hypothes${hypotheses.length === 1 ? 'is' : 'es'}`, color: 'var(--primary)', bg: 'rgba(99,102,241,0.1)' } : undefined}
+      >
+        <HypothesesSection hypotheses={hypotheses}/>
+      </ForensicSection>
+
+      {/* 3 — Evidence (what supports it) */}
+      <ForensicSection title="Evidence Summary" icon={<FileText size={16}/>} subtitle="Network, temporal and entity evidence derived from the historical analysis">
         <EvidenceSummarySection summary={evidenceSummary}/>
       </ForensicSection>
 
-      {/* Section 3 — Anti-Forensic Indicators */}
+      {/* 4 — Limitations */}
       <ForensicSection
-        title="Anti-Forensic / Evidence-Limitation Indicators"
+        title="Evidence Limitations & Anti-Forensic Indicators"
         icon={<Search size={16}/>}
-        subtitle="Evidence-coverage limitations and patterns that may warrant further investigation"
+        subtitle="Coverage gaps and patterns that limit or complicate the conclusions"
         badge={indicators.length > 0 ? { label: `${indicators.length} indicator${indicators.length !== 1 ? 's' : ''}`, color: '#d97706', bg: '#fef3c7' } : undefined}
       >
         <AntiForensicSection indicators={indicators}/>
       </ForensicSection>
 
-      {/* Section 4 — Hypotheses */}
-      <ForensicSection
-        title="Forensic Hypotheses"
-        icon={<Activity size={16}/>}
-        subtitle="Deterministic evidence-weighted hypotheses — prototype reasoning model"
-        badge={hypotheses.length > 0 ? { label: `${hypotheses.length} hypothesis`, color: 'var(--primary)', bg: 'rgba(99,102,241,0.1)' } : undefined}
-      >
-        <HypothesesSection hypotheses={hypotheses}/>
-      </ForensicSection>
-
-      {/* Section 5 — Final Assessment */}
-      <ForensicSection
-        title="Final Forensic Assessment"
-        icon={<CheckCircle size={16}/>}
-        subtitle="Prototype Forensic Reasoning — cautious deterministic assessment"
-      >
-        <FinalAssessmentSection assessment={finalAssessment}/>
+      {/* 5 — Provenance */}
+      <ForensicSection title="Evidence Integrity" icon={<Shield size={16}/>} subtitle="Capture provenance and hash for chain of custody">
+        <EvidenceIntegritySection integrity={integrity}/>
       </ForensicSection>
     </div>
   );
@@ -705,23 +710,6 @@ function FinalAssessmentSection({ assessment }: { assessment: FinalAssessment })
         </div>
       )}
 
-      {/* Anti-forensic notes */}
-      {assessment.anti_forensic_notes.length > 0 && assessment.anti_forensic_notes[0] !== 'No evidence-limitation or anti-forensic indicators detected.' && (
-        <div style={{ background: 'var(--bg-workspace)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '14px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>Evidence / Anti-Forensic Notes</div>
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {assessment.anti_forensic_notes.map((note, i) => (
-              <li key={i} style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>• {note}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Cautionary note */}
-      <div style={{ background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 10, padding: '10px 14px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, fontStyle: 'italic' }}>
-        <Info size={11} style={{ display: 'inline', marginRight: 5, color: 'var(--primary)' }}/>
-        {assessment.cautionary_note}
-      </div>
     </div>
   );
 }

@@ -167,7 +167,13 @@ export const apiService = {
     return request(`/api/alerts/${alertId}/resolve`, { method: 'POST' });
   },
 
-  async updateAlert(alertId: string, updates: { status?: AlertStatus; assigned_to?: string | null }): Promise<Alert> {
+  async updateAlert(alertId: string, updates: {
+    status?: AlertStatus;
+    assigned_to?: string | null;
+    event_count?: number;
+    last_seen?: string;
+    confidence?: number;
+  }): Promise<Alert> {
     return request(`/api/alerts/${alertId}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
@@ -178,7 +184,7 @@ export const apiService = {
     return request(`/api/alerts/${alertId}/reopen`, { method: 'POST' });
   },
 
-  async createAlert(data: Partial<Alert>): Promise<Alert> {
+  async createAlert(data: Partial<Alert> & { dedupe_key?: string }): Promise<Alert> {
     return request('/api/alerts', {
       method: 'POST',
       body: JSON.stringify(data),
