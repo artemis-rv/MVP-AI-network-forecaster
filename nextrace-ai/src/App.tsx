@@ -29,7 +29,7 @@ function ScrollToTop() {
 }
 
 function App() {
-  const { userRole } = useAppStore();
+  const { userRole, sidebarCollapsed } = useAppStore();
 
   if (!userRole) {
     return <LoginPage />;
@@ -38,7 +38,10 @@ function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <div className="app-layout">
+      <div 
+        className="app-layout"
+        style={{ '--sidebar-width': sidebarCollapsed ? '72px' : '240px' } as React.CSSProperties}
+      >
         <Sidebar />
         <div className="app-main">
           <TopBar />

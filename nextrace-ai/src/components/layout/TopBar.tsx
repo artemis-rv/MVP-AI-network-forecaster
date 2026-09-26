@@ -61,6 +61,7 @@ export function TopBar() {
         background: 'var(--topbar-bg)',
         backdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--topbar-border)',
+        transition: 'left var(--transition-base)',
         display: 'flex',
         alignItems: 'center',
         padding: '0 24px',

@@ -111,6 +111,10 @@ interface AppState {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
 
+  // Sidebar
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+
   // User menu
   userMenuOpen: boolean;
   setUserMenuOpen: (open: boolean) => void;
@@ -258,6 +262,9 @@ export const useAppStore = create<AppState>()(
 
       notifPanelOpen: false,
       setNotifPanelOpen: (open) => set({ notifPanelOpen: open }),
+
+      sidebarCollapsed: false,
+      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
     }),
     {
       name: 'app-storage',
@@ -267,6 +274,7 @@ export const useAppStore = create<AppState>()(
         currentUser: state.currentUser,
         users: state.users,
         activePage: state.activePage,
+        sidebarCollapsed: state.sidebarCollapsed,
       }),
     }
   )

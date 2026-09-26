@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Radio, TrendingUp, Bell, Search,
-  FileSearch, FileText, ShieldCheck, Activity, Zap, Target,
-  ChevronDown
+  LayoutGrid, Radar, TrendingUp, Bell, Search,
+  Database, FileText, ShieldCheck, Activity, Zap, Target,
+  ChevronDown, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useAlertStore } from '@/store/alertStore';
 
 export function Sidebar() {
-  const { setActivePage, userRole } = useAppStore();
+  const { setActivePage, userRole, sidebarCollapsed, setSidebarCollapsed } = useAppStore();
   const { stats, fetchStats } = useAlertStore();
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export function Sidebar() {
           id: 'adminOperations',
           title: 'Admin Operations',
           items: [
-            { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+            { id: 'overview', label: 'Dashboard', icon: LayoutGrid, path: '/' },
             { id: 'reports', label: 'View Reports', icon: FileText, path: '/reports' },
           ]
         },
@@ -49,8 +49,8 @@ export function Sidebar() {
           id: 'live',
           title: 'Live Operations',
           items: [
-            { id: 'overview', label: 'Overview', icon: LayoutDashboard, path: '/' },
-            { id: 'live-monitoring', label: 'Live Monitoring', icon: Radio, path: '/live-monitoring' },
+            { id: 'overview', label: 'Dashboard', icon: LayoutGrid, path: '/' },
+            { id: 'live-monitoring', label: 'Live Monitoring', icon: Radar, path: '/live-monitoring' },
             { id: 'investigation', label: 'Investigation', icon: Search, path: '/investigation' },
             { id: 'attack-prediction', label: 'Attack Prediction', icon: TrendingUp, path: '/attack-prediction' },
             { id: 'path-forecaster', label: 'Attack Path Forecaster', icon: Target, path: '/simulation' },
@@ -61,7 +61,7 @@ export function Sidebar() {
           id: 'historical',
           title: 'Forensic & Historical',
           items: [
-            { id: 'historical-pcap', label: 'Historical PCAP', icon: FileSearch, path: '/historical-pcap' },
+            { id: 'historical-pcap', label: 'Historical PCAP', icon: Database, path: '/historical-pcap' },
             { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
           ]
         }
@@ -84,16 +84,47 @@ export function Sidebar() {
         flexDirection: 'column',
         zIndex: 100,
         borderRight: '1px solid var(--sidebar-border)',
+        transition: 'width var(--transition-base)',
       }}
     >
-      {/* Brand */}
-      <div
+      <button
+        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         style={{
-          padding: '20px 16px 16px',
-          borderBottom: '1px solid var(--sidebar-border)',
+          position: 'absolute',
+          right: -12,
+          top: 24,
+          width: 24,
+          height: 24,
+          borderRadius: '50%',
+          background: 'var(--sidebar-bg)',
+          border: '1px solid var(--sidebar-border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 101,
+          color: 'var(--sidebar-text)',
+          padding: 0
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+        {sidebarCollapsed ? <ChevronRight size={14} strokeWidth={2} /> : <ChevronLeft size={14} strokeWidth={2} />}
+      </button>
+
+      {/* Brand & Header */}
+      <div
+        style={{
+          padding: '20px 16px',
+          borderBottom: '1px solid var(--sidebar-border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '77px', // Fixed height to prevent any layout shifts
+          boxSizing: 'border-box'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
           <div
             style={{
               width: 36,
@@ -107,9 +138,18 @@ export function Sidebar() {
               boxShadow: '0 4px 12px rgba(99,102,241,0.4)',
             }}
           >
-            <Zap size={18} color="white" strokeWidth={2.5} />
+            <Zap size={20} color="white" strokeWidth={1.5} />
           </div>
-          <div>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            opacity: sidebarCollapsed ? 0 : 1,
+            width: sidebarCollapsed ? 0 : 120,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            transition: 'all var(--transition-fast)'
+          }}>
             <div
               style={{
                 fontSize: 15,
@@ -129,7 +169,15 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
+      <nav style={{ 
+        flex: 1, 
+        padding: '12px', 
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-start',
+        gap: '20px'
+      }}>
         {filteredNavGroups.map((group) => (
           <div key={group.id} style={{ marginBottom: 12 }}>
             <div
@@ -143,17 +191,26 @@ export function Sidebar() {
                 marginBottom: 4,
               }}
             >
-              <span style={{ fontSize: 10, color: '#4a5568', fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+              <span style={{ 
+                fontSize: 10, color: '#4a5568', fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase',
+                opacity: sidebarCollapsed ? 0 : 1,
+                width: sidebarCollapsed ? 0 : 'auto',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                transition: 'all var(--transition-fast)'
+              }}>
                 {group.title}
               </span>
-              <ChevronDown
-                size={14}
-                color="#4a5568"
-                style={{
-                  transition: 'transform var(--transition-fast)',
-                  transform: expandedGroups[group.id] ? 'rotate(0deg)' : 'rotate(-90deg)',
-                }}
-              />
+              {!sidebarCollapsed && (
+                <ChevronDown
+                  size={14}
+                  color="#4a5568"
+                  style={{
+                    transition: 'transform var(--transition-fast)',
+                    transform: expandedGroups[group.id] ? 'rotate(0deg)' : 'rotate(-90deg)',
+                  }}
+                />
+              )}
             </div>
             <div
               style={{
@@ -163,7 +220,7 @@ export function Sidebar() {
               }}
             >
               {group.items.map((item) => (
-                <SidebarNavItem key={item.id} item={item} onNavigate={() => setActivePage(item.id)} />
+                <SidebarNavItem key={item.id} item={item} onNavigate={() => setActivePage(item.id)} collapsed={sidebarCollapsed} />
               ))}
             </div>
           </div>
@@ -171,8 +228,8 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom Status */}
-      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--sidebar-border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+      <div style={{ marginTop: 'auto', padding: sidebarCollapsed ? '16px 0' : '16px', borderTop: '1px solid var(--sidebar-border)', display: 'flex', flexDirection: 'column', alignItems: sidebarCollapsed ? 'center' : 'flex-start' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
           <div
             style={{
               width: 8,
@@ -183,15 +240,29 @@ export function Sidebar() {
               flexShrink: 0,
             }}
           />
-          <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>All Systems Operational</span>
+          <span style={{ 
+            fontSize: 11, color: '#10b981', fontWeight: 600,
+            opacity: sidebarCollapsed ? 0 : 1,
+            width: sidebarCollapsed ? 0 : 'auto',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            transition: 'all var(--transition-fast)'
+          }}>All Systems Operational</span>
         </div>
-        <div style={{ fontSize: 10, color: '#4a5568', fontWeight: 500 }}>v0.1.0 (Demo)</div>
+        <div style={{ 
+            fontSize: 10, color: '#4a5568', fontWeight: 500,
+            opacity: sidebarCollapsed ? 0 : 1,
+            height: sidebarCollapsed ? 0 : 'auto',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            transition: 'all var(--transition-fast)'
+        }}>v0.1.0 (Demo)</div>
       </div>
     </aside>
   );
 }
 
-function SidebarNavItem({ item, onNavigate }: { item: any; onNavigate: () => void }) {
+function SidebarNavItem({ item, onNavigate, collapsed }: { item: any; onNavigate: () => void; collapsed: boolean }) {
   const location = useLocation();
   const isActive = item.path === '/'
     ? location.pathname === '/'
@@ -201,20 +272,24 @@ function SidebarNavItem({ item, onNavigate }: { item: any; onNavigate: () => voi
     <NavLink
       to={item.path}
       onClick={onNavigate}
+      title={collapsed ? item.label : undefined}
       style={{ textDecoration: 'none', display: 'block', marginBottom: '2px' }}
     >
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          padding: '9px 10px',
+          gap: collapsed ? 0 : '12px',
+          padding: '10px 12px',
+          justifyContent: collapsed ? 'center' : 'flex-start',
           borderRadius: 8,
           cursor: 'pointer',
           position: 'relative',
           transition: 'all var(--transition-fast)',
           background: isActive ? 'var(--sidebar-active-bg)' : 'transparent',
           boxShadow: isActive ? `inset 0 0 0 1px rgba(99,102,241,0.3), 0 0 12px var(--sidebar-active-glow)` : 'none',
+          boxSizing: 'border-box',
+          width: '100%'
         }}
         onMouseEnter={(e) => {
           if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'var(--sidebar-bg-hover)';
@@ -237,37 +312,53 @@ function SidebarNavItem({ item, onNavigate }: { item: any; onNavigate: () => voi
             }}
           />
         )}
-        <item.icon
-          size={16}
-          color={isActive ? '#818cf8' : '#4a5568'}
-          strokeWidth={isActive ? 2.5 : 2}
-        />
+        
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <item.icon
+            size={20}
+            color={isActive ? '#818cf8' : '#4a5568'}
+            strokeWidth={1.5}
+            style={{ flexShrink: 0 }}
+          />
+          {'badge' in item && item.badge && (
+            <span
+              style={{
+                position: 'absolute',
+                top: -4,
+                right: -6,
+                width: 16,
+                height: 16,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 9,
+                fontWeight: 700,
+                background: 'var(--color-critical)',
+                color: 'white',
+                pointerEvents: 'none'
+              }}
+            >
+              {item.badge}
+            </span>
+          )}
+        </div>
+
         <span
           style={{
             fontSize: 13,
             fontWeight: isActive ? 600 : 500,
             color: isActive ? 'white' : 'var(--sidebar-text)',
             flex: 1,
+            opacity: collapsed ? 0 : 1,
+            width: collapsed ? 0 : 'auto',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            transition: 'all var(--transition-fast)',
           }}
         >
           {item.label}
         </span>
-        {'badge' in item && item.badge && (
-          <span
-            style={{
-              background: 'var(--color-critical)',
-              color: 'white',
-              fontSize: 10,
-              fontWeight: 700,
-              padding: '1px 6px',
-              borderRadius: 999,
-              minWidth: 18,
-              textAlign: 'center',
-            }}
-          >
-            {item.badge}
-          </span>
-        )}
       </div>
     </NavLink>
   );
