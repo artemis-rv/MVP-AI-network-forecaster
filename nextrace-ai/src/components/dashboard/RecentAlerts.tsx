@@ -51,9 +51,14 @@ export function RecentAlerts() {
       style={{
         background: 'var(--bg-card)',
         borderRadius: 'var(--radius-lg)',
+        padding: '20px',
         border: '1px solid var(--border-default)',
         boxShadow: 'var(--shadow-sm)',
-        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        maxHeight: 420,
+        transition: 'all 0.3s ease',
       }}
     >
       {/* Header */}
@@ -61,9 +66,8 @@ export function RecentAlerts() {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '16px 20px',
-          borderBottom: '1px solid var(--border-subtle)',
+          alignItems: 'flex-start',
+          marginBottom: 14,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -91,15 +95,15 @@ export function RecentAlerts() {
       </div>
 
       {/* Table */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
-            <tr style={{ background: 'var(--bg-workspace)' }}>
+            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               {['Time', 'Severity', 'Event', 'Source IP', 'Destination IP', 'Status', ''].map((col) => (
                 <th
                   key={col}
                   style={{
-                    padding: '10px 16px',
+                    padding: '8px 12px',
                     textAlign: 'left',
                     fontSize: 11,
                     fontWeight: 600,
@@ -131,22 +135,22 @@ export function RecentAlerts() {
                   navigate('/alerts');
                 }}
               >
-                <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '9px 12px', fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                   {formatTime(alert.created_at || alert.last_seen)}
                 </td>
-                <td style={{ padding: '12px 16px' }}>
+                <td style={{ padding: '9px 12px' }}>
                   <Badge severity={formatSeverity(alert.severity)} />
                 </td>
-                <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
+                <td style={{ padding: '9px 12px', fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
                   {alert.title}
                 </td>
-                <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                <td style={{ padding: '9px 12px', fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                   {alert.source_ip || '—'}
                 </td>
-                <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                <td style={{ padding: '9px 12px', fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                   {alert.destination_ip || '—'}
                 </td>
-                <td style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700 }}>
+                <td style={{ padding: '9px 12px', fontSize: 11, fontWeight: 700 }}>
                   <span style={{
                     padding: '2px 8px',
                     borderRadius: 4,
