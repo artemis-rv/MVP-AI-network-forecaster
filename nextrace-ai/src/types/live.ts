@@ -35,6 +35,10 @@ export interface TemporalState {
   mean_packet_size: number;
   connection_rate: number;
   suspicious_ratio: number;
+  /** True while the window is still filling (pushed every second); false for the closed window. */
+  partial?: boolean;
+  /** 0–1 share of the window elapsed. */
+  window_progress?: number;
 }
 
 export interface SessionStatus {

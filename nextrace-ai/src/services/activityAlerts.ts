@@ -10,6 +10,9 @@ import { useAlertStore } from '@/store/alertStore';
 import { useAppStore } from '@/store/appStore';
 import type { Alert, AlertSeverity } from '@/types/alert';
 import type { ActivityCategory, AlertTrigger, GroupedActivity } from '@/lib/activityGrouping';
+import {
+  affectedAssetsOf, assetLine, recommendedActionsFor, actionLine, explainActivity,
+} from '@/lib/socPlaybook';
 
 const ALERT_CATEGORY: Record<ActivityCategory, string> = {
   icmp_recon: 'RECONNAISSANCE',
@@ -25,6 +28,8 @@ const ALERT_CATEGORY: Record<ActivityCategory, string> = {
 
 const UPDATE_INTERVAL_MS = 5000;
 const lastSynced = new Map<string, number>();
+/** Number of affected assets last pushed per alert — a new host is pushed immediately, not throttled. */
+const assetCount = new Map<string, number>();
 
 function iso(ms: number): string {
   return new Date(ms).toISOString();
@@ -51,8 +56,13 @@ function buildPayload(t: AlertTrigger, runId: string): Partial<Alert> & { dedupe
       a.reason,
       `Targets: ${a.targets.join(', ')}`,
       `Ports: ${a.portCount} distinct${a.ports.length ? ` (${a.ports.slice(0, 8).join(', ')}${a.portCount > 8 ? ', …' : ''})` : ''}`,
+      `Aggregated: ${a.eventCount} events between ${new Date(a.firstSeen).toLocaleTimeString('en-US', { hour12: false })} and ${new Date(a.lastSeen).toLocaleTimeString('en-US', { hour12: false })} → 1 alert`,
       ...(a.mitre ? [`MITRE ATT&CK ${a.mitre.id} — ${a.mitre.name}`] : []),
     ],
+    activity_id: a.id,
+    affected_assets: affectedAssetsOf(a).map(assetLine),
+    recommended_actions: recommendedActionsFor(a).map(actionLine),
+    explanation: explainActivity(a),
     // Live traffic comes from the demo generator; the alert is flagged so it is never mistaken for real telemetry.
     simulation: true,
     dedupe_key: `${runId}|${a.id}|${a.shape}|${a.severity}`,
@@ -73,11 +83,16 @@ export function receiveAlert(alert: Alert): boolean {
   useAlertStore.setState({ alerts: [alert, ...store.alerts], totalAlerts: store.totalAlerts + 1 });
   const app = useAppStore.getState();
   app.addAlertNotification(alert);
+  // The popup names the affected asset (the thing the analyst must protect), not only the attacker.
+  const assets = alert.affected_assets ?? [];
+  const asset = assets[0]?.split(' — ')[0];
+  const more = assets.length > 1 ? ` +${assets.length - 1} more` : '';
   app.addToast(
-    `${alert.title} · ${alert.source_ip ?? '?'} → ${alert.destination_ip ?? '?'} · ${alert.severity}`,
+    `${alert.title} · ${alert.source_ip ?? '?'} → ${alert.destination_ip ?? '?'}${asset ? ` · affects ${asset}${more}` : ''} · ${alert.severity}`,
     toastType(alert.severity),
   );
   lastSynced.set(alert.id, Date.now());
+  assetCount.set(alert.id, alert.affected_assets?.length ?? 0);
   store.fetchStats();
   return true;
 }
@@ -109,13 +124,19 @@ export function raiseActivityAlerts(
 /** Keeps the existing alert for a growing activity in sync (count / last seen), at most every 5 s. */
 export function syncActivityAlerts(activities: GroupedActivity[], force = false): void {
   const now = Date.now();
-  const updates: { id: string; event_count: number; last_seen: string; confidence: number }[] = [];
+  const updates: { id: string; event_count: number; last_seen: string; confidence: number; affected_assets?: string[] }[] = [];
   for (const a of activities) {
     const alertId = a.alertIds[a.alertIds.length - 1];
     if (!alertId) continue;
-    if (!force && now - (lastSynced.get(alertId) ?? 0) < UPDATE_INTERVAL_MS) continue;
+    const assets = affectedAssetsOf(a);
+    const newAsset = assets.length > (assetCount.get(alertId) ?? 0);
+    if (!force && !newAsset && now - (lastSynced.get(alertId) ?? 0) < UPDATE_INTERVAL_MS) continue;
     lastSynced.set(alertId, now);
-    updates.push({ id: alertId, event_count: a.eventCount, last_seen: iso(a.lastSeen), confidence: a.confidence });
+    assetCount.set(alertId, assets.length);
+    updates.push({
+      id: alertId, event_count: a.eventCount, last_seen: iso(a.lastSeen), confidence: a.confidence,
+      ...(newAsset ? { affected_assets: assets.map(assetLine) } : {}),
+    });
   }
   if (updates.length === 0) return;
 
@@ -123,15 +144,20 @@ export function syncActivityAlerts(activities: GroupedActivity[], force = false)
   useAlertStore.setState(s => ({
     alerts: s.alerts.map(al => {
       const u = byId.get(al.id);
-      return u ? { ...al, event_count: u.event_count, last_seen: u.last_seen, confidence: u.confidence } : al;
+      return u ? {
+        ...al, event_count: u.event_count, last_seen: u.last_seen, confidence: u.confidence,
+        ...(u.affected_assets ? { affected_assets: u.affected_assets } : {}),
+      } : al;
     }),
   }));
   for (const u of updates) {
     if (u.id.startsWith('LOCAL-')) continue;
-    apiService.updateAlert(u.id, { event_count: u.event_count, last_seen: u.last_seen, confidence: u.confidence }).catch(() => {});
+    const { id, ...body } = u;
+    apiService.updateAlert(id, body).catch(() => {});
   }
 }
 
 export function resetActivityAlertSync(): void {
   lastSynced.clear();
+  assetCount.clear();
 }

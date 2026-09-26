@@ -1,931 +1,440 @@
-// NEXTRACE AI — Professional Wazuh-Inspired SOC Security PDF Report Generator
-// Guarantees an exact 3-page layout:
-// Page 1: Critical Findings & Attack Mappings
-// Page 2: Affected Assets
-// Page 3: Remediation & Report Summary
+// NEXTRACE AI — SOC report PDF
+// Renders a Report exactly as the report page shows it: headline figures, executive summary,
+// attack stage map, findings, affected assets, recommended actions, then every remaining section.
+// Everything printed comes from the report object — no placeholder or demo content — and the
+// document grows to as many pages as the data needs.
 
 import { jsPDF } from 'jspdf';
-import type { Report, Finding } from '@/types/report';
+import type { Report, Finding, ReportSection, ReportKpi } from '@/types/report';
 
 export interface SecurityReportData {
   title?: string;
   reportId?: string;
   generatedAt?: number | string;
-  environmentStatus?: 'LIVE DEMO' | 'LIVE SESSION';
-  reportingPeriod?: string;
   findings?: Finding[];
-  totalAlerts?: number;
-  criticalAlerts?: number;
-  highRiskEntities?: number;
-  activeAttackPaths?: number;
-  recentResolutions?: number;
 }
 
-// PDF-safe vector arrow helper (prevents ! or garbled glyphs from non-standard fonts)
-function drawPdfVectorArrow(doc: jsPDF, x: number, y: number, length: number = 4.5, color: string = '#64748B') {
-  doc.setDrawColor(color);
-  doc.setLineWidth(0.6);
-  doc.line(x, y, x + length, y);
+// ── Layout constants (mm, A4 portrait) ────────────────────────────────────────
+const PAGE_W = 210;
+const LEFT = 14;
+const RIGHT = 196;
+const WIDTH = RIGHT - LEFT;
+const TOP = 18;
+const BOTTOM = 278;
 
-  // Arrowhead triangle pointing right
-  doc.setFillColor(color);
-  doc.triangle(
-    x + length, y,              // tip
-    x + length - 1.8, y - 1.2,  // top left
-    x + length - 1.8, y + 1.2,  // bottom left
-    'F'
-  );
+type RGB = [number, number, number];
+const NAVY: RGB = [18, 58, 122];
+const BLUE: RGB = [11, 99, 206];
+const INK: RGB = [15, 23, 42];
+const MUTED: RGB = [100, 116, 139];
+const BORDER: RGB = [226, 232, 240];
+const PANEL: RGB = [248, 250, 252];
+const SEVERITY: Record<string, RGB> = {
+  CRITICAL: [185, 28, 28], HIGH: [194, 65, 12], MEDIUM: [180, 83, 9], LOW: [4, 120, 87],
+};
+const PRIORITY: Record<string, RGB> = { Immediate: [185, 28, 28], Next: [180, 83, 9], 'Follow-up': [100, 116, 139] };
+
+/** Standard PDF fonts only cover Windows-1252; map the few symbols the app uses and drop the rest. */
+const PDF_EXTRA = new Set('—–…·•‘’“”×€');
+
+function pdfText(v: unknown): string {
+  const mapped = String(v ?? '')
+    .replace(/→/g, '->').replace(/←/g, '<-').replace(/≥/g, '>=').replace(/≤/g, '<=').replace(/✓/g, 'OK');
+  let out = '';
+  for (const ch of mapped) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (c === 9 || c === 10 || (c >= 32 && c <= 126) || (c >= 160 && c <= 255) || PDF_EXTRA.has(ch)) out += ch;
+  }
+  return out;
 }
+
+function label(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+class PdfWriter {
+  doc: jsPDF;
+  y = TOP;
+  constructor(private headerRight: string) {
+    this.doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    this.header();
+  }
+
+  private header() {
+    const d = this.doc;
+    d.setFillColor(...NAVY); d.rect(0, 0, PAGE_W, 11, 'F');
+    d.setFillColor(...BLUE); d.rect(0, 11, PAGE_W, 1.2, 'F');
+    d.setTextColor(255, 255, 255); d.setFont('helvetica', 'bold'); d.setFontSize(7.5);
+    d.text('NEXTRACE AI — SOC REPORT', LEFT, 7.5);
+    d.setFont('helvetica', 'normal'); d.setFontSize(6.8);
+    d.text(pdfText(this.headerRight), RIGHT, 7.5, { align: 'right' });
+    this.y = TOP;
+  }
+
+  ensure(h: number) {
+    if (this.y + h > BOTTOM) { this.doc.addPage(); this.header(); }
+  }
+
+  lines(text: string, width: number, size: number): string[] {
+    this.doc.setFontSize(size);
+    return this.doc.splitTextToSize(pdfText(text), width) as string[];
+  }
+
+  section(title: string) {
+    this.ensure(16);
+    this.y += 3;
+    const d = this.doc;
+    d.setFillColor(...NAVY); d.rect(LEFT, this.y, WIDTH, 7.5, 'F');
+    d.setTextColor(255, 255, 255); d.setFont('helvetica', 'bold'); d.setFontSize(9.5);
+    d.text(pdfText(title.toUpperCase()), LEFT + 4, this.y + 5.2);
+    this.y += 11;
+  }
+
+  subheading(text: string) {
+    this.ensure(10);
+    const d = this.doc;
+    this.y += 1.5;
+    d.setFont('helvetica', 'bold'); d.setFontSize(7.5); d.setTextColor(...MUTED);
+    // Baseline below the cursor, so the heading never overlaps the line above it.
+    d.text(pdfText(text.toUpperCase()), LEFT, this.y + 3);
+    this.y += 5.5;
+  }
+
+  paragraph(text: string, opts: { size?: number; bold?: boolean; color?: RGB; indent?: number } = {}) {
+    const size = opts.size ?? 8.5;
+    const indent = opts.indent ?? 0;
+    const ls = this.lines(text, WIDTH - indent, size);
+    const lh = size * 0.42;
+    const d = this.doc;
+    for (const line of ls) {
+      this.ensure(lh + 1);
+      d.setFont('helvetica', opts.bold ? 'bold' : 'normal'); d.setFontSize(size); d.setTextColor(...(opts.color ?? INK));
+      d.text(line, LEFT + indent, this.y + lh * 0.8);
+      this.y += lh;
+    }
+    this.y += 1.5;
+  }
+
+  bullet(text: string, color: RGB = BLUE) {
+    const size = 8;
+    const ls = this.lines(text, WIDTH - 6, size);
+    const lh = size * 0.42;
+    this.ensure(lh + 1);
+    this.doc.setFillColor(...color); this.doc.circle(LEFT + 1.5, this.y + lh * 0.55, 0.7, 'F');
+    for (const line of ls) {
+      this.ensure(lh + 1);
+      this.doc.setFont('helvetica', 'normal'); this.doc.setFontSize(size); this.doc.setTextColor(...INK);
+      this.doc.text(line, LEFT + 5, this.y + lh * 0.8);
+      this.y += lh;
+    }
+    this.y += 1;
+  }
+
+  keyValue(k: string, v: string) {
+    const size = 8;
+    const ls = this.lines(v, WIDTH - 50, size);
+    const lh = size * 0.42;
+    this.ensure(lh * ls.length + 1);
+    const d = this.doc;
+    d.setFont('helvetica', 'bold'); d.setFontSize(7.5); d.setTextColor(...MUTED);
+    d.text(pdfText(k), LEFT, this.y + lh * 0.8);
+    d.setFont('helvetica', 'normal'); d.setFontSize(size); d.setTextColor(...INK);
+    ls.forEach((line, i) => d.text(line, LEFT + 50, this.y + lh * 0.8 + i * lh));
+    this.y += lh * ls.length + 1.2;
+  }
+
+  /** Simple bordered table; each row grows to fit its wrapped cells. */
+  table(cols: string[], widths: number[], rows: string[][], rowColor?: (r: number) => RGB | null) {
+    const d = this.doc;
+    const size = 7.5;
+    const lh = size * 0.42;
+    const drawHead = () => {
+      this.ensure(7);
+      d.setFillColor(...PANEL); d.rect(LEFT, this.y, WIDTH, 6, 'F');
+      d.setFont('helvetica', 'bold'); d.setFontSize(7); d.setTextColor(...MUTED);
+      let x = LEFT + 2;
+      cols.forEach((c, i) => { d.text(pdfText(c.toUpperCase()), x, this.y + 4); x += widths[i]; });
+      this.y += 6;
+    };
+    drawHead();
+    rows.forEach((row, r) => {
+      const wrapped = row.map((cell, i) => this.lines(cell, widths[i] - 3, size));
+      const h = Math.max(...wrapped.map(w => w.length)) * lh + 3;
+      if (this.y + h > BOTTOM) { d.addPage(); this.header(); drawHead(); }
+      d.setDrawColor(...BORDER); d.line(LEFT, this.y + h, RIGHT, this.y + h);
+      const stripe = rowColor?.(r);
+      if (stripe) { d.setFillColor(...stripe); d.rect(LEFT, this.y, 1.2, h, 'F'); }
+      let x = LEFT + 2;
+      wrapped.forEach((ls, i) => {
+        d.setFont('helvetica', i === 0 ? 'bold' : 'normal'); d.setFontSize(size); d.setTextColor(...INK);
+        ls.forEach((line, j) => d.text(line, x, this.y + 2 + lh * 0.8 + j * lh));
+        x += widths[i];
+      });
+      this.y += h;
+    });
+    this.y += 3;
+  }
+
+  footers() {
+    const d = this.doc;
+    const n = d.getNumberOfPages();
+    for (let i = 1; i <= n; i++) {
+      d.setPage(i);
+      d.setDrawColor(...BORDER); d.line(LEFT, 283, RIGHT, 283);
+      d.setFont('helvetica', 'normal'); d.setFontSize(8); d.setTextColor(...MUTED);
+      d.text('CONFIDENTIAL — SOC SECURITY REPORT | FOR INTERNAL USE ONLY', LEFT, 288);
+      d.text(`Page ${i} of ${n}`, RIGHT, 288, { align: 'right' });
+    }
+  }
+}
+
+// ── Section helpers ───────────────────────────────────────────────────────────
+
+const RENDERED_FIRST = new Set(['Executive Summary', 'Attack Stage Map', 'Affected Assets', 'Recommended Actions']);
+
+function sectionByTitle(report: Report, title: string): ReportSection | undefined {
+  return report.sections.find(s => s.title === title);
+}
+
+function envLabel(report: Report | null): string {
+  if (!report) return 'REPORT';
+  if (report.report_type === 'simulation') return 'SIMULATION';
+  if (report.report_type === 'live') return 'LIVE SESSION (SIMULATED TRAFFIC)';
+  return report.metadata.is_demo ? 'HISTORICAL PCAP (DEMO DATASET)' : 'HISTORICAL PCAP';
+}
+
+/** Headline figures: from the report builder, or derived from backend-generated report sections. */
+function kpisOf(report: Report): ReportKpi[] {
+  if (report.metadata.kpis?.length) return report.metadata.kpis;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pick = (...keys: string[]): any => {
+    for (const s of report.sections) for (const k of keys) if (s.content?.[k] !== undefined && s.content[k] !== null) return s.content[k];
+    return undefined;
+  };
+  const kpis: ReportKpi[] = [];
+  const packets = pick('packet_count', 'total_packets', 'packets');
+  const flows = pick('flow_count', 'total_flows', 'flows');
+  const duration = pick('duration_seconds');
+  if (packets !== undefined) kpis.push({ label: 'Packets', value: Number(packets).toLocaleString() });
+  if (flows !== undefined) kpis.push({ label: 'Flows', value: Number(flows).toLocaleString() });
+  if (duration !== undefined) kpis.push({ label: 'Duration', value: `${Number(duration).toFixed(1)}s` });
+  kpis.push({ label: 'Findings', value: String(report.findings.length) });
+  kpis.push({ label: 'Critical', value: String(report.findings.filter(f => f.severity === 'CRITICAL').length), tone: 'critical' });
+  kpis.push({ label: 'High', value: String(report.findings.filter(f => f.severity === 'HIGH').length), tone: 'high' });
+  return kpis.slice(0, 6);
+}
+
+function renderKpis(w: PdfWriter, kpis: ReportKpi[]) {
+  const d = w.doc;
+  const gap = 2;
+  const bw = (WIDTH - gap * (kpis.length - 1)) / kpis.length;
+  w.ensure(16);
+  kpis.forEach((k, i) => {
+    const x = LEFT + i * (bw + gap);
+    d.setFillColor(...PANEL); d.rect(x, w.y, bw, 14, 'F');
+    d.setDrawColor(...BORDER); d.rect(x, w.y, bw, 14, 'S');
+    d.setFont('helvetica', 'bold'); d.setFontSize(6.5); d.setTextColor(...MUTED);
+    d.text(pdfText(k.label.toUpperCase()), x + 3, w.y + 5);
+    d.setFontSize(11.5);
+    d.setTextColor(...(k.tone === 'critical' ? SEVERITY.CRITICAL : k.tone === 'high' ? SEVERITY.HIGH : BLUE));
+    d.text(pdfText(k.value), x + 3, w.y + 11);
+  });
+  w.y += 18;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderStageMap(w: PdfWriter, items: any[]) {
+  const d = w.doc;
+  const gap = 3;
+  const bw = (WIDTH - gap * (items.length - 1)) / items.length;
+  const h = 18;
+  w.ensure(h + 4);
+  items.forEach((m, i) => {
+    const x = LEFT + i * (bw + gap);
+    const observed = m.status === 'observed';
+    const predicted = m.status === 'predicted';
+    const color: RGB = observed ? (SEVERITY[m.severity] ?? BLUE) : predicted ? [217, 119, 6] : BORDER;
+    d.setFillColor(...(observed ? color : PANEL)); d.rect(x, w.y, bw, h, 'F');
+    d.setDrawColor(...color);
+    if (predicted) d.setLineDashPattern([1, 1], 0);
+    d.rect(x, w.y, bw, h, 'S');
+    d.setLineDashPattern([], 0);
+    d.setFont('helvetica', 'bold'); d.setFontSize(6);
+    d.setTextColor(...(observed ? [255, 255, 255] as RGB : predicted ? color : MUTED));
+    d.text(observed ? 'OBSERVED' : predicted ? 'PREDICTED' : 'NOT SEEN', x + 2, w.y + 4);
+    d.setFontSize(7.2);
+    const name = d.splitTextToSize(pdfText(m.stage), bw - 4) as string[];
+    name.slice(0, 2).forEach((ln, j) => d.text(ln, x + 2, w.y + 8.5 + j * 3.2));
+    if (m.activities?.length) {
+      d.setFont('helvetica', 'normal'); d.setFontSize(5.8);
+      d.text(pdfText(m.activities.slice(0, 2).join(', ') + (m.activities.length > 2 ? ' +' : '')), x + 2, w.y + 16);
+    }
+  });
+  w.y += h + 5;
+}
+
+function renderFindings(w: PdfWriter, findings: Finding[]) {
+  const d = w.doc;
+  const order: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+  const sorted = [...findings].sort((a, b) => (order[b.severity] ?? 0) - (order[a.severity] ?? 0));
+  if (sorted.length === 0) {
+    w.paragraph('No findings — no suspicious activity met the detection thresholds.', { color: MUTED });
+    return;
+  }
+  for (const f of sorted) {
+    const summary = w.lines(f.summary, WIDTH - 12, 7.8);
+    const evidence = f.evidence.slice(0, 4).flatMap(e => w.lines(`• ${e}`, WIDTH - 12, 7.2));
+    const h = 10 + summary.length * 3.3 + evidence.length * 3.1 + 3;
+    w.ensure(h + 2);
+    const color = SEVERITY[f.severity] ?? BLUE;
+    const top = w.y;
+    d.setFillColor(255, 255, 255); d.rect(LEFT, top, WIDTH, h, 'F');
+    d.setDrawColor(...BORDER); d.rect(LEFT, top, WIDTH, h, 'S');
+    d.setFillColor(...color); d.rect(LEFT, top, 2.5, h, 'F');
+    d.setFont('helvetica', 'bold'); d.setFontSize(8.8); d.setTextColor(...INK);
+    d.text((d.splitTextToSize(pdfText(f.title), 128) as string[])[0], LEFT + 6, top + 5.5);
+    d.setFillColor(...color); d.rect(RIGHT - 34, top + 2, 32, 5, 'F');
+    d.setFontSize(6.8); d.setTextColor(255, 255, 255);
+    d.text(`${f.severity} · ${f.confidence}%`, RIGHT - 18, top + 5.4, { align: 'center' });
+    d.setFont('helvetica', 'normal'); d.setFontSize(6.8); d.setTextColor(...MUTED);
+    d.text(pdfText(`${f.category} · ${f.id}`), LEFT + 6, top + 9.3);
+    let y = top + 13;
+    d.setFontSize(7.8); d.setTextColor(...INK);
+    summary.forEach(line => { d.text(line, LEFT + 6, y); y += 3.3; });
+    d.setFontSize(7.2); d.setTextColor(...MUTED);
+    evidence.forEach(line => { d.text(line, LEFT + 6, y); y += 3.1; });
+    w.y = top + h + 2.5;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderGeneric(w: PdfWriter, content: Record<string, any>) {
+  for (const [k, v] of Object.entries(content)) {
+    if (v === null || v === undefined || v === '') continue;
+    if (typeof v !== 'object') { w.keyValue(label(k), String(typeof v === 'number' ? v.toLocaleString() : v)); continue; }
+    if (Array.isArray(v)) {
+      if (v.length === 0) continue;
+      w.subheading(`${label(k)} (${v.length})`);
+      for (const item of v.slice(0, 40)) {
+        w.bullet(typeof item === 'object' && item !== null
+          ? Object.entries(item).map(([ik, iv]) => `${label(ik)}: ${Array.isArray(iv) ? iv.join(', ') : iv}`).join(' · ')
+          : String(item));
+      }
+      if (v.length > 40) w.paragraph(`… and ${v.length - 40} more`, { color: MUTED, size: 7.5 });
+      continue;
+    }
+    w.subheading(label(k));
+    for (const [ik, iv] of Object.entries(v)) w.keyValue(label(ik), Array.isArray(iv) ? iv.join(', ') : String(iv));
+  }
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
 
 export function generateSecurityReportPdf(customData?: SecurityReportData | Report | null): void {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-  });
+  const report = customData && 'sections' in customData ? (customData as Report) : null;
+  const summary = report ? null : (customData as SecurityReportData | null | undefined);
+  const generated = report
+    ? new Date(report.generated_at * 1000)
+    : new Date(typeof summary?.generatedAt === 'number' ? summary.generatedAt * 1000 : summary?.generatedAt ?? Date.now());
+  const dateLabel = generated.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+  const env = envLabel(report);
+  const w = new PdfWriter(`ENV: ${env}  |  GENERATED: ${dateLabel}`);
+  const d = w.doc;
 
-  const report = (customData && 'sections' in customData) ? (customData as Report) : null;
-  const now = new Date();
-  const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
-  const formattedDate = now.toLocaleDateString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric',
-  });
-  const formattedTime = now.toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  });
+  const title = report?.title ?? customData?.title ?? 'Security Report';
+  const reportId = report?.report_id ?? (customData as SecurityReportData)?.reportId ?? 'unknown';
+  const source = report?.metadata.filename ?? report?.metadata.session_id ?? report?.source_id ?? '—';
 
-  // Determine report metadata & mode
-  const isDemo = Boolean(
-    report?.metadata?.is_demo ||
-    (customData as any)?.is_demo ||
-    report?.report_type === 'simulation'
-  );
-  const envLabel = isDemo ? 'DEMO MODE' : 'HISTORICAL PCAP';
-  const reportTitle = report?.title || customData?.title || 'NETWORK SECURITY & PCAP FORENSIC REPORT';
-  const reportId = report?.report_id || (customData as SecurityReportData)?.reportId || (customData as any)?.report_id || `RPT-${dateStr.replace(/-/g, '')}-SOC1`;
+  // Title banner
+  d.setFillColor(...PANEL); d.rect(LEFT, w.y, WIDTH, 24, 'F');
+  d.setDrawColor(...BORDER); d.rect(LEFT, w.y, WIDTH, 24, 'S');
+  d.setTextColor(...BLUE); d.setFont('helvetica', 'bold'); d.setFontSize(14);
+  d.text('NEXTRACE AI', LEFT + 4, w.y + 7);
+  d.setTextColor(...NAVY); d.setFontSize(10);
+  d.text((d.splitTextToSize(pdfText(title.toUpperCase()), 110) as string[])[0], LEFT + 4, w.y + 13);
+  d.setTextColor(...MUTED); d.setFont('helvetica', 'italic'); d.setFontSize(8.5);
+  d.text('Predict. Trace. Secure.', LEFT + 4, w.y + 19);
+  d.setFont('helvetica', 'normal'); d.setFontSize(7.8); d.setTextColor(...INK);
+  d.text(pdfText(`Report ID: ${reportId}`), RIGHT - 4, w.y + 7, { align: 'right' });
+  d.text(pdfText(`Source: ${source}`), RIGHT - 4, w.y + 12, { align: 'right' });
+  d.text(pdfText(`Status: ${env}`), RIGHT - 4, w.y + 17, { align: 'right' });
+  w.y += 28;
 
-  // Color Palette Constants
-  const BLUE = '#0B63CE';
-  const RED = '#EF4444';
-  const ORANGE = '#F97316';
-  const GREEN = '#16805C';
-  const BORDER = '#E2E8F0';
-
-  // Helper to draw Header & Footer on every page (Two-column layout preventing text overlap)
-  const drawPageHeaderFooter = (pageNum: number) => {
-    // Top Bar
-    doc.setFillColor(18, 58, 122); // Deep Navy
-    doc.rect(0, 0, 210, 11, 'F');
-
-    doc.setFillColor(11, 99, 206); // Primary Blue Accent Line
-    doc.rect(0, 11, 210, 1.2, 'F');
-
-    // Header Left Column (x: 14 to 115)
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('NEXTRACE AI — SECURITY OPERATIONS & FORENSIC INTELLIGENCE', 14, 7.5);
-
-    // Header Right Column (x: 125 to 196, right aligned)
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(`ENV: ${envLabel}  |  DATE: ${formattedDate} ${formattedTime}`, 196, 7.5, { align: 'right' });
-
-    // Footer Line & Text
-    doc.setDrawColor(226, 232, 240);
-    doc.line(14, 283, 196, 283);
-
-    doc.setTextColor(100, 116, 139);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('CONFIDENTIAL — SOC SECURITY REPORT | FOR INTERNAL USE ONLY', 14, 288);
-    doc.text(`Page ${pageNum} of 3`, 196, 288, { align: 'right' });
-  };
-
-  // ── Extract Section Content from Report Object ──
-  const execSection = report?.sections?.find(s => s.title === 'Executive Summary')?.content || {};
-  const netSection = report?.sections?.find(s => s.title === 'Network Activity')?.content || {};
-  const susSection = report?.sections?.find(s => s.title === 'Suspicious Indicators')?.content || {};
-  const integritySection = report?.sections?.find(s => s.title === 'Evidence Integrity')?.content || {};
-  const filename = report?.metadata?.filename || execSection.filename || integritySection.filename || 'capture.pcap';
-
-  const pktCount = Number(
-    netSection.packet_count ?? netSection.total_packets ??
-    execSection.packet_count ?? execSection.total_packets ??
-    integritySection.packet_count ?? integritySection.total_packets ??
-    (report as any)?.packetCount ?? (report as any)?.total_packets ?? 0
-  );
-  const flowCount = Number(
-    netSection.flow_count ?? netSection.total_flows ??
-    execSection.flow_count ?? execSection.total_flows ??
-    integritySection.flow_count ?? integritySection.total_flows ??
-    (report as any)?.flowCount ?? (report as any)?.total_flows ?? 0
-  );
-  const duration = Number(netSection.duration_seconds ?? execSection.duration_seconds ?? 0);
-
-  const topSrcIps: Array<{ ip: string; count: number }> = netSection.top_src_ips || netSection.topSrcIps || [];
-  const topDstIps: Array<{ ip: string; count: number }> = netSection.top_dst_ips || netSection.topDstIps || [];
-  const susEvents: Array<any> = susSection.indicators || susSection.suspicious_events || [];
-  const entityRels: Array<any> = susSection.entity_relationships || susSection.entityRels || [];
-
-  const rawFindings: Finding[] = report?.findings || customData?.findings || [];
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PAGE 1: CRITICAL FINDINGS & ATTACK MAPPINGS
-  // ═══════════════════════════════════════════════════════════════════════════
-  drawPageHeaderFooter(1);
-
-  // Document Title Header Banner (Two-column layout)
-  doc.setFillColor(248, 250, 252);
-  doc.rect(14, 16, 182, 24, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.rect(14, 16, 182, 24, 'S');
-
-  // Left Title Column
-  doc.setTextColor(11, 99, 206);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('NEXTRACE AI', 18, 23);
-
-  doc.setTextColor(18, 58, 122);
-  doc.setFontSize(10.5);
-  doc.setFont('helvetica', 'bold');
-  doc.text(reportTitle.toUpperCase(), 18, 29);
-
-  doc.setTextColor(100, 116, 139);
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'italic');
-  doc.text('Predict. Trace. Secure.', 18, 35);
-
-  // Right Metadata Column (Strictly right-aligned to prevent title overlap)
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`Report ID: ${reportId}`, 192, 23, { align: 'right' });
-  doc.text(`File: ${filename}`, 192, 28, { align: 'right' });
-  doc.text(`Status: ${envLabel}`, 192, 33, { align: 'right' });
-
-  // ── Section 1 Header ──
-  doc.setFillColor(18, 58, 122);
-  doc.rect(14, 44, 182, 7.5, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9.5);
-  doc.setFont('helvetica', 'bold');
-  doc.text('1. CRITICAL FINDINGS & ATTACK MAPPINGS', 18, 49.2);
-
-  // Dynamic KPI Blocks (5 metrics)
-  const criticalCount = rawFindings.filter(f => f.severity === 'CRITICAL').length;
-  const highCount = rawFindings.filter(f => f.severity === 'HIGH').length;
-
-  const kpis = [
-    { label: 'Packets Parsed', val: pktCount > 0 ? pktCount.toLocaleString() : 'N/A', color: BLUE },
-    { label: 'Flows Extracted', val: flowCount > 0 ? flowCount.toLocaleString() : 'N/A', color: BLUE },
-    { label: 'Duration (s)', val: duration > 0 ? `${duration.toFixed(1)}s` : 'N/A', color: GREEN },
-    { label: 'Critical Alerts', val: String(criticalCount), color: RED },
-    { label: 'High Alerts', val: String(highCount), color: ORANGE },
-  ];
-
-  const kpiBoxWidth = 34.8;
-  kpis.forEach((k, idx) => {
-    const kx = 14 + idx * (kpiBoxWidth + 2);
-    doc.setFillColor(248, 250, 252);
-    doc.rect(kx, 54, kpiBoxWidth, 14, 'F');
-    doc.setDrawColor(226, 232, 240);
-    doc.rect(kx, 54, kpiBoxWidth, 14, 'S');
-
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text(k.label.toUpperCase(), kx + 3, 59);
-
-    doc.setFontSize(11.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(k.color);
-    doc.text(k.val, kx + 3, 65);
-  });
-
-  // ── Critical Findings Cards ──
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(18, 58, 122);
-  doc.text('SECURITY FINDINGS', 14, 73.5);
-
-  let findingsList: Array<{
-    title: string;
-    sev: string;
-    sevColor: string;
-    source: string;
-    evidence: string;
-    stage: string;
-    risk: string;
-  }> = [];
-
-  if (rawFindings.length > 0) {
-    const sevOrder: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
-    const sorted = [...rawFindings].sort((a, b) => (sevOrder[b.severity] || 0) - (sevOrder[a.severity] || 0));
-
-    findingsList = sorted.slice(0, 3).map((f) => {
-      let sevColor = BLUE;
-      if (f.severity === 'CRITICAL') sevColor = RED;
-      else if (f.severity === 'HIGH') sevColor = RED;
-      else if (f.severity === 'MEDIUM') sevColor = ORANGE;
-
-      let sourceStr = 'PCAP Flow Analysis';
-      const srcRef = f.evidence?.find(e => e.includes('Source IP:') || e.includes('Example source:'));
-      const dstRef = f.evidence?.find(e => e.includes('Destination IP:') || e.includes('Example destination:'));
-      if (srcRef && dstRef) {
-        const sIp = srcRef.split(':')[1]?.trim() || '';
-        const dIp = dstRef.split(':')[1]?.trim() || '';
-        sourceStr = `${sIp} -> ${dIp}`;
-      } else if (f.evidence && f.evidence.length > 0) {
-        const firstEv = f.evidence[0];
-        if (firstEv.length < 50) sourceStr = firstEv;
-      }
-
-      return {
-        title: f.title,
-        sev: f.severity,
-        sevColor,
-        source: sourceStr,
-        evidence: f.summary || (f.evidence && f.evidence[0]) || 'Evidence derived from flow analysis.',
-        stage: f.category || 'Security Event',
-        risk: `Confidence: ${f.confidence}% — Heuristic analysis from PCAP metadata`,
-      };
-    });
-  } else {
-    findingsList = [
-      {
-        title: 'No Suspicious Threat Indicators Observed',
-        sev: 'LOW',
-        sevColor: GREEN,
-        source: `${pktCount.toLocaleString()} packets / ${flowCount.toLocaleString()} flows`,
-        evidence: 'Traffic baseline parsed without triggering heuristic security rules or volumetric anomalies.',
-        stage: 'Network Activity',
-        risk: 'Observed network activity matches baseline parameters.',
-      },
-    ];
+  if (!report) {
+    w.section('Report content');
+    w.paragraph('The full report could not be loaded, so only its title is available. Open the report page and export again.', { color: MUTED });
+    w.footers();
+    d.save(`nextrace-report-${reportId}.pdf`);
+    return;
   }
 
-  let currentY = 76;
-  findingsList.forEach((f) => {
-    doc.setFillColor(255, 255, 255);
-    doc.rect(14, currentY, 182, 28, 'F');
-    doc.setDrawColor(226, 232, 240);
-    doc.rect(14, currentY, 182, 28, 'S');
+  renderKpis(w, kpisOf(report));
 
-    // Left severity stripe
-    doc.setFillColor(f.sevColor);
-    doc.rect(14, currentY, 2.5, 28, 'F');
-
-    // Title & Severity Badge
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(15, 23, 42);
-    const titleLines = doc.splitTextToSize(f.title, 135);
-    doc.text(titleLines[0], 20, currentY + 6);
-
-    doc.setFillColor(f.sevColor);
-    doc.rect(160, currentY + 2.5, 32, 5, 'F');
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.text(f.sev, 176, currentY + 6, { align: 'center' });
-
-    // Details Grid
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Source / Entity:', 20, currentY + 12);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    const srcText = doc.splitTextToSize(f.source, 75);
-    doc.text(srcText[0], 45, currentY + 12);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Category:', 125, currentY + 12);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    doc.text(f.stage, 142, currentY + 12);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Evidence:', 20, currentY + 17);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    const evText = doc.splitTextToSize(f.evidence, 140);
-    doc.text(evText[0], 45, currentY + 17);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Assessment:', 20, currentY + 22);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    const riskText = doc.splitTextToSize(f.risk, 140);
-    doc.text(riskText[0], 45, currentY + 22);
-
-    currentY += 31;
-  });
-
-  // ── Attack Mapping Section ──
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(18, 58, 122);
-  doc.text('ATTACK MAPPING & FORECAST PROGRESSION', 14, 173);
-
-  // Attack Progression Box
-  doc.setFillColor(248, 250, 252);
-  doc.rect(14, 176, 182, 54, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.rect(14, 176, 182, 54, 'S');
-
-  let chainStages: Array<{ label: string; state: 'passed' | 'active' | 'predicted' | 'none' }> = [];
-
-  if (isDemo) {
-    chainStages = [
-      { label: 'Reconnaissance', state: 'passed' },
-      { label: 'Initial Access', state: 'passed' },
-      { label: 'Lateral Movement', state: 'active' },
-      { label: 'Data Exfiltration', state: 'predicted' },
-    ];
-  } else {
-    const susTypes = susEvents.map((e: any) => String(e.type || e.indicator_type || '').toLowerCase());
-
-    const stagesDetected: string[] = [];
-    if (susTypes.some(t => t.includes('scan') || t.includes('sweep') || t.includes('recon')) || rawFindings.some(f => f.category === 'Network Activity')) {
-      stagesDetected.push('Reconnaissance');
+  let n = 1;
+  const exec = sectionByTitle(report, 'Executive Summary');
+  if (exec) {
+    w.section(`${n++}. Executive Summary`);
+    const c = exec.content;
+    if (c.summary) w.paragraph(String(c.summary), { size: 9 });
+    if (c.overall_severity) w.keyValue('Overall severity', String(c.overall_severity));
+    if (Array.isArray(c.in_plain_language) && c.in_plain_language.length) {
+      w.subheading('In plain language');
+      c.in_plain_language.forEach((t: string) => w.bullet(t));
     }
-    if (susTypes.some(t => t.includes('brute') || t.includes('auth')) || rawFindings.some(f => f.title.toLowerCase().includes('access') || f.title.toLowerCase().includes('brute'))) {
-      stagesDetected.push('Initial Access');
+    if (c.forensic_assessment) w.keyValue('Forensic assessment', String(c.forensic_assessment));
+    if (Array.isArray(c.what_to_investigate_next) && c.what_to_investigate_next.length) {
+      w.subheading('What to investigate next');
+      c.what_to_investigate_next.forEach((t: string) => w.bullet(t, SEVERITY.HIGH));
     }
-    if (susTypes.some(t => t.includes('c2') || t.includes('backdoor') || t.includes('rate'))) {
-      stagesDetected.push('Command & Control');
-    }
-    if (susTypes.some(t => t.includes('transfer') || t.includes('exfil'))) {
-      stagesDetected.push('Data Exfiltration');
-    }
+    const rest = Object.fromEntries(Object.entries(c).filter(([k]) =>
+      !['summary', 'overall_severity', 'in_plain_language', 'forensic_assessment', 'what_to_investigate_next'].includes(k)));
+    renderGeneric(w, rest);
+  }
 
-    if (stagesDetected.length > 0) {
-      chainStages = stagesDetected.slice(0, 4).map((stg, i) => ({
-        label: stg,
-        state: i === stagesDetected.length - 1 ? 'active' : 'passed',
-      }));
-    } else {
-      chainStages = [
-        { label: 'Insufficient Evidence for Attack Chain Mapping', state: 'none' },
-      ];
+  const stage = sectionByTitle(report, 'Attack Stage Map');
+  if (stage && Array.isArray(stage.content.stage_map)) {
+    w.section(`${n++}. Attack Stage Map`);
+    if (stage.content.progression) w.keyValue('Observed progression', String(stage.content.progression));
+    renderStageMap(w, stage.content.stage_map);
+  }
+
+  w.section(`${n++}. Findings (${report.findings.length})`);
+  renderFindings(w, report.findings);
+
+  const assets = sectionByTitle(report, 'Affected Assets');
+  if (assets) {
+    w.section(`${n++}. Affected Assets`);
+    if (assets.content.summary) w.paragraph(String(assets.content.summary), { color: MUTED });
+    const rows = (assets.content.assets ?? []) as { ip: string; role: string; impact: string; severity: string; activities: string[] }[];
+    if (rows.length) {
+      w.table(['Asset', 'Role', 'Impact', 'Severity', 'Activities'], [30, 24, 70, 20, 38],
+        rows.map(r => [r.ip, r.role, r.impact, r.severity, r.activities.join(', ')]),
+        i => SEVERITY[rows[i].severity] ?? null);
     }
   }
 
-  if (chainStages.length === 1 && chainStages[0].state === 'none') {
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text(chainStages[0].label, 105, 188, { align: 'center' });
-  } else {
-    const stageBoxWidth = Math.min(38, Math.floor(160 / chainStages.length));
-    const spacing = Math.floor((180 - chainStages.length * stageBoxWidth) / Math.max(1, chainStages.length - 1));
-
-    chainStages.forEach((st, i) => {
-      const sx = 18 + i * (stageBoxWidth + spacing);
-      const isAct = st.state === 'active';
-      const isPred = st.state === 'predicted';
-
-      doc.setFillColor(isAct ? 249 : isPred ? 239 : 241, isAct ? 115 : isPred ? 68 : 245, isAct ? 22 : isPred ? 68 : 249);
-      doc.rect(sx, 182, stageBoxWidth, 10, 'F');
-      doc.setDrawColor(isAct ? ORANGE : isPred ? RED : BORDER);
-      doc.rect(sx, 182, stageBoxWidth, 10, 'S');
-
-      doc.setFontSize(6.5);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(isAct || isPred ? 255 : 100, isAct || isPred ? 255 : 116, isAct || isPred ? 255 : 139);
-      doc.text(st.label, sx + stageBoxWidth / 2, 188.5, { align: 'center' });
-
-      if (i < chainStages.length - 1) {
-        drawPdfVectorArrow(doc, sx + stageBoxWidth + 1, 187, Math.max(2, spacing - 2), '#64748B');
-      }
-    });
-  }
-
-  // Forecast Metrics Panel
-  doc.setDrawColor(226, 232, 240);
-  doc.line(18, 197, 192, 197);
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(18, 58, 122);
-  doc.text('FORECAST INTELLIGENCE SUMMARY:', 18, 203);
-
-  if (isDemo) {
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Current Stage:', 18, 210);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(249, 115, 22);
-    doc.text('Lateral Movement (DEMO)', 44, 210);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Predicted Next Stage:', 18, 216);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(239, 68, 68);
-    doc.text('Data Exfiltration (DEMO)', 52, 216);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Forecast Confidence:', 18, 222);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(22, 128, 92);
-    doc.text('68% (DEMO Scenario)', 50, 222);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Relevant Target:', 110, 210);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    doc.text('10.0.0.5 -> 192.168.1.25 (DEMO)', 138, 210);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Estimated Window:', 110, 216);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    doc.text('< 15 minutes (DEMO)', 140, 216);
-  } else {
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Current Stage:', 18, 210);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    doc.text(chainStages.length > 0 && chainStages[0].state !== 'none' ? chainStages[chainStages.length - 1].label : 'Observed Network Traffic', 44, 210);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Predicted Next Stage:', 18, 216);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Forecast unavailable — insufficient historical evidence', 52, 216);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Forecast Confidence:', 18, 222);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.text('N/A — Heuristic PCAP Analysis Only', 50, 222);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Capture Span:', 110, 210);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    doc.text(`${duration.toFixed(1)}s (${pktCount.toLocaleString()} pkts)`, 135, 210);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Observed Flow Pairs:', 110, 216);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    doc.text(`${flowCount.toLocaleString()} active flows`, 143, 216);
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PAGE 2: AFFECTED ASSETS
-  // ═══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  drawPageHeaderFooter(2);
-
-  // Section Header
-  doc.setFillColor(18, 58, 122);
-  doc.rect(14, 18, 182, 7.5, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9.5);
-  doc.setFont('helvetica', 'bold');
-  doc.text('2. AFFECTED ASSETS & INVENTORY RISK MATRIX', 18, 23.2);
-
-  // Build Affected Assets dynamically from observed IPs
-  const observedIpMap: Map<string, {
-    ip: string;
-    ports: Set<number>;
-    pktCount: number;
-    byteCount: number;
-    isSus: boolean;
-  }> = new Map();
-
-  topSrcIps.forEach(s => {
-    const ip = s.ip || (s as any).src_ip || (s as any).srcIp;
-    const cnt = s.count ?? (s as any).packet_count ?? (s as any).pktCount ?? 0;
-    if (ip && !observedIpMap.has(ip)) {
-      observedIpMap.set(ip, { ip, ports: new Set(), pktCount: cnt, byteCount: 0, isSus: false });
-    }
-  });
-  topDstIps.forEach(d => {
-    const ip = d.ip || (d as any).dst_ip || (d as any).dstIp;
-    const cnt = d.count ?? (d as any).packet_count ?? (d as any).pktCount ?? 0;
-    if (ip && !observedIpMap.has(ip)) {
-      observedIpMap.set(ip, { ip, ports: new Set(), pktCount: cnt, byteCount: 0, isSus: false });
-    }
-  });
-
-  entityRels.forEach(rel => {
-    const s = rel.src_ip || rel.srcIp || rel.src;
-    const d = rel.dst_ip || rel.dstIp || rel.dst;
-    const pCount = rel.packet_count ?? rel.packetCount ?? rel.packets ?? 0;
-    const bCount = rel.byte_count ?? rel.byteCount ?? rel.bytes ?? 0;
-    const isSus = rel.is_suspicious ?? rel.isSuspicious ?? false;
-    const portsList = rel.ports || rel.dst_ports || rel.dstPorts || [];
-
-    if (s && !observedIpMap.has(s)) observedIpMap.set(s, { ip: s, ports: new Set(portsList), pktCount: pCount, byteCount: bCount, isSus: isSus });
-    if (d && !observedIpMap.has(d)) observedIpMap.set(d, { ip: d, ports: new Set(portsList), pktCount: pCount, byteCount: bCount, isSus: isSus });
-    if (s && observedIpMap.has(s)) {
-      portsList.forEach((p: number) => observedIpMap.get(s)?.ports.add(p));
-      if (isSus) observedIpMap.get(s)!.isSus = true;
-    }
-    if (d && observedIpMap.has(d)) {
-      portsList.forEach((p: number) => observedIpMap.get(d)?.ports.add(p));
-      if (isSus) observedIpMap.get(d)!.isSus = true;
-    }
-  });
-
-  const assetRows: Array<{
-    name: string;
-    ip: string;
-    type: string;
-    risk: string;
-    riskColor: string;
-    activity: string;
-    status: string;
-  }> = [];
-
-  if (isDemo) {
-    assetRows.push(
-      { name: 'Primary Database DB-01', ip: '192.168.1.50', type: 'Database Server', risk: 'CRITICAL', riskColor: RED, activity: 'Unauthorized SQL Query & Egress Exfiltration', status: 'Under Investigation' },
-      { name: 'Secured Workstation WS-05', ip: '192.168.1.25', type: 'Workstation', risk: 'HIGH', riskColor: ORANGE, activity: 'Lateral Movement & Credential Dumping', status: 'At Risk' },
-      { name: 'Domain Controller DC-01', ip: '10.0.0.5', type: 'Domain Controller', risk: 'CRITICAL', riskColor: RED, activity: 'Kerberoasting & Privilege Escalation TGS', status: 'Quarantined' },
-      { name: 'Core Gateway Router GW-01', ip: '10.0.0.1', type: 'Network Gateway', risk: 'MEDIUM', riskColor: ORANGE, activity: 'External Port Scan & SYN Flood Anomaly', status: 'Monitored' },
-      { name: 'External Web Gateway', ip: '203.0.113.10', type: 'Web Gateway', risk: 'LOW', riskColor: BLUE, activity: 'Reconnaissance Probing & Directory Traversal', status: 'Resolved' },
-    );
-  } else {
-    const ipList = Array.from(observedIpMap.values()).slice(0, 5);
-
-    if (ipList.length === 0) {
-      assetRows.push({
-        name: 'Observed Network Host',
-        ip: '0.0.0.0',
-        type: 'Unknown / Network Host',
-        risk: 'LOW',
-        riskColor: BLUE,
-        activity: 'Baseline traffic observed',
-        status: 'Monitored',
-      });
-    } else {
-      ipList.forEach(entry => {
-        const ports = Array.from(entry.ports);
-
-        let assetType = 'Unknown / Network Host'; // EXACT prompt requirement default!
-        if (ports.some(p => [5432, 3306, 1433, 1521, 27017].includes(p))) {
-          assetType = 'Database Server';
-        } else if (ports.some(p => [80, 443, 8080, 8443].includes(p))) {
-          assetType = 'Web Server / Gateway';
-        } else if (ports.some(p => [53].includes(p))) {
-          assetType = 'DNS Server';
-        } else if (ports.some(p => [88, 389, 445].includes(p))) {
-          assetType = 'Domain Controller';
-        } else if (ports.some(p => [22, 3389, 23].includes(p))) {
-          assetType = 'Remote Access Host';
-        }
-
-        let riskLevel = 'LOW';
-        let riskColor = GREEN;
-        if (entry.isSus) {
-          riskLevel = 'HIGH';
-          riskColor = ORANGE;
-        }
-
-        assetRows.push({
-          name: `Host ${entry.ip}`,
-          ip: entry.ip,
-          type: assetType,
-          risk: riskLevel,
-          riskColor,
-          activity: `${entry.pktCount.toLocaleString()} pkts observed across ${ports.length > 0 ? ports.slice(0, 3).join(', ') : 'network'} ports`,
-          status: entry.isSus ? 'Under Investigation' : 'Monitored',
-        });
-      });
+  const actions = sectionByTitle(report, 'Recommended Actions');
+  if (actions) {
+    w.section(`${n++}. Recommended Actions`);
+    if (actions.content.summary) w.paragraph(String(actions.content.summary), { color: MUTED });
+    const rows = (actions.content.actions ?? []) as { priority: string; action: string; rationale: string; activities: string[] }[];
+    if (rows.length) {
+      w.table(['Priority', 'Action', 'Why', 'Ref'], [22, 82, 56, 22],
+        rows.map(r => [r.priority, r.action, r.rationale, r.activities.join(', ')]),
+        i => PRIORITY[rows[i].priority] ?? null);
     }
   }
 
-  // Asset Summary Stats Banner
-  const criticalAssetCount = assetRows.filter(r => r.risk === 'CRITICAL').length;
-  const highAssetCount = assetRows.filter(r => r.risk === 'HIGH').length;
-
-  doc.setFillColor(248, 250, 252);
-  doc.rect(14, 28, 182, 12, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.rect(14, 28, 182, 12, 'S');
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(15, 23, 42);
-  doc.text(`Affected Assets: ${assetRows.length}`, 22, 35.5);
-  doc.setTextColor(239, 68, 68);
-  doc.text(`Critical Risk: ${criticalAssetCount}`, 68, 35.5);
-  doc.setTextColor(249, 115, 22);
-  doc.text(`High Risk: ${highAssetCount}`, 110, 35.5);
-  doc.setTextColor(11, 99, 206);
-  doc.text(`Monitored: ${assetRows.length - criticalAssetCount - highAssetCount}`, 152, 35.5);
-
-  // SOC-Style Asset Table Header (Fixed Column Layout: 22% | 14% | 15% | 13% | 23% | 13%)
-  doc.setFillColor(241, 245, 249);
-  doc.rect(14, 44, 182, 8, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.rect(14, 44, 182, 8, 'S');
-
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(100, 116, 139);
-  doc.text('ASSET / HOSTNAME', 17, 49.5);
-  doc.text('IP ADDRESS', 56, 49.5);
-  doc.text('ASSET TYPE', 81.5, 49.5);
-  doc.text('RISK LEVEL', 108.5, 49.5);
-  doc.text('OBSERVED ACTIVITY', 132, 49.5);
-  doc.text('STATUS', 174, 49.5);
-
-  // Asset Table Rows with Safe Multiline Wrapping & Vertical Centering
-  let assetY = 52;
-  assetRows.forEach((row, idx) => {
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    const nameLines = doc.splitTextToSize(row.name, 34);
-    const activityLines = doc.splitTextToSize(row.activity, 38);
-    const statusLines = doc.splitTextToSize(row.status, 20);
-
-    const maxLines = Math.max(nameLines.length, activityLines.length, statusLines.length, 1);
-    const rowHeight = Math.max(14, maxLines * 4.5 + 5);
-
-    doc.setFillColor(idx % 2 === 0 ? 255 : 248, idx % 2 === 0 ? 255 : 250, idx % 2 === 0 ? 255 : 252);
-    doc.rect(14, assetY, 182, rowHeight, 'F');
-    doc.setDrawColor(241, 245, 249);
-    doc.rect(14, assetY, 182, rowHeight, 'S');
-
-    const nameY = assetY + (rowHeight - nameLines.length * 4) / 2 + 3;
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(15, 23, 42);
-    doc.text(nameLines, 17, nameY);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(11, 99, 206);
-    doc.text(row.ip, 56, assetY + rowHeight / 2 + 1);
-
-    doc.setTextColor(100, 116, 139);
-    const typeText = doc.splitTextToSize(row.type, 24);
-    doc.text(typeText[0], 81.5, assetY + rowHeight / 2 + 1);
-
-    doc.setFillColor(row.riskColor);
-    doc.rect(110, assetY + (rowHeight - 5) / 2, 16.5, 5, 'F');
-    doc.setFontSize(6.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.text(row.risk, 118.25, assetY + (rowHeight - 5) / 2 + 3.5, { align: 'center' });
-
-    const activityY = assetY + (rowHeight - activityLines.length * 4) / 2 + 3;
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    doc.text(activityLines, 132, activityY);
-
-    const statusY = assetY + (rowHeight - statusLines.length * 4) / 2 + 3;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text(statusLines, 174, statusY);
-
-    assetY += rowHeight;
-  });
-
-  // Additional SOC Asset Exposure Context Box
-  const summaryBoxY = Math.max(128, assetY + 4);
-  doc.setFillColor(248, 250, 252);
-  doc.rect(14, summaryBoxY, 182, 56, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.rect(14, summaryBoxY, 182, 56, 'S');
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(18, 58, 122);
-  doc.text('ASSET RISK & IMPACT ANALYSIS SUMMARY', 18, summaryBoxY + 8);
-
-  const notes: string[] = [];
-
-  if (isDemo) {
-    notes.push(
-      'Domain Controller DC-01 (10.0.0.5) exhibits high risk of credential harvesting due to active Kerberoasting attempts.',
-      'Primary Database DB-01 (192.168.1.50) is the target of anomalous SQL egress traffic, requiring immediate egress rate-limiting.',
-      'Workstation WS-05 (192.168.1.25) has been identified as the primary pivot point for internal lateral movement.',
-      'Core Gateway GW-01 (10.0.0.1) has successfully blocked external SYN probes but requires signature update for rate limiting.',
-      'All asset telemetry is synchronized with NEXTRACE AI forensic intelligence pipeline for continuous automated monitoring.'
-    );
-  } else {
-    if (assetRows.length > 0 && assetRows[0].ip !== '0.0.0.0') {
-      assetRows.slice(0, 3).forEach(a => {
-        notes.push(`Host ${a.ip} identified as ${a.type} with status '${a.status}' (${a.activity}).`);
-      });
-    } else {
-      notes.push('No high-risk network assets identified in this capture window.');
-    }
-    notes.push(`Total capture duration: ${duration.toFixed(1)}s across ${flowCount.toLocaleString()} total flows.`);
-    notes.push('All network entities derived strictly from observed packet header metadata in the uploaded PCAP file.');
+  for (const s of [...report.sections].sort((a, b) => a.order - b.order)) {
+    if (RENDERED_FIRST.has(s.title)) continue;
+    w.section(`${n++}. ${s.title}`);
+    renderGeneric(w, s.content);
+    if (s.evidence_refs.length) w.paragraph(`Evidence: ${s.evidence_refs.slice(0, 30).join(', ')}`, { size: 7, color: MUTED });
   }
 
-  let noteY = summaryBoxY + 15;
-  notes.forEach((note) => {
-    doc.setFillColor(18, 58, 122);
-    doc.circle(20, noteY - 1, 0.8, 'F');
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    const splitNote = doc.splitTextToSize(note, 168);
-    doc.text(splitNote, 24, noteY);
-    noteY += splitNote.length * 4.5 + 2.5;
-  });
+  w.section('Disclaimer');
+  w.paragraph(report.disclaimer, { size: 8, color: MUTED });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PAGE 3: REMEDIATION & REPORT STATUS
-  // ═══════════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  drawPageHeaderFooter(3);
-
-  // Section Header
-  doc.setFillColor(18, 58, 122);
-  doc.rect(14, 18, 182, 7.5, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9.5);
-  doc.setFont('helvetica', 'bold');
-  doc.text('3. ACTIONABLE REMEDIATION RECOMMENDATIONS', 18, 23.2);
-
-  const remediations: Array<{
-    priorityGroup: string;
-    color: string;
-    rec: string;
-    reason: string;
-    finding: string;
-    action: string;
-  }> = [];
-
-  if (isDemo) {
-    remediations.push(
-      {
-        priorityGroup: 'CRITICAL / IMMEDIATE ACTIONS',
-        color: RED,
-        rec: 'Isolate Domain Controller DC-01 & Reset Compromised Admin Credentials',
-        reason: 'Active Kerberoasting & privilege escalation detected on 10.0.0.5.',
-        finding: 'Kerberoasting & Privilege Escalation Attempt',
-        action: 'Revoke active Kerberos tickets, terminate LDAP sessions, and isolate IP 10.0.0.5.',
-      },
-      {
-        priorityGroup: 'CRITICAL / IMMEDIATE ACTIONS',
-        color: RED,
-        rec: 'Enforce Database Firewall Egress Rules on DB Server (192.168.1.50)',
-        reason: 'Predicted next stage is Data Exfiltration targeting database schema.',
-        finding: 'Unauthorized Database Schema Exfiltration Query',
-        action: 'Block unauthenticated outbound TCP connections on ports 5432 / 3306.',
-      },
-      {
-        priorityGroup: 'HIGH PRIORITY ACTIONS',
-        color: ORANGE,
-        rec: 'Host Quarantine & EDR Scan on Workstation-05 (192.168.1.25)',
-        reason: 'Observed LSASS memory access and unauthorized lateral SSH connections.',
-        finding: 'Suspicious Lateral Movement & Credential Dumping',
-        action: 'Deploy EDR host isolation command and scan for persistence mechanisms.',
-      },
-      {
-        priorityGroup: 'MONITORING / FOLLOW-UP',
-        color: BLUE,
-        rec: 'Update Edge Gateway Reconnaissance Inspection Policies',
-        reason: 'Increased port scanning activity detected from external sources.',
-        finding: 'External Port Scanning Anomaly',
-        action: 'Apply rate-limiting rules at Core Gateway Router GW-01.',
-      }
-    );
-  } else {
-    if (rawFindings.length > 0) {
-      rawFindings.slice(0, 4).forEach((f) => {
-        let pGroup = 'MONITORING / FOLLOW-UP';
-        let rColor = BLUE;
-        if (f.severity === 'CRITICAL' || f.severity === 'HIGH') {
-          pGroup = 'CRITICAL / IMMEDIATE ACTIONS';
-          rColor = RED;
-        } else if (f.severity === 'MEDIUM') {
-          pGroup = 'HIGH PRIORITY ACTIONS';
-          rColor = ORANGE;
-        }
-
-        remediations.push({
-          priorityGroup: pGroup,
-          color: rColor,
-          rec: `Investigate ${f.title}`,
-          reason: f.summary || 'Security finding identified during PCAP analysis.',
-          finding: f.title,
-          action: `Audit associated network flows and verify service configuration.`,
-        });
-      });
-    } else {
-      remediations.push({
-        priorityGroup: 'MONITORING / FOLLOW-UP',
-        color: GREEN,
-        rec: 'Maintain Baseline Network Monitoring & Logging',
-        reason: 'No high-risk threat signatures or anomalous exfiltration flows were detected in this PCAP.',
-        finding: 'N/A — Baseline Network Activity',
-        action: 'Continue routine traffic logging, PCAP inspection, and automated feature extraction.',
-      });
-    }
-  }
-
-  let remY = 28;
-  remediations.forEach((r, idx) => {
-    doc.setFillColor(255, 255, 255);
-    doc.rect(14, remY, 182, 33, 'F');
-    doc.setDrawColor(226, 232, 240);
-    doc.rect(14, remY, 182, 33, 'S');
-
-    doc.setFillColor(r.color);
-    doc.rect(14, remY, 2.5, 33, 'F');
-
-    // Group Header & Recommendation
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(r.color);
-    doc.text(r.priorityGroup, 20, remY + 6);
-
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(15, 23, 42);
-    const recText = doc.splitTextToSize(`${idx + 1}. ${r.rec}`, 165);
-    doc.text(recText[0], 20, remY + 11.5);
-
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Reason:', 20, remY + 17);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    const reasonText = doc.splitTextToSize(r.reason, 150);
-    doc.text(reasonText[0], 35, remY + 17);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Related Finding:', 20, remY + 22);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(15, 23, 42);
-    const findingText = doc.splitTextToSize(r.finding, 140);
-    doc.text(findingText[0], 44, remY + 22);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(100, 116, 139);
-    doc.text('Required Action:', 20, remY + 27);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(11, 99, 206);
-    const actionText = doc.splitTextToSize(r.action, 140);
-    doc.text(actionText[0], 45, remY + 27);
-
-    remY += 36;
-  });
-
-  // Report Status Block (Bottom of Page 3)
-  doc.setFillColor(248, 250, 252);
-  doc.rect(14, 178, 182, 30, 'F');
-  doc.setDrawColor(226, 232, 240);
-  doc.rect(14, 178, 182, 30, 'S');
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(18, 58, 122);
-  doc.text('REPORT STATUS SUMMARY', 18, 186);
-
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(15, 23, 42);
-  doc.text(`Total Findings: ${rawFindings.length}`, 22, 194);
-  doc.text(`Affected Assets: ${assetRows.length}`, 72, 194);
-  doc.text(`Remediation Actions: ${remediations.length}`, 122, 194);
-
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text(`Attestation: Automated SOC Security Audit completed for ${filename}. All findings & telemetry mappings validated.`, 18, 202);
-
-  // STRICT VALIDATION: Ensure exactly 3 pages
-  const totalPageCount = doc.getNumberOfPages();
-  if (totalPageCount > 3) {
-    console.warn(`[PDF Warning] Document exceeded 3 pages (${totalPageCount} pages). Truncating extra pages.`);
-    for (let p = totalPageCount; p > 3; p--) {
-      doc.deletePage(p);
-    }
-  }
-
-  // Automatic Download
-  const outFilename = `NEXTRACE_AI_Security_Report_${dateStr}.pdf`;
-  doc.save(outFilename);
+  w.footers();
+  d.save(`nextrace-${report.report_type}-${report.report_id}.pdf`.replace(/[^a-z0-9._-]/gi, '-'));
 }

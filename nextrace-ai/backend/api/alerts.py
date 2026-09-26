@@ -3,9 +3,11 @@ NEXTRACE AI — Alerts API Router (Phase 10)
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints, field_validator
+
+from backend.alerts.models import SEVERITIES, STATUSES, CATEGORIES
 
 from backend.alerts.store import (
     list_alerts,
@@ -21,33 +23,78 @@ from backend.alerts.store import (
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
 # ── Request Models ─────────────────────────────────────────────────────────────
+# Every field is bounded: the alert store is in memory and alerts are rendered in every open tab,
+# so oversized or malformed input is rejected here rather than stored and broadcast.
+
+ShortText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+LongText  = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
+Line      = Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)]
+HostRef   = Annotated[str, StringConstraints(strip_whitespace=True, max_length=64, pattern=r"^[0-9A-Za-z.:_-]+$")]
+Stamp     = Annotated[str, StringConstraints(strip_whitespace=True, max_length=40, pattern=r"^[0-9T:.+\-Z ]+$")]
+Tag       = Annotated[str, StringConstraints(strip_whitespace=True, max_length=64)]
+
 
 class UpdateAlertRequest(BaseModel):
     status: Optional[str] = None
-    assigned_to: Optional[str] = None
+    assigned_to: Optional[ShortText] = None
     # Grouped-activity alerts grow as more packets join the activity
-    event_count: Optional[int] = None
-    last_seen: Optional[str] = None
-    confidence: Optional[int] = None
+    event_count: Optional[int] = Field(None, ge=0, le=10_000_000)
+    last_seen: Optional[Stamp] = None
+    confidence: Optional[int] = Field(None, ge=0, le=100)
+    affected_assets: Optional[List[Line]] = Field(None, max_length=50)
+
+    @field_validator("status")
+    @classmethod
+    def _status(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in STATUSES:
+            raise ValueError(f"status must be one of {sorted(STATUSES)}")
+        return v
+
 
 class CreateAlertRequest(BaseModel):
-    title: str = "Suspicious Network Anomaly"
-    description: Optional[str] = "High-confidence anomalous telemetry flagged by AI detector."
+    title: ShortText = "Suspicious Network Anomaly"
+    description: Optional[LongText] = "High-confidence anomalous telemetry flagged by AI detector."
     severity: str = "HIGH"
     status: str = "OPEN"
     category: str = "ANOMALY"
-    source_ip: Optional[str] = "192.168.1.105"
-    destination_ip: Optional[str] = "10.0.0.1"
-    protocol: Optional[str] = "TCP"
-    event_count: int = 15
-    confidence: int = 88
-    first_seen: Optional[str] = None
-    last_seen: Optional[str] = None
-    tags: Optional[List[str]] = None
-    evidence: Optional[List[str]] = None
+    source_ip: Optional[HostRef] = "192.168.1.105"
+    destination_ip: Optional[HostRef] = "10.0.0.1"
+    protocol: Optional[Annotated[str, StringConstraints(max_length=32)]] = "TCP"
+    event_count: int = Field(15, ge=0, le=10_000_000)
+    confidence: int = Field(88, ge=0, le=100)
+    first_seen: Optional[Stamp] = None
+    last_seen: Optional[Stamp] = None
+    tags: Optional[List[Tag]] = Field(None, max_length=20)
+    evidence: Optional[List[Line]] = Field(None, max_length=30)
     simulation: bool = False
+    # SOC context produced by the grouping layer (src/lib/socPlaybook.ts)
+    activity_id: Optional[Tag] = None
+    affected_assets: Optional[List[Line]] = Field(None, max_length=50)
+    recommended_actions: Optional[List[Line]] = Field(None, max_length=20)
+    explanation: Optional[LongText] = None
     # Grouped-activity alerts: repeated submissions with the same key return the existing alert
-    dedupe_key: Optional[str] = None
+    dedupe_key: Optional[Annotated[str, StringConstraints(max_length=200)]] = None
+
+    @field_validator("severity")
+    @classmethod
+    def _severity(cls, v: str) -> str:
+        if v not in SEVERITIES:
+            raise ValueError(f"severity must be one of {sorted(SEVERITIES)}")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def _status(cls, v: str) -> str:
+        if v not in STATUSES:
+            raise ValueError(f"status must be one of {sorted(STATUSES)}")
+        return v
+
+    @field_validator("category")
+    @classmethod
+    def _category(cls, v: str) -> str:
+        if v not in CATEGORIES:
+            raise ValueError(f"category must be one of {sorted(CATEGORIES)}")
+        return v
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -59,8 +106,8 @@ async def get_alerts_endpoint(
     search: Optional[str] = None,
     source_ip: Optional[str] = None,
     assigned_to: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
 ):
     """List alerts with filtering."""
     alerts = list_alerts()

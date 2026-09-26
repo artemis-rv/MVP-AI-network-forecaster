@@ -1,14 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, Bell, ChevronDown, Moon, Sun, X, User, Settings, LogOut, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Search, Bell, ChevronDown, Moon, Sun, X, User, Settings, LogOut, ArrowRight, CheckCircle2, HelpCircle } from 'lucide-react';
 import { useAppStore, AppNotification } from '@/store/appStore';
 import { useLiveStore } from '@/store/liveStore';
 import { useAlertStore } from '@/store/alertStore';
 import { apiService } from '@/services/api';
 import { wsService } from '@/services/websocket';
+import { LiveIndicator } from '@/components/layout/LiveIndicator';
+import { startTour } from '@/components/tour/tourStore';
 
 export function TopBar() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const {
     searchOpen, setSearchOpen,
     userMenuOpen, setUserMenuOpen,
@@ -25,8 +28,6 @@ export function TopBar() {
   // Bell badge = unread notifications in the panel
   const activeAlertsBadge = unreadCount;
 
-  const { session } = useLiveStore();
-  const isLiveRunning = session?.running ?? false;
 
   // Load alerts and sync notifications once on mount; rejoin a running live session after a page reload
   useEffect(() => {
@@ -112,22 +113,9 @@ export function TopBar() {
         zIndex: 90,
       }}
     >
-      {isLiveRunning && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 3,
-            background: 'var(--color-critical)',
-            boxShadow: '0 0 8px var(--color-critical)',
-            zIndex: 100,
-          }}
-        />
-      )}
       {/* Search Bar */}
       <div
+        data-tour="search"
         style={{
           flex: 1,
           maxWidth: 480,
@@ -194,42 +182,22 @@ export function TopBar() {
 
       <div style={{ flex: 1 }} />
 
-      {/* LIVE DEMO Badge */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: 'rgba(16,185,129,0.1)',
-          border: '1px solid rgba(16,185,129,0.3)',
-          borderRadius: 999,
-          padding: '4px 12px',
-          cursor: 'pointer',
-        }}
-        onClick={() => addToast('Live demo mode is active. Data is simulated.', 'info')}
+      {/* Live session state — visible on every page */}
+      <LiveIndicator />
+
+      {/* Guided tour of the current page */}
+      <button
+        type="button"
+        onClick={() => startTour(pathname, pathname === '/')}
+        title="Take a tour of this page"
+        aria-label="Take a tour of this page"
+        style={{ width: 38, height: 38, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
       >
-        {isLiveRunning && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid rgba(0,0,0,0.5)' }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-critical)', animation: 'pulse-dot 1.5s infinite' }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-critical)' }}>LIVE RUNNING</span>
-          </span>
-        )}
-        <div
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: 'var(--color-live)',
-            animation: 'pulse-dot 1.5s infinite',
-          }}
-        />
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-live)', letterSpacing: '0.5px' }}>
-          LIVE DEMO
-        </span>
-      </div>
+        <HelpCircle size={16} color="var(--text-secondary)" />
+      </button>
 
       {/* Notifications */}
-      <div ref={notifRef} style={{ position: 'relative' }}>
+      <div ref={notifRef} data-tour="notifications" style={{ position: 'relative' }}>
         <button
           onClick={() => { setNotifPanelOpen(!notifPanelOpen); setUserMenuOpen(false); }}
           title={activeAlertsBadge > 0 ? `${activeAlertsBadge} active alerts` : 'Notifications'}

@@ -31,6 +31,13 @@ import { ActivityList, SeverityPill } from '@/components/activity/ActivityList';
 import { SEVERITY_STYLE } from '@/components/activity/severity';
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline';
 import { ActivityInspector } from '@/components/activity/ActivityInspector';
+import { StageMap } from '@/components/activity/StageMap';
+import { toStageMapItems } from '@/components/activity/stageMapItems';
+import { PlainLanguagePanel } from '@/components/activity/PlainLanguagePanel';
+import { EntityBehaviour } from '@/components/activity/EntityBehaviour';
+import { Tabs } from '@/components/ui/Tabs';
+import { useFocusParam } from '@/hooks/useFocusParam';
+import { buildStageMap, affectedAssets, recommendedActions } from '@/lib/socPlaybook';
 
 function tsToTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString('en-US', { hour12: false });
@@ -424,140 +431,208 @@ function ErrorView({ error, onReset }: { error: string | null; onReset: () => vo
 // Normal traffic is summarised statistically instead of being listed.
 // ═══════════════════════════════════════════════════════════════════════════
 
+type ResultTab = 'overview' | 'activities' | 'entities' | 'timeline' | 'relationships' | 'evidence';
+
 function ResultView({ result, jobId, filename, isDemo }: {
   result: HistoricalResult; jobId: string | null; filename: string; isDemo: boolean;
 }) {
   const activities = useMemo(() => significantActivities(groupHistoricalEvents(result.suspicious_events)), [result]);
   const { entities } = useMemo(() => deriveRiskEntities(activities), [activities]);
+  const stageMap = useMemo(() => toStageMapItems(buildStageMap(activities)), [activities]);
+  const assets = useMemo(() => affectedAssets(activities), [activities]);
+  const actions = useMemo(() => recommendedActions(activities, 6), [activities]);
   const [inspectId, setInspectId] = useState<string | null>(null);
+  const [tab, setTab] = useState<ResultTab>('overview');
+  const [entityIp, setEntityIp] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<{ id: string; key: string | number } | null>(null);
   const inspected = inspectId ? activities.find(a => a.id === inspectId) ?? null : null;
+
+  // Deep link (?focus=HACT-0003) from alerts, timelines or reports → exact activity row + inspector
+  const focus = useFocusParam();
+  const [handledFocus, setHandledFocus] = useState<string | null>(null);
+  if (focus && focus.key !== handledFocus && activities.some(a => a.id === focus.id)) {
+    setHandledFocus(focus.key);
+    setTab('activities');
+    setHighlight(focus);
+    setInspectId(focus.id);
+  }
+
+  function locate(id: string) {
+    setTab('activities');
+    setHighlight({ id, key: Date.now() });
+  }
 
   const worst = activities.reduce<AlertSeverity | null>((w, a) => (!w || SEVERITY_RANK[a.severity] > SEVERITY_RANK[w] ? a.severity : w), null);
   const highRisk = entities.filter(e => e.riskLevel === 'High').length;
-  const keyFindings = [...activities]
-    .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || b.eventCount - a.eventCount)
-    .slice(0, 4);
   const steps = nextSteps(activities);
-  const protoTotal = result.protocol_distribution.reduce((s, p) => s + p.count, 0) || 1;
+  const protoTotal = result.protocol_distribution.reduce((sum, pr) => sum + pr.count, 0) || 1;
   const suspiciousPairs = result.entity_relationships.filter(r => r.is_suspicious).length;
+  const selectedEntity = entityIp ?? entities[0]?.ip ?? null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 32 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 32 }}>
       {isDemo && (
         <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, padding: '8px 14px', fontSize: 12, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={13} /> Built-in demo capture — packets are synthetic, not real network traffic.
         </div>
       )}
 
-      {/* ── A. Summary / key findings ── */}
-      <SectionCard title="Summary" subtitle="What happened · who is involved · how severe · what to investigate next">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 16 }}>
-          <HistKpi label="Grouped Activities" value={activities.length.toString()} icon={<ShieldAlert size={16} />}
-            color={activities.length ? 'var(--color-warning)' : 'var(--color-live)'} sub={`from ${result.suspicious_events.length} detector indicators`} />
-          <HistKpi label="Highest Severity" value={worst ?? 'None'} icon={<AlertTriangle size={16} />}
-            color={worst ? SEVERITY_STYLE[worst].color : 'var(--color-live)'} sub={`${activities.filter(a => a.severity === 'CRITICAL' || a.severity === 'HIGH').length} high / critical`} />
-          <HistKpi label="Suspicious Entities" value={entities.length.toString()} icon={<Users size={16} />}
-            color="var(--primary)" sub={`${highRisk} high risk`} />
-          <HistKpi label="Capture" value={result.packet_count.toLocaleString()} icon={<Layers size={16} />}
-            color="var(--secondary)" sub={`packets · ${formatDuration(result.duration_seconds)} · ${result.flow_count} flows`} />
+      {/* Always visible: headline figures + where the attack is in the kill chain */}
+      <div data-tour="hist-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+        <HistKpi label="Grouped Activities" value={activities.length.toString()} icon={<ShieldAlert size={16} />}
+          color={activities.length ? 'var(--color-warning)' : 'var(--color-live)'} sub={`from ${result.suspicious_events.length} detector indicators`} />
+        <HistKpi label="Highest Severity" value={worst ?? 'None'} icon={<AlertTriangle size={16} />}
+          color={worst ? SEVERITY_STYLE[worst].color : 'var(--color-live)'} sub={`${activities.filter(a => a.severity === 'CRITICAL' || a.severity === 'HIGH').length} high / critical`} />
+        <HistKpi label="Affected Assets" value={assets.length.toString()} icon={<Users size={16} />}
+          color="var(--primary)" sub={`${entities.length} suspicious entities · ${highRisk} high risk`} />
+        <HistKpi label="Capture" value={result.packet_count.toLocaleString()} icon={<Layers size={16} />}
+          color="var(--secondary)" sub={`packets · ${formatDuration(result.duration_seconds)} · ${result.flow_count} flows`} />
+      </div>
+      <div data-tour="stage-map" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', padding: '12px 14px' }}>
+        <div style={{ ...subHeading, marginBottom: 8 }}>Attack stage map</div>
+        <StageMap items={stageMap} onSelectActivity={id => setInspectId(id)} compact />
+      </div>
+
+      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+        <div style={{ padding: '0 14px' }}>
+          <Tabs<ResultTab>
+            tourId="hist-tabs"
+            active={tab}
+            onChange={setTab}
+            tabs={[
+              { id: 'overview', label: 'Overview' },
+              { id: 'activities', label: 'Activities', count: activities.length },
+              { id: 'entities', label: 'Entities', count: entities.length },
+              { id: 'timeline', label: 'Timeline' },
+              { id: 'relationships', label: 'Relationships', count: suspiciousPairs },
+              { id: 'evidence', label: 'Evidence & Limits' },
+            ]}
+          />
         </div>
-        {activities.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <CheckCircle2 size={16} color="#059669" /> No suspicious activity was detected in this capture.
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
-            <div>
-              <div style={subHeading}>Key findings</div>
-              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {keyFindings.map(a => (
-                  <li key={a.id} onClick={() => setInspectId(a.id)} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
-                    <SeverityPill severity={a.severity} />
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                      <strong style={{ color: 'var(--text-primary)' }}>{a.label}</strong> — {a.reason}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <div style={subHeading}>Investigate next</div>
-              <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {steps.map((s, i) => <li key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{s}</li>)}
-              </ol>
-            </div>
-          </div>
-        )}
-      </SectionCard>
 
-      {/* ── B. Grouped suspicious activities (click → C. deep inspection) ── */}
-      <SectionCard
-        title="Suspicious Activities"
-        subtitle="Detector indicators grouped by similarity (type, source, protocol, target, port) · click a row for deep inspection"
-        badge={activities.length > 0 ? { label: `${activities.length} activities`, color: 'var(--color-warning)', bg: '#fef3c7' } : undefined}
-      >
-        <ActivityList activities={activities} onSelect={a => setInspectId(a.id)} maxHeight={340}
-          emptyText="No suspicious activity detected in this capture." />
-      </SectionCard>
-
-      {/* ── Who is involved ── */}
-      <SectionCard title="Suspicious Entities" subtitle="Risk scored from grouped activity only — hosts with benign traffic are not listed">
-        <EntityRiskTable entities={entities} onSelect={id => setInspectId(id)} />
-      </SectionCard>
-
-      {/* ── D. Major chronological events ── */}
-      <SectionCard title="Major Events" subtitle="Chronological, activity-level reconstruction · normal traffic summarised below">
-        <ActivityTimeline activities={activities} onSelect={a => setInspectId(a.id)} maxHeight={300}
-          emptyText="No major suspicious events in this capture." />
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
-          <div style={subHeading}>Traffic volume per {result.window_seconds}s window</div>
-          <TrafficTimelineChart windows={result.temporal_windows} events={result.suspicious_events} />
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.6 }}>
-            Normal traffic: {result.packet_count.toLocaleString()} packets over {result.temporal_windows.length} windows ·
-            protocol mix {result.protocol_distribution.map(p => `${p.protocol} ${Math.round((p.count / protoTotal) * 100)}%`).join(', ')} ·
-            top talkers {result.top_src_ips.slice(0, 3).map(x => x.ip).join(', ')}
-          </div>
-        </div>
-      </SectionCard>
-
-      {/* ── E. Network / entity relationships ── */}
-      <SectionCard title="Network Relationships" subtitle={`Observed host connections · ${suspiciousPairs} suspicious host pair${suspiciousPairs === 1 ? '' : 's'} highlighted`}>
-        <div style={{ height: 380, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-          <ReactFlowProvider>
-            <HistoricalNetworkGraph relationships={result.entity_relationships} />
-          </ReactFlowProvider>
-        </div>
-      </SectionCard>
-
-      {/* ── F. Evidence & limitations ── */}
-      <SectionCard title="Evidence & Limitations" subtitle="Capture provenance and what this analysis cannot show">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={subHeading}>Capture / source</div>
-            {([
-              ['Capture file', filename || '—'],
-              ['Analysis ID', jobId ?? '—'],
-              ['Capture period', `${tsToTime(result.start_timestamp)} — ${tsToTime(result.end_timestamp)}`],
-              ['Analysis window', `${result.window_seconds}s`],
-              ['Packets / flows', `${result.packet_count.toLocaleString()} / ${result.flow_count.toLocaleString()}`],
-              ['Evidence hash', 'Computed in Forensic Analysis'],
-            ] as const).map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 11, padding: '4px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                <span style={{ color: 'var(--text-muted)' }}>{k}</span>
-                <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
+        <div style={{ padding: '14px 18px' }}>
+          {tab === 'overview' && (
+            activities.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle2 size={16} color="#059669" /> No suspicious activity was detected in this capture.
               </div>
-            ))}
-          </div>
-          <div>
-            <div style={subHeading}>Limitations</div>
-            <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {historicalLimitations({ isDemo, result }).map((l, i) => (
-                <li key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{l}</li>
-              ))}
-            </ul>
-          </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18 }}>
+                <PlainLanguagePanel
+                  activities={activities}
+                  context="historical"
+                  totals={{ packets: result.packet_count, flows: result.flow_count, duration_seconds: result.duration_seconds }}
+                  onSelect={a => setInspectId(a.id)}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div>
+                    <div style={subHeading}>Affected assets</div>
+                    {assets.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No internal asset affected.</div>
+                    ) : (
+                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {assets.slice(0, 5).map(x => (
+                          <li key={x.ip} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12 }}>
+                            <SeverityPill severity={x.severity} />
+                            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }}>{x.ip}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>{x.role} — {x.impact}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <div style={subHeading}>Recommended actions</div>
+                    <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {actions.map((r, i) => (
+                        <li key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                          <strong style={{ color: r.priority === 'Immediate' ? '#b91c1c' : r.priority === 'Next' ? '#b45309' : 'var(--text-muted)' }}>{r.priority}:</strong> {r.action}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                  <div>
+                    <div style={subHeading}>Investigate next</div>
+                    <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {steps.map((st, i) => <li key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{st}</li>)}
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+
+          {tab === 'activities' && (
+            <ActivityList activities={activities} onSelect={a => setInspectId(a.id)} maxHeight={460} highlight={highlight}
+              emptyText="No suspicious activity detected in this capture." />
+          )}
+
+          {tab === 'entities' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 16 }}>
+              <EntityRiskTable entities={entities} selectedIp={selectedEntity} onSelect={setEntityIp} />
+              <div>
+                <div style={subHeading}>What {selectedEntity ?? 'this entity'} did</div>
+                {selectedEntity
+                  ? <EntityBehaviour ip={selectedEntity} activities={activities} onSelect={id => setInspectId(id)} alertsApplicable={false} />
+                  : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No suspicious entities detected.</div>}
+              </div>
+            </div>
+          )}
+
+          {tab === 'timeline' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 18 }}>
+              <ActivityTimeline activities={activities} onSelect={a => setInspectId(a.id)} onLocate={a => locate(a.id)} maxHeight={420}
+                emptyText="No major suspicious events in this capture." />
+              <div>
+                <div style={subHeading}>Traffic volume per {result.window_seconds}s window</div>
+                <TrafficTimelineChart windows={result.temporal_windows} events={result.suspicious_events} />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.6 }}>
+                  Normal traffic: {result.packet_count.toLocaleString()} packets over {result.temporal_windows.length} windows ·
+                  protocol mix {result.protocol_distribution.map(pr => `${pr.protocol} ${Math.round((pr.count / protoTotal) * 100)}%`).join(', ')} ·
+                  top talkers {result.top_src_ips.slice(0, 3).map(x => x.ip).join(', ')}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'relationships' && (
+            <div style={{ height: 440, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+              <ReactFlowProvider>
+                <HistoricalNetworkGraph relationships={result.entity_relationships} />
+              </ReactFlowProvider>
+            </div>
+          )}
+
+          {tab === 'evidence' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={subHeading}>Capture / source</div>
+                {([
+                  ['Capture file', filename || '—'],
+                  ['Analysis ID', jobId ?? '—'],
+                  ['Capture period', `${tsToTime(result.start_timestamp)} — ${tsToTime(result.end_timestamp)}`],
+                  ['Analysis window', `${result.window_seconds}s`],
+                  ['Packets / flows', `${result.packet_count.toLocaleString()} / ${result.flow_count.toLocaleString()}`],
+                  ['Evidence hash', 'Computed in Forensic Analysis'],
+                ] as const).map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 11, padding: '4px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={subHeading}>Limitations</div>
+                <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {historicalLimitations({ isDemo, result }).map((l, i) => (
+                    <li key={i} style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{l}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
-      </SectionCard>
+      </div>
 
       {inspected && (
         <ActivityInspector
@@ -614,12 +689,12 @@ function TrafficTimelineChart({ windows, events }: { windows: TemporalWindow[]; 
   );
 }
 
-function EntityRiskTable({ entities, onSelect }: { entities: DashboardEntity[]; onSelect: (activityId: string) => void }) {
+function EntityRiskTable({ entities, selectedIp, onSelect }: { entities: DashboardEntity[]; selectedIp: string | null; onSelect: (ip: string) => void }) {
   if (entities.length === 0) {
     return <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '20px 0' }}>No suspicious entities detected.</div>;
   }
   return (
-    <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+    <div style={{ maxHeight: 420, overflowY: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead style={{ position: 'sticky', top: 0 }}>
           <tr style={{ background: 'var(--bg-workspace)' }}>
@@ -630,10 +705,8 @@ function EntityRiskTable({ entities, onSelect }: { entities: DashboardEntity[]; 
         </thead>
         <tbody>
           {entities.map(e => (
-            <tr key={e.ip} onClick={() => e.activityIds[0] && onSelect(e.activityIds[0])}
-              style={{ borderTop: '1px solid var(--border-subtle)', cursor: 'pointer' }}
-              onMouseEnter={ev => (ev.currentTarget.style.background = 'var(--bg-workspace)')}
-              onMouseLeave={ev => (ev.currentTarget.style.background = 'transparent')}>
+            <tr key={e.ip} onClick={() => onSelect(e.ip)} aria-selected={selectedIp === e.ip}
+              style={{ borderTop: '1px solid var(--border-subtle)', cursor: 'pointer', background: selectedIp === e.ip ? 'var(--primary-light)' : 'transparent' }}>
               <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{e.ip}</td>
               <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                 <span style={{ fontWeight: 800, color: e.riskLevel === 'High' ? '#b91c1c' : e.riskLevel === 'Medium' ? '#b45309' : '#047857' }}>{e.riskLevel}</span>
@@ -662,26 +735,6 @@ function HistKpi({ label, value, icon, color, sub }: { label: string; value: str
       </div>
       <div style={{ fontSize: 22, fontWeight: 900, color, letterSpacing: '-0.5px', marginBottom: 2 }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sub}</div>
-    </div>
-  );
-}
-
-function SectionCard({ title, subtitle, children, badge }: {
-  title: string; subtitle?: string; children: React.ReactNode;
-  badge?: { label: string; color: string; bg: string };
-}) {
-  return (
-    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-      <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>{title}</h3>
-          {subtitle && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{subtitle}</div>}
-        </div>
-        {badge && (
-          <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: badge.bg, color: badge.color, border: `1px solid ${badge.color}40` }}>{badge.label}</span>
-        )}
-      </div>
-      <div style={{ padding: '14px 18px' }}>{children}</div>
     </div>
   );
 }

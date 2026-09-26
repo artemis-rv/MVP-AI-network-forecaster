@@ -30,6 +30,8 @@ export interface ForecastResult {
   is_benign: boolean;
   demo_label: string;
   stage_probabilities: StageProbability[];
+  /** Early forecast from the first, still-filling window — replaced when that window closes. */
+  provisional?: boolean;
 }
 
 export const ATTACK_STAGES = [

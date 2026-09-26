@@ -13,6 +13,7 @@ import {
 import { useFindingsStore, getFilteredFindings } from '@/store/findingsStore';
 import type { Finding, Report, ReportSection, FindingSeverity, FindingCategory } from '@/types/report';
 import { generateSecurityReportPdf } from '@/utils/pdfGenerator';
+import { StageMap, type StageMapItem } from '@/components/activity/StageMap';
 
 // ── Design tokens (reuse NEXTRACE AI palette) ─────────────────────────────────
 const SEV: Record<FindingSeverity, { color: string; bg: string; border: string }> = {
@@ -52,68 +53,52 @@ function exportJSON(report: Report) {
   URL.revokeObjectURL(url);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mdValue(key: string, val: any): string[] {
+  const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  if (val === null || val === undefined || val === '') return [];
+  if (typeof val !== 'object') return [`**${label}:** ${String(val)}`, ''];
+  if (!Array.isArray(val)) return [`**${label}:**`, '', '```json', JSON.stringify(val, null, 2), '```', ''];
+  if (val.length === 0) return [];
+  if (val.every(v => typeof v !== 'object' || v === null)) return [`**${label}:**`, '', ...val.map(v => `- ${String(v)}`), ''];
+  const cols = Array.from(new Set(val.flatMap(v => Object.keys(v))));
+  const cell = (v: unknown) => (Array.isArray(v) ? v.join(', ') : v === null || v === undefined ? '—' : String(v)).replace(/\|/g, '\\|');
+  return [
+    `**${label}:**`, '',
+    `| ${cols.join(' | ')} |`,
+    `| ${cols.map(() => '---').join(' | ')} |`,
+    ...val.map(v => `| ${cols.map(c => cell(v[c])).join(' | ')} |`),
+    '',
+  ];
+}
+
 function exportMarkdown(report: Report) {
-  const isSim = report.report_type === 'simulation';
-  const typeStr = TYPE_LABEL[report.report_type];
-
-  const critical = report.findings.filter(f => f.severity === 'CRITICAL');
-  const high     = report.findings.filter(f => f.severity === 'HIGH');
-  const medium   = report.findings.filter(f => f.severity === 'MEDIUM');
-  const low      = report.findings.filter(f => f.severity === 'LOW');
-  const total    = report.findings.length;
-
+  const sevCount = (s: FindingSeverity) => report.findings.filter(f => f.severity === s).length;
   const lines: string[] = [
     `# ${report.title}`,
-    `**Type:** ${typeStr} | **Date:** ${tsLabel(report.generated_at)} | **ID:** \`${report.report_id}\``,
-    ``,
-    `---`,
-    ``,
-    `## Overall Assessment`,
-    `This report analyzes network and system events based on ${total} detected findings. The environment exhibits ${critical.length} critical and ${high.length} high severity alerts, warranting immediate investigation. ` + 
-    (isSim ? `*Note: All data is synthetically generated via simulation and does not represent real network traffic.*` : `These patterns are consistent with active exploitation or post-compromise activity.`),
-    ``,
-    `---`,
-    ``,
-    `## Alert Analysis`,
-    `### Security Findings by Severity`,
-    `| Severity | Count | Priority Action |`,
-    `|----------|-------|-----------------|`,
-    `| CRITICAL | ${critical.length} | Immediate remediation required |`,
-    `| HIGH     | ${high.length} | Schedule patching/investigation |`,
-    `| MEDIUM   | ${medium.length} | Review during regular audits |`,
-    `| LOW      | ${low.length} | Monitor for anomalies |`,
-    `| **Total**| **${total}** | |`,
-    ``,
-    `### Top Priority Security Events`,
-    `This section highlights the most critical findings affecting the monitored infrastructure.`,
-    ``,
-    `| Severity | Category | Confidence | Description |`,
-    `|----------|----------|------------|-------------|`,
-    ...[...critical, ...high].slice(0, 10).map(f => 
-      `| ${f.severity} | ${f.category} | ${f.confidence}% | **${f.title}**: ${f.summary.replace(/\n/g, ' ')} |`
-    ),
-    ``,
-    `---`,
-    ``,
-    `## Network & Endpoint Analysis`,
-    `### Activity Distribution`,
-    `| Category | Count | Status |`,
-    `|----------|-------|--------|`,
-    ...Array.from(new Set(report.findings.map(f => f.category))).map(cat => {
-      const count = report.findings.filter(f => f.category === cat).length;
-      return `| ${cat} | ${count} | ${count > 5 ? 'Elevated' : 'Normal'} |`;
-    }),
-    ``,
-    `---`,
-    ``,
-    `## Recommended Actions`,
-    `Based on the alert activity and analysis, the following actions are recommended:`,
-    ``,
-    ...critical.slice(0, 3).map(f => `- **High Urgency**: Investigate ${f.title}. ${f.summary.split('.')[0]}.`),
-    ...high.slice(0, 3).map(f => `- **Medium Urgency**: Review ${f.title} to confirm authorization.`),
-    `- **General**: Conduct a full review of the security posture and implement a remediation plan to address the highest-impact failing controls.`,
-    ``,
+    `**Type:** ${TYPE_LABEL[report.report_type]} | **Generated:** ${tsLabel(report.generated_at)} | **ID:** \`${report.report_id}\``,
+    '',
   ];
+  if (report.metadata.kpis?.length) {
+    lines.push(`| ${report.metadata.kpis.map(k => k.label).join(' | ')} |`);
+    lines.push(`| ${report.metadata.kpis.map(() => '---').join(' | ')} |`);
+    lines.push(`| ${report.metadata.kpis.map(k => k.value).join(' | ')} |`, '');
+  }
+  lines.push(
+    '## Findings',
+    `Critical ${sevCount('CRITICAL')} · High ${sevCount('HIGH')} · Medium ${sevCount('MEDIUM')} · Low ${sevCount('LOW')}`,
+    '',
+    '| Severity | Category | Confidence | Finding |',
+    '|---|---|---|---|',
+    ...report.findings.map(f => `| ${f.severity} | ${f.category} | ${f.confidence}% | **${f.title}** — ${f.summary.replace(/\n/g, ' ').replace(/\|/g, '\\|')} |`),
+    '',
+  );
+  for (const sec of [...report.sections].sort((a, b) => a.order - b.order)) {
+    lines.push(`## ${sec.order}. ${sec.title}`, '');
+    for (const [k, v] of Object.entries(sec.content)) lines.push(...mdValue(k, v));
+    if (sec.evidence_refs.length) lines.push(`_Evidence: ${sec.evidence_refs.join(', ')}_`, '');
+  }
+  lines.push('---', '', `> ${report.disclaimer}`, '');
 
   const md   = lines.join('\n');
   const prefix = `nextrace-${report.report_type}-${report.source_id}`;
@@ -258,13 +243,25 @@ export function ReportPage() {
         </div>
       </div>
 
-      {/* ── Findings Summary KPI cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16, marginBottom: 24 }}>
+      {/* ── Headline figures from the analysed data ── */}
+      {report.metadata.kpis && report.metadata.kpis.length > 0 && (
+        <div data-tour="report-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 20 }}>
+          {[...report.metadata.kpis, { label: 'Findings', value: `${total} (${critical + high} high+)`, tone: undefined }].map(k => (
+            <div key={k.label} style={{ ...card, padding: '12px 16px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2, color: k.tone === 'critical' ? '#b91c1c' : k.tone === 'high' ? '#c2410c' : 'var(--text-primary)' }}>{k.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Findings Summary KPI cards (reports without headline figures, e.g. backend-generated) ── */}
+      {!report.metadata.kpis?.length && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16, marginBottom: 24 }}>
         <KpiCard label="Total Findings" value={total}    color="var(--primary)"    icon={<BarChart2 size={18}/>} />
         <KpiCard label="High / Critical" value={critical + high} color="#dc2626" icon={<Shield size={18}/>} />
         <KpiCard label="Medium"          value={medium}  color="#d97706"           icon={<AlertTriangle size={18}/>} />
         <KpiCard label="Low"             value={low}     color="#059669"           icon={<CheckCircle size={18}/>} />
-      </div>
+      </div>}
 
       {/* ── Findings Table ── */}
       <div style={{ ...card, marginBottom: 24 }}>
@@ -466,8 +463,10 @@ function FindingDetailPanel({ finding, onClose }: { finding: Finding; onClose: (
   );
 }
 
+const OPEN_BY_DEFAULT = new Set(['Investigation Scope', 'Attack Stage Map', 'Affected Assets', 'Recommended Actions']);
+
 function SectionCard({ section }: { section: ReportSection }) {
-  const [expanded, setExpanded] = useState(section.order <= 2);
+  const [expanded, setExpanded] = useState(section.order <= 2 || OPEN_BY_DEFAULT.has(section.title));
 
   return (
     <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
@@ -557,6 +556,18 @@ function SectionContent({ content }: { content: Record<string, any> }) {
           );
         }
 
+        if (key === 'stage_map' && Array.isArray(val)) {
+          return <StageMap key={key} items={val as StageMapItem[]} />;
+        }
+        if (key === 'assets' && Array.isArray(val)) {
+          if (val.length === 0) return null;
+          return <AssetTable key={key} rows={val} />;
+        }
+        if (key === 'actions' && Array.isArray(val)) {
+          if (val.length === 0) return null;
+          return <ActionList key={key} rows={val} />;
+        }
+
         if (Array.isArray(val)) {
           if (val.length === 0) return null;
           const isStringArray = val.every(v => typeof v === 'string');
@@ -614,6 +625,53 @@ function SectionContent({ content }: { content: Record<string, any> }) {
         );
       })}
     </div>
+  );
+}
+
+const PRIORITY_COLOR: Record<string, string> = { Immediate: '#b91c1c', Next: '#b45309', 'Follow-up': 'var(--text-muted)' };
+
+function AssetTable({ rows }: { rows: { ip: string; role: string; impact: string; severity: FindingSeverity; activities: string[] }[] }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: 'var(--bg-workspace)' }}>
+            {['Asset', 'Role', 'Impact', 'Severity', 'Activities'].map(c => <th key={c} style={thStyle}>{c}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.ip} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ ...tdStyle, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{r.ip}</td>
+              <td style={tdStyle}>{r.role}</td>
+              <td style={tdStyle}>{r.impact}</td>
+              <td style={tdStyle}><span style={{ fontSize: 10, fontWeight: 800, color: SEV[r.severity]?.color }}>{r.severity}</span></td>
+              <td style={{ ...tdStyle, fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.activities.join(', ')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ActionList({ rows }: { rows: { priority: string; action: string; rationale: string; activities: string[] }[] }) {
+  return (
+    <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {rows.map((r, i) => (
+        <li key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 12px', borderRadius: 8, background: 'var(--bg-workspace)' }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: PRIORITY_COLOR[r.priority], border: `1px solid ${PRIORITY_COLOR[r.priority]}`, borderRadius: 999, padding: '1px 7px', whiteSpace: 'nowrap', marginTop: 2 }}>
+            {r.priority.toUpperCase()}
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45 }}>{r.action}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              {r.rationale} <span style={{ fontFamily: 'var(--font-mono)' }}>· {r.activities.join(', ')}</span>
+            </div>
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -744,6 +802,10 @@ const thStyle: React.CSSProperties = {
   padding: '10px 14px', textAlign: 'left', fontSize: 11,
   fontWeight: 600, color: 'var(--text-muted)',
   letterSpacing: '0.4px', textTransform: 'uppercase', whiteSpace: 'nowrap',
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '8px 14px', fontSize: 12, color: 'var(--text-secondary)', verticalAlign: 'top',
 };
 
 const selectStyle: React.CSSProperties = {

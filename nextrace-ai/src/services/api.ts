@@ -156,15 +156,15 @@ export const apiService = {
   },
 
   async getAlert(alertId: string): Promise<Alert> {
-    return request(`/api/alerts/${alertId}`);
+    return request(`/api/alerts/${encodeURIComponent(alertId)}`);
   },
 
   async acknowledgeAlert(alertId: string): Promise<Alert> {
-    return request(`/api/alerts/${alertId}/acknowledge`, { method: 'POST' });
+    return request(`/api/alerts/${encodeURIComponent(alertId)}/acknowledge`, { method: 'POST' });
   },
 
   async resolveAlert(alertId: string): Promise<Alert> {
-    return request(`/api/alerts/${alertId}/resolve`, { method: 'POST' });
+    return request(`/api/alerts/${encodeURIComponent(alertId)}/resolve`, { method: 'POST' });
   },
 
   async updateAlert(alertId: string, updates: {
@@ -173,15 +173,16 @@ export const apiService = {
     event_count?: number;
     last_seen?: string;
     confidence?: number;
+    affected_assets?: string[];
   }): Promise<Alert> {
-    return request(`/api/alerts/${alertId}`, {
+    return request(`/api/alerts/${encodeURIComponent(alertId)}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
   },
 
   async reopenAlert(alertId: string): Promise<Alert> {
-    return request(`/api/alerts/${alertId}/reopen`, { method: 'POST' });
+    return request(`/api/alerts/${encodeURIComponent(alertId)}/reopen`, { method: 'POST' });
   },
 
   async createAlert(data: Partial<Alert> & { dedupe_key?: string }): Promise<Alert> {
@@ -190,7 +191,39 @@ export const apiService = {
       body: JSON.stringify(data),
     });
   },
+
+  /** Plain-language explanation of grouped activities (LLM when configured on the server, template otherwise). */
+  async explain(body: ExplainRequest): Promise<ExplainResponse> {
+    return request('/api/explain', { method: 'POST', body: JSON.stringify(body) });
+  },
 };
+
+export interface ExplainActivityFacts {
+  id: string;
+  category: string;
+  label: string;
+  severity: string;
+  stage: string;
+  sources: string[];
+  targets: string[];
+  ports: number[];
+  event_count: number;
+  duration_seconds: number;
+  bytes: number | null;
+  mitre_id: string | null;
+}
+
+export interface ExplainRequest {
+  context: 'historical' | 'live' | 'investigation';
+  totals: { packets: number; flows: number; duration_seconds: number };
+  activities: ExplainActivityFacts[];
+}
+
+export interface ExplainResponse {
+  explanation: string;
+  source: 'llm' | 'template';
+  model: string | null;
+}
 
 
 

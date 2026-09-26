@@ -25,6 +25,11 @@ class WebSocketService {
   connect(): void {
     this.intentionalClose = false;
     this.reconnectAttempts = 0;
+    // Idempotent: several views call connect() on mount; a second socket would only race the first.
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      if (this.ws.readyState === WebSocket.OPEN) useLiveStore.getState().setWsConnected(true);
+      return;
+    }
     
     // Start batch processor
     if (!this.batchTimer) {
@@ -45,7 +50,9 @@ class WebSocketService {
     this._flushEventQueue(); // Flush any remaining
     
     if (this.ws) {
-      this.ws.close(1000, 'User stopped session');
+      const old = this.ws;
+      old.onopen = old.onclose = old.onerror = old.onmessage = null;
+      old.close(1000, 'User stopped session');
       this.ws = null;
     }
     useLiveStore.getState().setWsConnected(false);
@@ -63,19 +70,27 @@ class WebSocketService {
   }
 
   private _openSocket(): void {
+    this._clearReconnectTimer();
     if (this.ws) {
-      this.ws.close();
+      // Detach first: a replaced socket must not report "disconnected" or schedule its own reconnect.
+      const old = this.ws;
+      old.onopen = old.onclose = old.onerror = old.onmessage = null;
+      old.close();
       this.ws = null;
     }
     try {
-      this.ws = new WebSocket(WS_URL);
+      const socket = new WebSocket(WS_URL);
+      this.ws = socket;
 
-      this.ws.onopen = () => {
+      socket.onopen = () => {
+        if (this.ws !== socket) return;
         this.reconnectAttempts = 0;
         useLiveStore.getState().setWsConnected(true);
       };
 
-      this.ws.onclose = () => {
+      socket.onclose = () => {
+        if (this.ws !== socket) return;
+        this.ws = null;
         useLiveStore.getState().setWsConnected(false);
         if (!this.intentionalClose && this.reconnectAttempts < MAX_RECONNECTS) {
           this.reconnectAttempts++;
@@ -83,11 +98,13 @@ class WebSocketService {
         }
       };
 
-      this.ws.onerror = () => {
+      socket.onerror = () => {
+        if (this.ws !== socket) return;
         useLiveStore.getState().setWsConnected(false);
       };
 
-      this.ws.onmessage = (ev: MessageEvent) => {
+      socket.onmessage = (ev: MessageEvent) => {
+        if (this.ws !== socket) return;
         this._handleMessage(ev.data as string);
       };
     } catch {

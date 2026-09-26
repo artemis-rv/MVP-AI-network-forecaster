@@ -3,8 +3,11 @@
 // The list lives in its own bounded scroll container and follows the newest entry unless the
 // analyst has scrolled up to read older ones.
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Crosshair, ExternalLink, PanelRightOpen } from 'lucide-react';
 import type { GroupedActivity } from '@/lib/activityGrouping';
+import { explainActivity, affectedAssetsOf, recommendedActionsFor } from '@/lib/socPlaybook';
 import { SeverityPill } from '@/components/activity/ActivityList';
 import { SEVERITY_STYLE } from '@/components/activity/severity';
 
@@ -23,15 +26,22 @@ function clock(ms: number): string {
 }
 
 export function ActivityTimeline({
-  activities, onSelect, filterIp, predicted, maxHeight = 320, emptyText,
+  activities, onSelect, onLocate, linkFor, filterIp, predicted, maxHeight = 320, emptyText,
 }: {
   activities: GroupedActivity[];
+  /** Open the deep-inspection drawer for the activity. */
   onSelect?: (a: GroupedActivity) => void;
+  /** Scroll to and highlight the activity elsewhere on the same page. */
+  onLocate?: (a: GroupedActivity) => void;
+  /** Page that owns the activity, when it lives on another page (navigates there with ?focus=). */
+  linkFor?: (a: GroupedActivity) => string;
   filterIp?: string;
   predicted?: { stage: string; target?: string } | null;
   maxHeight?: number;
   emptyText?: string;
 }) {
+  const navigate = useNavigate();
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const entries = useMemo<Entry[]>(() => activities
     .filter(a => !filterIp || a.sources.includes(filterIp) || a.targets.includes(filterIp))
     .flatMap(a => a.milestones.map((m, i) => ({ key: `${a.id}-${i}`, ts: m.ts, kind: m.kind, text: m.text, activity: a })))
@@ -67,10 +77,14 @@ export function ActivityTimeline({
             return (
               <div
                 key={e.key}
-                onClick={() => onSelect?.(e.activity)}
-                style={{ display: 'flex', gap: 10, cursor: onSelect ? 'pointer' : 'default', borderRadius: 8, padding: '2px 4px' }}
-                onMouseEnter={ev => onSelect && (ev.currentTarget.style.background = 'var(--bg-workspace)')}
-                onMouseLeave={ev => (ev.currentTarget.style.background = 'transparent')}
+                role="button"
+                tabIndex={0}
+                aria-expanded={openKey === e.key}
+                onClick={() => setOpenKey(k => (k === e.key ? null : e.key))}
+                onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setOpenKey(k => (k === e.key ? null : e.key)); } }}
+                style={{ display: 'flex', gap: 10, cursor: 'pointer', borderRadius: 8, padding: '2px 4px', background: openKey === e.key ? 'var(--bg-workspace)' : 'transparent' }}
+                onMouseEnter={ev => (ev.currentTarget.style.background = 'var(--bg-workspace)')}
+                onMouseLeave={ev => (ev.currentTarget.style.background = openKey === e.key ? 'var(--bg-workspace)' : 'transparent')}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, paddingTop: 4 }}>
                   <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
@@ -88,6 +102,14 @@ export function ActivityTimeline({
                     </span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.45 }}>{e.text}</div>
+                  {openKey === e.key && (
+                    <TimelineDetail
+                      activity={e.activity}
+                      onInspect={onSelect ? () => onSelect(e.activity) : undefined}
+                      onLocate={onLocate ? () => onLocate(e.activity) : undefined}
+                      onOpen={linkFor ? () => navigate(linkFor(e.activity)) : undefined}
+                    />
+                  )}
                 </div>
               </div>
             );
@@ -110,6 +132,41 @@ export function ActivityTimeline({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Inline answer to "what is this event?" — then one click to the exact element. */
+function TimelineDetail({ activity: a, onInspect, onLocate, onOpen }: {
+  activity: GroupedActivity;
+  onInspect?: () => void;
+  onLocate?: () => void;
+  onOpen?: () => void;
+}) {
+  const assets = affectedAssetsOf(a);
+  const first = recommendedActionsFor(a)[0];
+  const btn: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 9px',
+    borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer',
+  };
+  return (
+    <div onClick={ev => ev.stopPropagation()} style={{ marginTop: 6, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-card)', cursor: 'default' }}>
+      <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>{explainActivity(a)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 10px', marginTop: 6, fontSize: 11 }}>
+        <span style={{ color: 'var(--text-muted)' }}>Source</span>
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{a.sources.join(', ')}</span>
+        <span style={{ color: 'var(--text-muted)' }}>Affected</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{assets.length ? assets.map(x => `${x.ip} (${x.role})`).join(', ') : 'No internal asset'}</span>
+        {first && <>
+          <span style={{ color: 'var(--text-muted)' }}>First step</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{first.action}</span>
+        </>}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+        {onInspect && <button type="button" style={btn} onClick={onInspect}><PanelRightOpen size={12} /> Inspect</button>}
+        {onLocate && <button type="button" style={btn} onClick={onLocate}><Crosshair size={12} /> Show in activity list</button>}
+        {onOpen && <button type="button" style={btn} onClick={onOpen}><ExternalLink size={12} /> Open {a.id}</button>}
+      </div>
     </div>
   );
 }

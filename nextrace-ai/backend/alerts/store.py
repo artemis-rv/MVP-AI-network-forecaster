@@ -22,6 +22,10 @@ def _create_demo_alerts() -> Dict[str, dict]:
     return {}
 
 _ALERTS: Dict[str, dict] = _create_demo_alerts()
+_BY_DEDUPE_KEY: Dict[str, str] = {}
+
+# The store lives in memory; bound it so a runaway client cannot exhaust the process.
+MAX_ALERTS = 5000
 
 # ── Store Methods ─────────────────────────────────────────────────────────────
 
@@ -52,13 +56,23 @@ def get_stats() -> dict:
 
 def find_by_dedupe_key(key: str) -> Optional[dict]:
     """Return the alert previously created for this dedupe key (grouped-activity alerts are idempotent)."""
-    for alert in _ALERTS.values():
-        if alert.get("dedupe_key") == key:
-            return alert
-    return None
+    alert_id = _BY_DEDUPE_KEY.get(key)
+    return _ALERTS.get(alert_id) if alert_id else None
+
+
+def _evict_if_full() -> None:
+    """Drops the oldest resolved alerts first, then the oldest alerts, once the cap is reached."""
+    if len(_ALERTS) < MAX_ALERTS:
+        return
+    ordered = sorted(_ALERTS.values(), key=lambda a: (a.get("status") != "RESOLVED", a.get("created_at") or ""))
+    for alert in ordered[: len(_ALERTS) - MAX_ALERTS + 1]:
+        _ALERTS.pop(alert["id"], None)
+        if alert.get("dedupe_key"):
+            _BY_DEDUPE_KEY.pop(alert["dedupe_key"], None)
 
 def create_alert(data: dict) -> dict:
     """Create and insert a new alert."""
+    _evict_if_full()
     now = _now_iso()
     new_id = data.get("id")
     if not new_id:
@@ -88,9 +102,14 @@ def create_alert(data: dict) -> dict:
         "tags": data.get("tags", ["automated", "live"]),
         "evidence": data.get("evidence", ["Triggered by security rules"]),
         "simulation": data.get("simulation", False),
+        "activity_id": data.get("activity_id"),
+        "affected_assets": data.get("affected_assets", []),
+        "recommended_actions": data.get("recommended_actions", []),
+        "explanation": data.get("explanation"),
     }
     if data.get("dedupe_key"):
         alert["dedupe_key"] = data["dedupe_key"]
+        _BY_DEDUPE_KEY[data["dedupe_key"]] = new_id
     _ALERTS[new_id] = alert
     return alert
 
@@ -114,7 +133,7 @@ def update_alert(alert_id: str, updates: dict) -> dict:
         alert["assigned_to"] = updates["assigned_to"]
 
     # Grouped-activity alerts: further packets update the same incident instead of creating new alerts
-    for key in ("event_count", "last_seen", "confidence"):
+    for key in ("event_count", "last_seen", "confidence", "affected_assets"):
         if updates.get(key) is not None:
             alert[key] = updates[key]
 

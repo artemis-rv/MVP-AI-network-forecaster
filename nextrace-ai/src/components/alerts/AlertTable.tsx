@@ -65,7 +65,7 @@ export function AlertTable({ alerts, selectedId, onSelect }: AlertTableProps) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--bg-workspace)', borderBottom: '1px solid var(--border-subtle)' }}>
-              {['Severity', 'Alert', 'Category', 'Source', 'Dest', 'Confidence', 'Events', 'Status', 'Last Seen', 'Actions'].map((col) => (
+              {['Severity', 'Alert', 'Category', 'Source', 'Dest', 'Affected', 'Confidence', 'Events', 'Status', 'Last Seen', 'Actions'].map((col) => (
                 <th
                   key={col}
                   style={{
@@ -114,6 +114,14 @@ export function AlertTable({ alerts, selectedId, onSelect }: AlertTableProps) {
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                     {alert.destination_ip || '-'}
+                  </td>
+                  <td
+                    title={alert.affected_assets?.join('\n') || 'No internal asset identified'}
+                    style={{ padding: '12px 16px', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}
+                  >
+                    {alert.affected_assets?.length
+                      ? <>{alert.affected_assets[0].split(' — ')[0].replace(/ \(.*\)$/, '')}{alert.affected_assets.length > 1 && <span style={{ color: 'var(--text-muted)' }}> +{alert.affected_assets.length - 1}</span>}</>
+                      : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
                     {alert.confidence}%

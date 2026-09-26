@@ -10,6 +10,7 @@ import { useLiveStore } from '@/store/liveStore';
 import { significantActivities } from '@/lib/activityGrouping';
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline';
 import { ActivityInspector } from '@/components/activity/ActivityInspector';
+import { activityHref } from '@/hooks/useFocusParam';
 
 export function TimelinePanel() {
   const navigate = useNavigate();
@@ -33,6 +34,7 @@ export function TimelinePanel() {
         activities={grouped}
         filterIp={entityIp}
         onSelect={a => setInspectId(a.id)}
+        linkFor={a => activityHref(a.id)}
         predicted={showPrediction && currentForecast ? { stage: currentForecast.predicted_next_stage, target: currentForecast.target } : null}
         maxHeight={300}
         emptyText="No grouped activity involves this entity."

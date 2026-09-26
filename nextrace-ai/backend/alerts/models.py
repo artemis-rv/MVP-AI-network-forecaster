@@ -41,6 +41,10 @@ class Alert(BaseModel):
     tags: List[str] = Field(default_factory=list)
     evidence: List[str] = Field(default_factory=list)
     simulation: bool = Field(False)
+    activity_id: Optional[str] = None
+    affected_assets: List[str] = Field(default_factory=list)
+    recommended_actions: List[str] = Field(default_factory=list)
+    explanation: Optional[str] = None
 
 class AlertStats(BaseModel):
     total: int = 0
