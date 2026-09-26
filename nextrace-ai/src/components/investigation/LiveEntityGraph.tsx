@@ -16,17 +16,6 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
 
-  // Find "now" in the graph context to handle demo/live safely
-  const maxTimestamp = useMemo(() => {
-    let max = 0;
-    edges.forEach(e => {
-      if (!e.lastSeen) return;
-      const t = new Date(e.lastSeen).getTime();
-      if (t > max) max = t;
-    });
-    return max || Date.now();
-  }, [edges]);
-
   useEffect(() => {
     if (focusIp) {
       const node = nodes.find(n => n.ip === focusIp);
@@ -316,9 +305,6 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
         {layoutNodes.map(node => {
           const c = NODE_COLORS[node.type] ?? NODE_COLORS.internal;
           const activeNode = hoveredNode === node.id || selectedNode === node.id;
-
-          // Pulse effect if this node is actively involved in suspicious traffic
-          const isRecentAlert = edges.some(e => e.suspicious && (e.from === node.id || e.to === node.id) && (e.lastSeen && maxTimestamp - new Date(e.lastSeen).getTime() < 5000));
 
           return (
             <g key={node.id} transform={`translate(${node.renderX},${node.renderY})`}

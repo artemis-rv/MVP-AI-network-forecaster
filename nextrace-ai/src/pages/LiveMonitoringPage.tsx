@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Play, Square, WifiOff, RotateCcw, Trash2, X,
+  Play, Square, WifiOff, RotateCcw, Trash2,
   Filter, RefreshCw, AlertTriangle, ShieldAlert, CheckCircle2, ShieldCheck, Clock, Activity,
 } from 'lucide-react';
 import {
@@ -56,20 +56,24 @@ export function LiveMonitoringPage() {
   const [chartTimeRange, setChartTimeRange] = useState<1 | 5 | 15>(1);
 
   const realChartData = useMemo(() => {
-    return temporalHistory.map(t => {
+    if (temporalHistory.length === 0) return [];
+    const list = temporalHistory.map((t, idx) => {
       let dateObj = new Date();
       if (t.window_end) {
-        const d = new Date(t.window_end);
+        const raw = String(t.window_end).replace(/\+00:00Z$/, 'Z').replace(/\+00:00$/, 'Z');
+        const d = new Date(raw);
         if (!isNaN(d.getTime())) {
           dateObj = d;
         } else if (typeof t.window_end === 'number') {
           dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
         } else {
-          const num = Number(t.window_end);
+          const num = Number(raw);
           if (!isNaN(num)) {
             dateObj = new Date(num < 1e11 ? num * 1000 : num);
           }
         }
+      } else {
+        dateObj = new Date(Date.now() - (temporalHistory.length - 1 - idx) * 10000);
       }
       return {
         timestamp: dateObj.getTime(),
@@ -79,9 +83,26 @@ export function LiveMonitoringPage() {
         suspicious: t.suspicious_count,
       };
     });
+
+    if (list.length === 1) {
+      const first = list[0];
+      const prevTime = new Date(first.timestamp - 10000);
+      return [
+        {
+          timestamp: prevTime.getTime(),
+          time: prevTime.toLocaleTimeString('en-US', { hour12: false }),
+          packets: Math.max(0, Math.floor(first.packets * 0.5)),
+          flows: Math.max(0, Math.floor(first.flows * 0.5)),
+          suspicious: 0,
+        },
+        first,
+      ];
+    }
+
+    return list;
   }, [temporalHistory]);
 
-  const chartData = isRunning && realChartData.length > 0 
+  const chartData = realChartData.length > 0 
     ? realChartData 
     : generateZeroChartData(chartTimeRange);
 

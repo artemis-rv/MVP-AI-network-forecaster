@@ -51,9 +51,11 @@ def compute_temporal_state(
     conn_rate      = n / duration_sec
     susp_ratio     = suspicious_count / n if n > 0 else 0.0
 
+    ws = window_start.isoformat(timespec="milliseconds").replace("+00:00", "") + "Z"
+    we = window_end.isoformat(timespec="milliseconds").replace("+00:00", "") + "Z"
     return {
-        "window_start":    window_start.isoformat(timespec="milliseconds") + "Z",
-        "window_end":      window_end.isoformat(timespec="milliseconds") + "Z",
+        "window_start":    ws,
+        "window_end":      we,
         "window_seconds":  window_seconds,
         # Counts
         "packet_count":      n,
@@ -79,9 +81,11 @@ def compute_temporal_state(
 
 
 def _zero_state(window_start: datetime, window_end: datetime, window_seconds: int) -> dict:
+    ws = window_start.isoformat(timespec="milliseconds").replace("+00:00", "") + "Z"
+    we = window_end.isoformat(timespec="milliseconds").replace("+00:00", "") + "Z"
     return {
-        "window_start":     window_start.isoformat(timespec="milliseconds") + "Z",
-        "window_end":       window_end.isoformat(timespec="milliseconds") + "Z",
+        "window_start":     ws,
+        "window_end":       we,
         "window_seconds":   window_seconds,
         "packet_count":     0,
         "byte_count":       0,

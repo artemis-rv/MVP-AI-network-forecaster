@@ -121,8 +121,6 @@ export const useInvestigationStore = create<InvestigationStore>((set, get) => ({
 
   openInvestigation: (ctx) => {
     const { currentForecast } = useForecastStore.getState();
-    const { session } = useLiveStore.getState();
-    const isLive = session?.running ?? false;
 
     const stage = currentForecast?.current_stage ?? 'Reconnaissance';
     const priority = priorityFromForecast(stage);

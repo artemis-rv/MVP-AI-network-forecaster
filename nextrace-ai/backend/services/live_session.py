@@ -365,7 +365,7 @@ class LiveSession:
             "session_id":      self.session_id,
             "running":         self.running,
             "mode":            self.mode,
-            "start_time":      self.start_time.isoformat() + "Z" if self.start_time else None,
+            "start_time":      self.start_time.isoformat().replace("+00:00", "") + "Z" if self.start_time else None,
             "packet_count":    self.packet_count,
             "benign_count":    self.benign_count,
             "suspicious_count": self.suspicious_count,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { KpiCard } from '@/components/dashboard/KpiCard';
@@ -25,7 +25,7 @@ const kpiIcons = [
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { session, temporalHistory, currentTemporal, liveNodes } = useLiveStore();
+  const { session, temporalHistory, liveNodes } = useLiveStore();
   const { stats, alerts, fetchStats, fetchAlerts } = useAlertStore();
   const [entityRiskFilter, setEntityRiskFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
   const [highlightEntities, setHighlightEntities] = useState(false);
@@ -52,30 +52,48 @@ export function DashboardPage() {
   ] : null;
 
   // Chart data: use real temporal history if available, else mock
-  const chartData = (temporalHistory.length > 0)
-    ? temporalHistory.map(t => {
-        let dateObj = new Date();
-        if (t.window_end) {
-          const raw = String(t.window_end).replace(/\+00:00Z$/, 'Z').replace(/\+00:00$/, 'Z');
-          const d = new Date(raw);
-          if (!isNaN(d.getTime())) {
-            dateObj = d;
-          } else if (typeof t.window_end === 'number') {
-            dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
-          } else {
-            const num = Number(raw);
-            if (!isNaN(num)) {
-              dateObj = new Date(num < 1e11 ? num * 1000 : num);
-            }
+  const chartData = useMemo(() => {
+    if (temporalHistory.length === 0) return undefined;
+    const list = temporalHistory.map((t, idx) => {
+      let dateObj = new Date();
+      if (t.window_end) {
+        const raw = String(t.window_end).replace(/\+00:00Z$/, 'Z').replace(/\+00:00$/, 'Z');
+        const d = new Date(raw);
+        if (!isNaN(d.getTime())) {
+          dateObj = d;
+        } else if (typeof t.window_end === 'number') {
+          dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
+        } else {
+          const num = Number(raw);
+          if (!isNaN(num)) {
+            dateObj = new Date(num < 1e11 ? num * 1000 : num);
           }
         }
-        return {
-          time: dateObj.toLocaleTimeString('en-US', { hour12: false }),
-          total: t.packet_count,
-          events: t.suspicious_count,
-        };
-      })
-    : undefined;
+      } else {
+        dateObj = new Date(Date.now() - (temporalHistory.length - 1 - idx) * 10000);
+      }
+      return {
+        timestamp: dateObj.getTime(),
+        time: dateObj.toLocaleTimeString('en-US', { hour12: false }),
+        total: t.packet_count,
+        events: t.suspicious_count,
+      };
+    });
+
+    if (list.length === 1) {
+      const first = list[0];
+      return [
+        {
+          timestamp: first.timestamp - 10000,
+          time: new Date(first.timestamp - 10000).toLocaleTimeString('en-US', { hour12: false }),
+          total: Math.max(0, Math.floor(first.total * 0.5)),
+          events: 0,
+        },
+        first,
+      ];
+    }
+    return list;
+  }, [temporalHistory]);
 
 
   const handleKpiClick = (kpiId: string, defaultLink: string) => {
