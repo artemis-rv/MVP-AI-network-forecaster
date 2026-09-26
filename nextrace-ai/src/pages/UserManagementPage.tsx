@@ -134,7 +134,7 @@ export function UserManagementPage() {
               {filteredUsers.map((u, i) => {
                 const isCurrent = currentUser?.id === u.id;
                 return (
-                  <tr key={u.id} style={{ borderBottom: i === filteredUsers.length - 1 ? 'none' : '1px solid var(--border-subtle)', background: 'white' }}>
+                  <tr key={u.id} style={{ borderBottom: i === filteredUsers.length - 1 ? 'none' : '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
                     <td style={{ padding: '16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{
@@ -227,7 +227,7 @@ export function UserManagementPage() {
       {/* User Modal */}
       {isModalOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(2px)' }}>
-          <form onSubmit={handleSaveUser} style={{ background: 'white', width: 440, borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+          <form onSubmit={handleSaveUser} style={{ background: 'var(--bg-card)', width: 440, borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-workspace)' }}>
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{editingUser ? 'Edit User Credentials' : 'Add New User'}</h2>
               <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
@@ -284,7 +284,7 @@ export function UserManagementPage() {
             </div>
 
             <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-workspace)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-              <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'white', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-card)', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
               <button type="submit" style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Account</button>
             </div>
           </form>

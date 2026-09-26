@@ -159,7 +159,7 @@ export function InvestigationAssistant() {
           background: 'var(--bg-card)',
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border-default)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
           overflow: 'hidden',
           display: isOpen ? 'flex' : 'none',
           flexDirection: 'column',

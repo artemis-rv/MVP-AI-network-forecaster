@@ -50,7 +50,7 @@ export function ReportsListPage() {
               </tr>
             ) : (
               reportList.map((r, i) => (
-                <tr key={r.report_id} style={{ borderBottom: i === reportList.length - 1 ? 'none' : '1px solid var(--border-subtle)', background: 'white' }}>
+                <tr key={r.report_id} style={{ borderBottom: i === reportList.length - 1 ? 'none' : '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
                   <td style={{ padding: '16px', fontWeight: 700, color: 'var(--primary)' }}>{r.report_id}</td>
                   <td style={{ padding: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.title || (r.report_type === 'simulation' ? 'Simulation Report' : 'Historical Analysis Report')}</td>
                   <td style={{ padding: '16px' }}>

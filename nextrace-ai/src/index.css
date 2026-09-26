@@ -7,39 +7,51 @@
 
 :root {
   /* Backgrounds */
-  --bg-workspace: #f8fafc; /* Slate 50 */
+  --bg-workspace: #f8fafc;
+  /* Slate 50 */
   --bg-card: #ffffff;
-  --bg-card-hover: #f1f5f9; /* Slate 100 */
+  --bg-card-hover: #f1f5f9;
+  /* Slate 100 */
   --bg-input: #f1f5f9;
 
   /* Sidebar */
-  --sidebar-bg: #0f172a; /* Slate 900 */
-  --sidebar-bg-hover: #1e293b; /* Slate 800 */
+  --sidebar-bg: #0f172a;
+  /* Slate 900 */
+  --sidebar-bg-hover: #1e293b;
+  /* Slate 800 */
   --sidebar-active-bg: rgba(255, 255, 255, 0.1);
   --sidebar-active-glow: transparent;
-  --sidebar-text: #94a3b8; /* Slate 400 */
+  --sidebar-text: #94a3b8;
+  /* Slate 400 */
   --sidebar-text-active: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.1);
 
   /* Primary / Action */
-  --primary: #334155; /* Slate 700 */
-  --primary-hover: #0f172a; /* Slate 900 */
-  --primary-light: #e2e8f0; /* Slate 200 */
+  --primary: #334155;
+  /* Slate 700 */
+  --primary-hover: #0f172a;
+  /* Slate 900 */
+  --primary-light: #e2e8f0;
+  /* Slate 200 */
   --primary-glow: transparent;
 
   /* Secondary */
-  --secondary: #475569; /* Slate 600 */
+  --secondary: #475569;
+  /* Slate 600 */
   --secondary-light: #f1f5f9;
 
   /* Status Colors (Semantic only, no neon) */
-  --color-live: #059669; /* Emerald 600 */
+  --color-live: #059669;
+  /* Emerald 600 */
   --color-live-light: #d1fae5;
   --color-live-glow: transparent;
 
-  --color-warning: #d97706; /* Amber 600 */
+  --color-warning: #d97706;
+  /* Amber 600 */
   --color-warning-light: #fef3c7;
 
-  --color-critical: #dc2626; /* Red 600 */
+  --color-critical: #dc2626;
+  /* Red 600 */
   --color-critical-light: #fee2e2;
   --color-critical-glow: transparent;
 
@@ -53,13 +65,18 @@
   --color-low-light: #d1fae5;
 
   /* Text */
-  --text-primary: #0f172a; /* Slate 900 */
-  --text-secondary: #475569; /* Slate 600 */
-  --text-muted: #64748b; /* Slate 500 */
+  --text-primary: #0f172a;
+  /* Slate 900 */
+  --text-secondary: #475569;
+  /* Slate 600 */
+  --text-muted: #64748b;
+  /* Slate 500 */
 
   /* Borders */
-  --border-default: #cbd5e1; /* Slate 300 - slightly sharper */
-  --border-subtle: #e2e8f0; /* Slate 200 */
+  --border-default: #cbd5e1;
+  /* Slate 300 - slightly sharper */
+  --border-subtle: #e2e8f0;
+  /* Slate 200 */
 
   /* Shadows (Flat/Crisp design) */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -89,8 +106,86 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-/* ═══ Reset + Base ═══ */
+/* ═══════════════════════════════════════════
+   NEXTRACE AI — Dark Mode Theme
+   Applied when <html data-theme="dark">
+═══════════════════════════════════════════ */
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-workspace: #0B0F19;
+  --bg-card: #111827;
+  --bg-card-hover: #1F2937;
+  --bg-input: #1F2937;
+
+  /* Sidebar */
+  --sidebar-bg: #06090F;
+  --sidebar-bg-hover: #111827;
+  --sidebar-active-bg: rgba(99, 102, 241, 0.18);
+  --sidebar-active-glow: 0 0 10px rgba(99, 102, 241, 0.2);
+  --sidebar-text: #94a3b8;
+  --sidebar-text-active: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.05);
+
+  /* Primary / Action */
+  --primary: #818cf8;
+  --primary-hover: #6366f1;
+  --primary-light: rgba(99, 102, 241, 0.15);
+  --primary-glow: 0 0 12px rgba(99, 102, 241, 0.3);
+
+  /* Secondary */
+  --secondary: #2dd4bf;
+  --secondary-light: rgba(45, 212, 191, 0.15);
+
+  /* Status Colors */
+  --color-live: #10b981;
+  --color-live-light: rgba(16, 185, 129, 0.15);
+  --color-live-glow: 0 0 8px rgba(16, 185, 129, 0.4);
+
+  --color-warning: #f59e0b;
+  --color-warning-light: rgba(245, 158, 11, 0.15);
+
+  --color-critical: #ef4444;
+  --color-critical-light: rgba(239, 68, 68, 0.15);
+  --color-critical-glow: 0 0 8px rgba(239, 68, 68, 0.4);
+
+  --color-high: #f97316;
+  --color-high-light: rgba(249, 115, 22, 0.15);
+
+  --color-medium: #eab308;
+  --color-medium-light: rgba(234, 179, 8, 0.15);
+
+  --color-low: #10b981;
+  --color-low-light: rgba(16, 185, 129, 0.15);
+
+  /* Text */
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+
+  /* Borders */
+  --border-default: #334155;
+  --border-subtle: #1e293b;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.6);
+
+  /* Topbar */
+  --topbar-bg: #0B0F19;
+  --topbar-border: #1e293b;
+}
+
+/* Smooth transition on theme toggle */
 *, *::before, *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.1s ease;
+}
+
+/* ═══ Reset + Base ═══ */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -116,13 +211,16 @@ body {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
@@ -160,38 +258,79 @@ body {
 
 /* ═══ Typography Utilities ═══ */
 .text-gradient {
-  color: var(--primary); /* Stripped gradient, just solid primary color */
+  color: var(--primary);
+  /* Stripped gradient, just solid primary color */
 }
 
 /* ═══ Shimmer Animation ═══ */
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @keyframes pulse-dot {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.4); opacity: 0.7; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.4);
+    opacity: 0.7;
+  }
 }
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(16px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-fade-in-up {
@@ -210,8 +349,13 @@ body {
 }
 
 @keyframes dash-flow {
-  from { stroke-dashoffset: 20; }
-  to { stroke-dashoffset: 0; }
+  from {
+    stroke-dashoffset: 20;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 @keyframes popover-in {
@@ -219,6 +363,7 @@ body {
     opacity: 0;
     transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -273,4 +418,3 @@ body {
   box-shadow: 0 6px 18px rgba(11, 99, 206, 0.45);
   transform: translateY(-2px);
 }
-

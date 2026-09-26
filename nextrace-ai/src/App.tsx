@@ -38,7 +38,7 @@ function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <div 
+      <div
         className="app-layout"
         style={{ '--sidebar-width': sidebarCollapsed ? '72px' : '240px' } as React.CSSProperties}
       >

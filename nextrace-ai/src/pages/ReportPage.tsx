@@ -708,7 +708,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function ConfidencePill({ value }: { value: number }) {
   const color = value >= 65 ? '#059669' : value >= 45 ? '#d97706' : '#94a3b8';
-  const bg    = value >= 65 ? '#d1fae5' : value >= 45 ? '#fef3c7' : '#f1f5f9';
+  const bg    = value >= 65 ? '#d1fae5' : value >= 45 ? '#fef3c7' : 'var(--bg-input)';
   return (
     <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999, background: bg, color, border: `1px solid ${color}40` }}>
       {value}% conf.

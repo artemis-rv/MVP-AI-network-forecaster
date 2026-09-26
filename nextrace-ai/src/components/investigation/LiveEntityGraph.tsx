@@ -84,12 +84,12 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
 
   const { vbX, vbY, vbWidth, vbHeight } = useMemo(() => {
     if (layoutNodes.length === 0) return { vbX: 0, vbY: 0, vbWidth: 800, vbHeight: 600 };
-    
+
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
-    
+
     layoutNodes.forEach(n => {
       if (n.renderX < minX) minX = n.renderX;
       if (n.renderX > maxX) maxX = n.renderX;
@@ -103,7 +103,7 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
     // Padding ensures nodes don't clip at edges
     const paddingX = 120;
     const paddingY = 80;
-    
+
     return {
       vbX: minX - paddingX,
       vbY: minY - paddingY,
@@ -116,7 +116,7 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
   const transformRef = useRef({ zoom: 1, panX: 0, panY: 0 });
   const [, forceRender] = useState({});
   const vbRef = useRef({ vbX: 0, vbY: 0, vbWidth: 800, vbHeight: 600 });
-  
+
   useEffect(() => {
     vbRef.current = { vbX, vbY, vbWidth, vbHeight };
   }, [vbX, vbY, vbWidth, vbHeight]);
@@ -127,7 +127,7 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault(); // Stop page scroll
-      
+
       const { zoom: prevZoom, panX: prevPanX, panY: prevPanY } = transformRef.current;
       const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1; // down = out, up = in
       const nextZoom = Math.max(0.2, Math.min(prevZoom * zoomFactor, 5));
@@ -138,26 +138,26 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
       pt.y = e.clientY;
       const ctm = svg.getScreenCTM();
       if (!ctm) return;
-      
+
       const svgP = pt.matrixTransform(ctm.inverse());
-      
+
       const { vbX: bx, vbY: by, vbWidth: bw, vbHeight: bh } = vbRef.current;
-      
+
       const old_w = bw / prevZoom;
       const old_h = bh / prevZoom;
-      
+
       const current_vbX = bx + (bw - old_w) / 2 - prevPanX;
       const current_vbY = by + (bh - old_h) / 2 - prevPanY;
-      
+
       const relX = (svgP.x - current_vbX) / old_w;
       const relY = (svgP.y - current_vbY) / old_h;
-      
+
       const new_w = bw / nextZoom;
       const new_h = bh / nextZoom;
-      
+
       const new_vbX = svgP.x - relX * new_w;
       const new_vbY = svgP.y - relY * new_h;
-      
+
       const new_panX = bx + (bw - new_w) / 2 - new_vbX;
       const new_panY = by + (bh - new_h) / 2 - new_vbY;
 
@@ -277,34 +277,30 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
           const from = layoutNodes.find(n => n.id === edge.from);
           const to = layoutNodes.find(n => n.id === edge.to);
           if (!from || !to) return null;
-          
+
           const isHovered = hoveredEdge === edge.id;
           const nodeHovered = hoveredNode === from.id || hoveredNode === to.id;
           const isAttackPath = edge.suspicious;
-          const isActive = edge.lastSeen ? (maxTimestamp - new Date(edge.lastSeen).getTime() < 5000) : false;
-          
-          const midX = (from.renderX + to.renderX) / 2;
-          const midY = (from.renderY + to.renderY) / 2;
 
           // Traffic volume edge thickness: minimum 1, max 6, scales smoothly
           const thickness = Math.min(6, Math.max(1, 1 + (edge.packetCount || 0) / 10));
 
           return (
             <g key={edge.id || i}
-               onMouseEnter={() => setHoveredEdge(edge.id)}
-               onMouseLeave={() => setHoveredEdge(null)}
-               style={{ cursor: 'pointer' }}>
-              
+              onMouseEnter={() => setHoveredEdge(edge.id)}
+              onMouseLeave={() => setHoveredEdge(null)}
+              style={{ cursor: 'pointer' }}>
+
               {/* Invisible thicker line for easier hovering */}
               <line
                 x1={from.renderX} y1={from.renderY} x2={to.renderX} y2={to.renderY}
                 stroke="transparent"
                 strokeWidth={20}
               />
-              
+
               <line
                 x1={from.renderX} y1={from.renderY} x2={to.renderX} y2={to.renderY}
-                stroke={isAttackPath ? '#ef4444' : (nodeHovered || isHovered ? '#6366f1' : '#cbd5e1')}
+                stroke={isAttackPath ? '#ef4444' : (nodeHovered || isHovered ? '#6366f1' : 'var(--border-default)')}
                 strokeWidth={isAttackPath ? thickness + 1 : thickness}
                 strokeDasharray={isAttackPath ? '5,5' : 'none'}
                 style={{
@@ -320,7 +316,7 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
         {layoutNodes.map(node => {
           const c = NODE_COLORS[node.type] ?? NODE_COLORS.internal;
           const activeNode = hoveredNode === node.id || selectedNode === node.id;
-          
+
           // Pulse effect if this node is actively involved in suspicious traffic
           const isRecentAlert = edges.some(e => e.suspicious && (e.from === node.id || e.to === node.id) && (e.lastSeen && maxTimestamp - new Date(e.lastSeen).getTime() < 5000));
 
@@ -382,7 +378,7 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
           top: 12,
           right: selectedNode ? 212 : 12,
           zIndex: 20,
-          background: 'white',
+          background: 'var(--bg-card)',
           border: '1px solid var(--border-default)',
           borderRadius: 8,
           width: 30,
@@ -406,7 +402,7 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
         if (!n) return null;
         const c = NODE_COLORS[n.type] ?? NODE_COLORS.internal;
         return (
-          <div className="animate-slide-in-right" style={{ position: 'absolute', top: 10, right: 10, width: 190, background: 'white', borderRadius: 10, border: `1px solid ${c.border}`, padding: 12, boxShadow: 'var(--shadow-md)', zIndex: 10 }}>
+          <div className="animate-slide-in-right" style={{ position: 'absolute', top: 10, right: 10, width: 190, background: 'var(--bg-card)', borderRadius: 10, border: `1px solid ${c.border}`, padding: 12, boxShadow: 'var(--shadow-md)', zIndex: 10 }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', marginBottom: 2 }}>{n.ip}</div>
             <div style={{ fontSize: 11, color: c.border, fontWeight: 600, textTransform: 'capitalize', marginBottom: 8 }}>{n.type}</div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
@@ -424,7 +420,7 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
         if (!e) return null;
         const isAttack = e.suspicious;
         return (
-          <div className="animate-slide-in-right" style={{ pointerEvents: 'none', position: 'absolute', bottom: 10, right: 10, width: 220, background: 'white', borderRadius: 10, border: `1px solid ${isAttack ? '#ef4444' : '#cbd5e1'}`, padding: 12, boxShadow: 'var(--shadow-md)', zIndex: 10 }}>
+          <div className="animate-slide-in-right" style={{ pointerEvents: 'none', position: 'absolute', bottom: 10, right: 10, width: 220, background: 'var(--bg-card)', borderRadius: 10, border: `1px solid ${isAttack ? '#ef4444' : 'var(--border-default)'}`, padding: 12, boxShadow: 'var(--shadow-md)', zIndex: 10 }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: isAttack ? '#ef4444' : 'var(--text-primary)', marginBottom: 2 }}>
               {isAttack ? 'Suspicious Path' : 'Network Flow'}
             </div>
@@ -432,10 +428,10 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
               {e.from} → {e.to}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-              <div>Protocol: <strong style={{color:'var(--text-primary)'}}>{e.label}</strong></div>
-              <div>Packets: <strong style={{color:'var(--text-primary)'}}>{e.packetCount || 0}</strong></div>
-              <div>Bytes: <strong style={{color:'var(--text-primary)'}}>{e.bytes || 0}</strong></div>
-              <div>Active: <strong style={{color:'var(--text-primary)'}}>{e.lastSeen ? e.lastSeen.slice(11, 19) : 'N/A'}</strong></div>
+              <div>Protocol: <strong style={{ color: 'var(--text-primary)' }}>{e.label}</strong></div>
+              <div>Packets: <strong style={{ color: 'var(--text-primary)' }}>{e.packetCount || 0}</strong></div>
+              <div>Bytes: <strong style={{ color: 'var(--text-primary)' }}>{e.bytes || 0}</strong></div>
+              <div>Active: <strong style={{ color: 'var(--text-primary)' }}>{e.lastSeen ? e.lastSeen.slice(11, 19) : 'N/A'}</strong></div>
             </div>
           </div>
         );

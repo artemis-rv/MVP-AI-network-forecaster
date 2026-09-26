@@ -11,9 +11,10 @@ export function TopBar() {
     searchOpen, setSearchOpen,
     userMenuOpen, setUserMenuOpen,
     notifPanelOpen, setNotifPanelOpen,
-    notifications, unreadCount, markAllRead, markNotificationAsRead, syncNotificationsFromAlerts,
+    notifications, markNotificationAsRead, syncNotificationsFromAlerts,
     addToast,
-    userRole, currentUser, logout
+    userRole, currentUser, logout,
+    isDark, toggleTheme,
   } = useAppStore();
 
   const { alerts, fetchAlerts, selectAlert, stats } = useAlertStore();
@@ -36,7 +37,11 @@ export function TopBar() {
     }
   }, [alerts, syncNotificationsFromAlerts]);
 
-  const [darkMode, setDarkMode] = useState(false);
+  // Restore theme from persisted state on load
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
+
   const [searchValue, setSearchValue] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -195,7 +200,7 @@ export function TopBar() {
         onClick={() => addToast('Live demo mode is active. Data is simulated.', 'info')}
       >
         {isLiveRunning && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid rgba(0,0,0,0.1)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid rgba(0,0,0,0.5)' }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-critical)', animation: 'pulse-dot 1.5s infinite' }} />
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-critical)' }}>LIVE RUNNING</span>
           </span>
@@ -269,7 +274,7 @@ export function TopBar() {
               top: 'calc(100% + 8px)',
               right: 0,
               width: 360,
-              background: 'white',
+              background: 'var(--bg-card)',
               borderRadius: 14,
               border: '1px solid var(--border-default)',
               boxShadow: 'var(--shadow-lg)',
@@ -441,13 +446,15 @@ export function TopBar() {
 
       {/* Theme Toggle */}
       <button
-        onClick={() => { setDarkMode(!darkMode); addToast('Dark mode coming in a future update.', 'info'); }}
+        id="theme-toggle-btn"
+        onClick={toggleTheme}
+        title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         style={{
           width: 38,
           height: 38,
           borderRadius: 10,
           border: '1px solid var(--border-default)',
-          background: 'white',
+          background: isDark ? 'rgba(129,140,248,0.1)' : 'var(--bg-card)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -455,9 +462,9 @@ export function TopBar() {
           transition: 'all var(--transition-fast)',
         }}
         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--primary-light)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'white')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = isDark ? 'rgba(129,140,248,0.1)' : 'var(--bg-card)')}
       >
-        {darkMode ? <Sun size={15} color="var(--color-warning)" /> : <Moon size={15} color="var(--text-secondary)" />}
+        {isDark ? <Sun size={15} color="var(--color-warning)" /> : <Moon size={15} color="var(--text-secondary)" />}
       </button>
 
       {/* User Menu */}
@@ -471,17 +478,19 @@ export function TopBar() {
             padding: '6px 12px 6px 6px',
             borderRadius: 10,
             border: '1px solid var(--border-default)',
-            background: userMenuOpen ? 'var(--primary-light)' : 'white',
+            background: userMenuOpen ? 'var(--primary-light)' : 'var(--bg-card)',
             cursor: 'pointer',
             transition: 'all var(--transition-fast)',
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = userMenuOpen ? 'var(--primary-light)' : 'var(--bg-card)')}
         >
           <div
             style={{
               width: 30,
               height: 30,
               borderRadius: 8,
-              background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
+              background: '#6366f1',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -512,7 +521,7 @@ export function TopBar() {
               top: 'calc(100% + 8px)',
               right: 0,
               width: 220,
-              background: 'white',
+              background: 'var(--bg-card)',
               borderRadius: 12,
               border: '1px solid var(--border-default)',
               boxShadow: 'var(--shadow-lg)',

@@ -251,7 +251,7 @@ export function WholeNetworkGraph({
           animated: true,
           style: { stroke: '#dc2626', strokeWidth: 4, filter: 'drop-shadow(0 0 8px rgba(220,38,38,0.7))' },
           label: `⚡ ${activeStageName}`,
-          labelStyle: { fontSize: 10, fontWeight: 800, fill: '#ffffff' },
+          labelStyle: { fontSize: 10, fontWeight: 800, fill: 'var(--bg-card)' },
           labelBgStyle: { fill: '#dc2626', fillOpacity: 1, rx: 6, ry: 6 },
         });
       }

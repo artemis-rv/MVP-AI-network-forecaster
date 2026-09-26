@@ -56,13 +56,14 @@ export function DashboardPage() {
     ? temporalHistory.map(t => {
         let dateObj = new Date();
         if (t.window_end) {
-          const d = new Date(t.window_end);
+          const raw = String(t.window_end).replace(/\+00:00Z$/, 'Z').replace(/\+00:00$/, 'Z');
+          const d = new Date(raw);
           if (!isNaN(d.getTime())) {
             dateObj = d;
           } else if (typeof t.window_end === 'number') {
             dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
           } else {
-            const num = Number(t.window_end);
+            const num = Number(raw);
             if (!isNaN(num)) {
               dateObj = new Date(num < 1e11 ? num * 1000 : num);
             }
@@ -111,7 +112,7 @@ export function DashboardPage() {
       >
         {kpiData.map((kpi, i) => {
           const links = ['/alerts', '/live-monitoring', '/attack-prediction', '/reports'];
-          
+
           let val = kpi.value;
           let comp = kpi.comparison;
           let change = kpi.change;
@@ -172,7 +173,7 @@ export function DashboardPage() {
             hoverDetails = {
               title: 'Recent Resolutions',
               items: [
-                { label: 'Total Resolved', value: stats?.resolved ?? 0, highlight: 'live' as const }
+                { label: 'Total Resolved', value: String(stats?.resolved ?? 0), highlight: 'live' as const }
               ]
             };
           } else if (liveKpiValues) {
@@ -227,7 +228,7 @@ export function DashboardPage() {
         />
         <RecentAlerts />
       </div>
-      
+
       {/* Bottom Area */}
       <div style={{ paddingBottom: 16 }}>
         <LatestReports />

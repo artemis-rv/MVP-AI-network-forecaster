@@ -29,7 +29,7 @@ const STAGE_META: Record<string, { color: string; bg: string; border: string; ic
   'Persistence':        { color: '#7c3aed', bg: '#ede9fe', border: '#7c3aed', icon: (s = 14) => <Lock size={s} /> },
   'Impact':             { color: '#b91c1c', bg: '#fee2e2', border: '#b91c1c', icon: (s = 14) => <Zap size={s} /> },
 };
-const STAGE_DEFAULT = { color: '#94a3b8', bg: '#f1f5f9', border: '#cbd5e1', icon: (s = 14) => <Settings size={s} /> };
+const STAGE_DEFAULT = { color: '#94a3b8', bg: 'var(--bg-input)', border: 'var(--border-default)', icon: (s = 14) => <Settings size={s} /> };
 
 function getStageMeta(name: string) {
   return STAGE_META[name] ?? STAGE_DEFAULT;
@@ -1005,7 +1005,7 @@ function StatusPill({ status }: { status: string }) {
     paused:    ['#d97706', '#fef3c7'],
     completed: ['#059669', '#d1fae5'],
     stopped:   ['#dc2626', '#fee2e2'],
-    idle:      ['#94a3b8', '#f1f5f9'],
+    idle:      ['#94a3b8', 'var(--bg-input)'],
   };
   const [c, bg] = styles[status] ?? styles['idle'];
   const icons: Record<string, React.ReactNode> = {

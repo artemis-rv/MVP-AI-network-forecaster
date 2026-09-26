@@ -54,8 +54,8 @@ function EntityNode({ data }: NodeProps) {
         boxShadow: isSelected
           ? '0 0 0 3px rgba(99,102,241,0.3), 0 4px 16px rgba(0,0,0,0.12)'
           : isFocused
-          ? `0 0 16px ${meta.shadow}, 0 4px 12px rgba(0,0,0,0.08)`
-          : '0 2px 8px rgba(0,0,0,0.08)',
+          ? `0 0 16px ${meta.shadow}, 0 4px 12px rgba(0,0,0,0.5)`
+          : '0 2px 8px rgba(0,0,0,0.5)',
         cursor: 'pointer',
         transition: 'all 0.2s ease',
         position: 'relative',
@@ -126,7 +126,7 @@ function AttackEdge({
     const d = data as { protocol?: string; connectionCount?: number; isSuspicious?: boolean };
   const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
   const isSuspicious = d?.isSuspicious ?? false;
-  const color = isSuspicious ? '#ef4444' : '#64748b';
+  const color = isSuspicious ? '#ef4444' : 'var(--text-muted)';
 
   return (
     <g>
@@ -147,10 +147,10 @@ function AttackEdge({
       {d?.protocol && (
         <foreignObject x={labelX - 45} y={labelY - 16} width={90} height={32} style={{ overflow: 'visible', pointerEvents: 'none' }}>
           <div style={{
-            background: selected ? '#6366f1' : isSuspicious ? '#fee2e2' : '#f8fafc',
-            border: `1px solid ${selected ? '#6366f1' : isSuspicious ? '#fca5a5' : '#e2e8f0'}`,
+            background: selected ? '#6366f1' : isSuspicious ? '#fee2e2' : 'var(--bg-workspace)',
+            border: `1px solid ${selected ? '#6366f1' : isSuspicious ? '#fca5a5' : 'var(--border-subtle)'}`,
             borderRadius: 6, padding: '2px 6px', fontSize: 10, fontWeight: 700,
-            color: selected ? 'white' : isSuspicious ? '#b91c1c' : '#475569',
+            color: selected ? 'white' : isSuspicious ? '#b91c1c' : 'var(--text-secondary)',
             textAlign: 'center', lineHeight: 1.4, whiteSpace: 'nowrap',
           }}>
             {d.protocol}{d.connectionCount ? ` · ${d.connectionCount}` : ''}
@@ -293,7 +293,7 @@ export function AttackPathGraph({ focusIp, onNodeSelect }: AttackPathGraphProps)
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#e2e8f0" gap={20} size={1} />
-        <Controls showInteractive={false} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8 }} />
+        <Controls showInteractive={false} style={{ background: 'var(--bg-card)', border: '1px solid #e2e8f0', borderRadius: 8 }} />
         <MiniMap
           nodeColor={(n) => {
             const t = (n.data as unknown as AttackNodeData)?.nodeType ?? 'server';
@@ -309,7 +309,7 @@ export function AttackPathGraph({ focusIp, onNodeSelect }: AttackPathGraphProps)
         position: 'absolute', top: 12, left: 12, background: 'rgba(255,255,255,0.95)',
         border: '1px solid #e2e8f0', borderRadius: 10, padding: '8px 12px',
         display: 'flex', gap: 12, flexWrap: 'wrap', backdropFilter: 'blur(4px)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
       }}>
         {Object.entries(NODE_META).map(([k, v]) => (
           <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: v.text }}>

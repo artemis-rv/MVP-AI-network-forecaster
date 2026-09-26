@@ -35,7 +35,7 @@ export function ToastContainer() {
               alignItems: 'flex-start',
               gap: 10,
               padding: '12px 16px',
-              background: 'white',
+              background: 'var(--bg-card)',
               border: `1px solid ${c.border}`,
               borderLeft: `4px solid ${c.border}`,
               borderRadius: 12,

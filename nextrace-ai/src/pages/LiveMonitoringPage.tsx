@@ -233,7 +233,7 @@ export function LiveMonitoringPage() {
                       padding: '8px 16px', borderRadius: 8, border: '1px solid',
                       fontSize: 13, fontWeight: 600, cursor: isRunning ? 'not-allowed' : 'pointer',
                       borderColor: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--border-default)',
-                      background: mode === m ? (m === 'suspicious' ? 'var(--color-critical-light)' : 'var(--color-live-light)') : 'white',
+                      background: mode === m ? (m === 'suspicious' ? 'var(--color-critical-light)' : 'var(--color-live-light)') : 'var(--bg-card)',
                       color: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--text-secondary)',
                       opacity: isRunning ? 0.6 : 1,
                       transition: 'all var(--transition-fast)',
@@ -261,7 +261,7 @@ export function LiveMonitoringPage() {
                       padding: '6px 10px', borderRadius: 6, border: '1px solid', fontSize: 12, fontWeight: 600,
                       cursor: isRunning ? 'not-allowed' : 'pointer',
                       borderColor: windowSeconds === w ? 'var(--primary)' : 'var(--border-default)',
-                      background: windowSeconds === w ? 'var(--primary-light)' : 'white',
+                      background: windowSeconds === w ? 'var(--primary-light)' : 'var(--bg-card)',
                       color: windowSeconds === w ? 'var(--primary)' : 'var(--text-muted)',
                       opacity: isRunning ? 0.6 : 1,
                       transition: 'all var(--transition-fast)',
@@ -407,7 +407,7 @@ export function LiveMonitoringPage() {
                       onClick={() => setChartTimeRange(m as 1|5|15)}
                       style={{
                         padding: '4px 8px', fontSize: 11, fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer',
-                        background: chartTimeRange === m ? 'white' : 'transparent',
+                        background: chartTimeRange === m ? 'var(--bg-card)' : 'transparent',
                         color: chartTimeRange === m ? 'var(--text-primary)' : 'var(--text-muted)',
                         boxShadow: chartTimeRange === m ? 'var(--shadow-sm)' : 'none'
                       }}
@@ -611,7 +611,7 @@ function btnStyle(variant: string): React.CSSProperties {
   if (variant === 'critical') return { ...base, background: 'var(--color-critical)', color: 'white', borderColor: 'transparent' };
   if (variant === 'primary') return { ...base, background: 'var(--primary)', color: 'white', borderColor: 'transparent' };
   if (variant === 'secondary-sm') return { ...base, padding: '5px 12px', fontSize: 12, background: 'var(--primary-light)', color: 'var(--primary)', borderColor: 'var(--primary)' };
-  if (variant === 'ghost-sm') return { ...base, padding: '5px 12px', fontSize: 12, background: 'white', color: 'var(--text-secondary)', borderColor: 'var(--border-default)' };
+  if (variant === 'ghost-sm') return { ...base, padding: '5px 12px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-secondary)', borderColor: 'var(--border-default)' };
   return base;
 }
 

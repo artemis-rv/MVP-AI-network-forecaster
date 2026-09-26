@@ -612,7 +612,7 @@ function SuspiciousTable({ events }: { events: SuspiciousEvent[] }) {
     <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 10, background: 'var(--bg-card)' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--border-subtle)' }}>
+          <tr style={{ background: 'var(--bg-workspace)', borderBottom: '2px solid var(--border-subtle)' }}>
             {['Time', 'Indicator Type', 'Source', 'Destination', 'Proto', 'Severity', 'Reason'].map(col => (
               <th key={col} style={{
                 padding: '12px 16px', textAlign: 'left', fontWeight: 800, color: 'var(--text-muted)',
@@ -657,9 +657,9 @@ function SuspiciousTable({ events }: { events: SuspiciousEvent[] }) {
               <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                 <span style={{
                   fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 999,
-                  background: SEV_BG[ev.severity] ?? '#f1f5f9', color: SEV_COLOR[ev.severity] ?? '#64748b',
+                  background: SEV_BG[ev.severity] ?? 'var(--bg-input)', color: SEV_COLOR[ev.severity] ?? 'var(--text-muted)',
                   textTransform: 'uppercase', letterSpacing: '0.4px', display: 'inline-flex', alignItems: 'center', gap: 4,
-                  border: `1px solid ${SEV_COLOR[ev.severity] ?? '#64748b'}30`
+                  border: `1px solid ${SEV_COLOR[ev.severity] ?? 'var(--text-muted)'}30`
                 }}>
                   <AlertTriangle size={11} /> {ev.severity}
                 </span>
@@ -700,7 +700,7 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
             {/* Icon / Dot */}
             <div style={{
               width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-              background: isSus ? SEV_BG[entry.severity] : '#f1f5f9',
+              background: isSus ? SEV_BG[entry.severity] : 'var(--bg-input)',
               border: `2px solid ${isSus ? SEV_COLOR[entry.severity] : '#94a3b8'}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               zIndex: 1, boxShadow: isSus ? `0 4px 12px ${SEV_COLOR[entry.severity]}40` : 'none',
@@ -718,7 +718,7 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
               border: isSus ? `1px solid ${SEV_COLOR[entry.severity]}40` : '1px solid transparent',
               borderLeft: isSus ? `4px solid ${SEV_COLOR[entry.severity]}` : '4px solid transparent',
               borderRadius: 10, padding: isSus ? '14px 20px' : '6px 20px',
-              boxShadow: isSus ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
+              boxShadow: isSus ? '0 4px 12px rgba(0,0,0,0.4)' : 'none',
               transition: 'all 0.2s ease-in-out',
               display: 'flex', flexDirection: 'column', gap: 6,
               marginBottom: isLast ? 0 : 8
