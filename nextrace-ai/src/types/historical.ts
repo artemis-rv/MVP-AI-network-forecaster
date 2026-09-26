@@ -92,6 +92,7 @@ export interface SuspiciousEvent {
 
 /** Activity/stage timeline entry */
 export interface ActivityTimelineEntry {
+  event_id?: string;
   entry_type: 'suspicious' | 'normal';
   timestamp: number;
   stage: string;

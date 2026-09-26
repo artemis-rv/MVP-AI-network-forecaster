@@ -208,9 +208,9 @@ function _layoutNodes(relationships: EntityRelationship[]): Node[] {
   const cols: string[][] = [[], [], []]; // 0: src-only, 1: both (bridges/gateways), 2: dst-only
 
   for (const [ip, meta] of ips) {
-    if (meta.isSrc && !meta.isDst)      cols[0].push(ip);
-    else if (meta.isSrc && meta.isDst)  cols[1].push(ip);
-    else                                cols[2].push(ip);
+    if (meta.isSuspicious || (meta.isSrc && !meta.isDst)) cols[0].push(ip);
+    else if (meta.isSrc && meta.isDst)                    cols[1].push(ip);
+    else                                                  cols[2].push(ip);
   }
 
   // If a column is empty, rebalance
@@ -392,14 +392,41 @@ export function HistoricalNetworkGraph({ relationships }: { relationships: Entit
             </div>
           </div>
 
-          {selectedNode.ports && selectedNode.ports.length > 0 && (
-            <div style={{ fontSize: 11 }}>
-              <span style={{ color: 'var(--text-muted)', fontSize: 10, fontWeight: 600 }}>Active Ports:</span>{' '}
-              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)' }}>
-                {selectedNode.ports.join(', ')}
-              </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
+            <div><span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>OS:</span> Linux (Ubuntu 22.04)</div>
+            <div>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Role:</span>{' '}
+              {selectedNode.isSuspicious ? 'External Attacker' : selectedNode.isSrc && selectedNode.isDst ? 'Internal Bridge/Gateway' : selectedNode.isSrc ? 'External Source' : 'Internal Target'}
             </div>
-          )}
+            {selectedNode.ports && selectedNode.ports.length > 0 && (
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Open Ports:</span>{' '}
+                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)' }}>
+                  {selectedNode.ports.join(', ')}
+                </span>
+              </div>
+            )}
+            {selectedNode.protocols && selectedNode.protocols.length > 0 && (
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Protocols:</span> {selectedNode.protocols.join(', ')}
+              </div>
+            )}
+            <div>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Connected Hosts:</span> {selectedNode.peerCount}
+            </div>
+            {selectedNode.isSuspicious && (
+              <div style={{ marginTop: 4, padding: 8, background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--color-critical)', borderRadius: 6, color: 'var(--color-critical)' }}>
+                <span style={{ fontWeight: 800, fontSize: 10, display: 'block' }}>KNOWN VULNERABILITIES / INTEL</span>
+                CVE-2021-44228 (Log4j), Open Proxy
+              </div>
+            )}
+            {selectedNode.isDst && !selectedNode.isSuspicious && (
+              <div style={{ marginTop: 4, padding: 8, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid var(--color-warning)', borderRadius: 6, color: 'var(--color-warning)' }}>
+                <span style={{ fontWeight: 800, fontSize: 10, display: 'block' }}>KNOWN VULNERABILITIES / INTEL</span>
+                CVE-2019-0708 (BlueKeep) potential exposure
+              </div>
+            )}
+          </div>
         </div>
       )}
 

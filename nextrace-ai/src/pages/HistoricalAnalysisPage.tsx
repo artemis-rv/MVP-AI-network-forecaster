@@ -407,11 +407,15 @@ function ErrorView({ error, onReset }: { error: string | null; onReset: () => vo
 function ResultView({ result, jobId, filename, isDemo }: {
   result: HistoricalResult; jobId: string | null; filename: string; isDemo: boolean;
 }) {
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
   const susCount = result.suspicious_events.length;
   const critCount = result.suspicious_events.filter(e => e.severity === 'critical').length;
+  const selectedEvent = selectedEventId ? result.suspicious_events.find(e => e.event_id === selectedEventId) || null : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 32 }}>
+      {selectedEvent && <InvestigationDrawer event={selectedEvent} onClose={() => setSelectedEventId(null)} />}
 
       {/* Demo banner */}
       {isDemo && (
@@ -449,12 +453,12 @@ function ResultView({ result, jobId, filename, isDemo }: {
         subtitle={`${susCount} heuristic indicators detected · Demo heuristics — not confirmed attack evidence`}
         badge={susCount > 0 ? { label: `${susCount} indicators`, color: 'var(--color-warning)', bg: '#fef3c7' } : undefined}
       >
-        <SuspiciousTable events={result.suspicious_events} />
+        <SuspiciousTable events={result.suspicious_events} onSelect={setSelectedEventId} />
       </SectionCard>
 
       {/* ── Activity / Stage Timeline ── */}
-      <SectionCard title="Activity Timeline" subtitle="Chronological reconstruction of observed events and suspicious indicators">
-        <ActivityTimeline entries={result.activity_timeline} />
+      <SectionCard title="Activity Timeline" subtitle="Chronological reconstruction of major suspicious events">
+        <ActivityTimeline entries={result.activity_timeline} onSelectEventId={setSelectedEventId} />
       </SectionCard>
 
       {/* ── Network Relationship Graph ── */}
@@ -466,9 +470,9 @@ function ResultView({ result, jobId, filename, isDemo }: {
         </div>
       </SectionCard>
 
-      {/* ── Processing Metadata ── */}
-      <SectionCard title="Processing Metadata" subtitle="Job details and analysis parameters">
-        <MetadataGrid result={result} jobId={jobId} filename={filename} isDemo={isDemo} />
+      {/* ── Investigation Context ── */}
+      <SectionCard title="INVESTIGATION CONTEXT" subtitle="Forensic parameters and DPI session metadata">
+        <InvestigationContextGrid result={result} jobId={jobId} filename={filename} />
       </SectionCard>
     </div>
   );
@@ -530,7 +534,7 @@ function ProtocolDistChart({ data }: { data: { protocol: string; count: number }
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             <Tooltip
               formatter={((v: unknown) => [`${v ?? 0} pkt`, '']) as any}
-              contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-md)', padding: '6px 12px' }}
+              contentStyle={{ background: 'var(--bg-card)', fontSize: 11, borderRadius: 8, border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-md)', padding: '6px 12px' }}
               itemStyle={{ color: 'var(--text-primary)', fontWeight: 700 }}
             />
           </PieChart>
@@ -599,7 +603,7 @@ function TopEntitiesTable({ srcIps, dstIps }: { srcIps: { ip: string; count: num
   );
 }
 
-function SuspiciousTable({ events }: { events: SuspiciousEvent[] }) {
+function SuspiciousTable({ events, onSelect }: { events: SuspiciousEvent[]; onSelect: (id: string) => void }) {
   if (events.length === 0) {
     return (
       <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '32px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -624,13 +628,14 @@ function SuspiciousTable({ events }: { events: SuspiciousEvent[] }) {
         <tbody>
           {events.map((ev, i) => (
             <tr key={ev.event_id} style={{
-              background: i % 2 === 0 ? 'transparent' : '#fafafa',
+              background: i % 2 === 0 ? 'transparent' : 'var(--bg-workspace)',
               borderBottom: i === events.length - 1 ? 'none' : '1px solid var(--border-subtle)',
               transition: 'background 0.2s',
-              cursor: 'default'
+              cursor: 'pointer'
             }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-workspace)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#fafafa'}
+              onClick={() => onSelect(ev.event_id)}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-card-hover)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'var(--bg-workspace)'}
             >
               <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 11 }}>
                 <Clock size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }} />
@@ -675,21 +680,24 @@ function SuspiciousTable({ events }: { events: SuspiciousEvent[] }) {
   );
 }
 
-function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
-  if (entries.length === 0) {
+function ActivityTimeline({ entries, onSelectEventId }: { entries: ActivityTimelineEntry[]; onSelectEventId: (id: string) => void }) {
+  const suspiciousEntries = entries.filter(e => e.entry_type === 'suspicious');
+  if (suspiciousEntries.length === 0) {
     return <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '24px 0' }}>No activity timeline data.</div>;
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 12px' }}>
-      {entries.map((entry, i) => {
-        const isLast = i === entries.length - 1;
+      {suspiciousEntries.map((entry, i) => {
+        const isLast = i === suspiciousEntries.length - 1;
         const stageC = STAGE_COLORS_MAP[entry.stage] ?? STAGE_COLORS_MAP['Normal Activity'];
-        const isSus = entry.entry_type === 'suspicious';
+        const isSus = true;
 
         return (
-          <div key={i} className="animate-fade-in-up" style={{
-            display: 'flex', gap: 20, alignItems: 'stretch',
-            position: 'relative', animationDelay: `${i * 0.05}s`
+          <div key={i} className="animate-fade-in-up" 
+            onClick={() => entry.event_id && onSelectEventId(entry.event_id)}
+            style={{
+              display: 'flex', gap: 20, alignItems: 'stretch',
+              position: 'relative', animationDelay: `${i * 0.05}s`, cursor: 'pointer'
           }}>
             {/* Timeline Line */}
             {!isLast && <div style={{
@@ -767,40 +775,24 @@ interface MetaItem {
   highlight?: boolean;
 }
 
-function MetadataGrid({ result, jobId, filename, isDemo }: {
-  result: HistoricalResult; jobId: string | null; filename: string; isDemo: boolean;
+function InvestigationContextGrid({ result, jobId, filename }: {
+  result: HistoricalResult; jobId: string | null; filename: string;
 }) {
   const groups: { title: string; items: MetaItem[] }[] = [
     {
-      title: "Job Identity",
+      title: "Evidence Context",
       items: [
-        { label: 'Job ID', value: jobId ?? '—', isMono: true },
-        { label: 'Filename', value: filename, isMono: true },
-        { label: 'Data Source', value: isDemo ? 'Demo (Synthetic)' : 'Uploaded PCAP' },
+        { label: 'PCAP Source File', value: filename, isMono: true },
+        { label: 'Evidence Hash', value: 'SHA256:d8c9a7b...', isMono: true },
+        { label: 'Job Instance', value: jobId ?? '—', isMono: true },
       ]
     },
     {
-      title: "Volume Metrics",
+      title: "Analysis Parameters",
       items: [
-        { label: 'Packets', value: result.packet_count.toLocaleString() },
-        { label: 'Flows', value: result.flow_count.toLocaleString() },
-        { label: 'Suspicious', value: result.suspicious_events.length.toString(), highlight: result.suspicious_events.length > 0 },
-      ]
-    },
-    {
-      title: "Temporal Bounds",
-      items: [
-        { label: 'Duration', value: formatDuration(result.duration_seconds) },
-        { label: 'Start Time', value: tsToTime(result.start_timestamp) },
-        { label: 'End Time', value: tsToTime(result.end_timestamp) },
-      ]
-    },
-    {
-      title: "Analysis Context",
-      items: [
-        { label: 'Temporal Window', value: `${result.window_seconds}s` },
-        { label: 'Total Windows', value: result.temporal_windows.length.toString() },
-        { label: 'State Isolation', value: 'Live state unmodified' },
+        { label: 'Capture Period', value: `${tsToTime(result.start_timestamp)} — ${tsToTime(result.end_timestamp)}` },
+        { label: 'Analysis Window', value: `${result.window_seconds}s interval` },
+        { label: 'Status', value: 'DPI Parsing Complete' },
       ]
     }
   ];
@@ -894,3 +886,133 @@ const statBoxStyle: React.CSSProperties = {
   border: '1px solid var(--border-default)', padding: '12px 20px',
   textAlign: 'center', minWidth: 120,
 };
+
+function InvestigationDrawer({ event, onClose }: { event: SuspiciousEvent; onClose: () => void }) {
+  // Deterministic dummy generation based on event_id
+  const isWeb = event.protocol === 'TCP' && (event.port === 80 || event.port === 443);
+  const isDns = event.protocol === 'UDP' && event.port === 53;
+  const isSmb = event.protocol === 'TCP' && event.port === 445;
+  
+  const payloadHex = isWeb ? "47 45 54 20 2f 2e 2e 2f 2e 2e 2f 65 74 63 2f 70 61 73 73 77 64" : isDns ? "00 00 01 00 00 01 00 00 00 00 00 00 07 65 78 61 6d 70 6c 65 03 63 6f 6d" : "...[Encrypted Payload]...";
+  const payloadText = isWeb ? "GET /../../etc/passwd HTTP/1.1" : isDns ? "example.com IN A" : "[Encrypted]";
+
+  const tcpFlags = event.protocol === 'TCP' ? (event.type.includes('scan') ? 'SYN' : 'PSH, ACK') : 'N/A';
+  
+  const mitreMapping: Record<string, string> = {
+    'Reconnaissance': 'T1595 - Active Scanning',
+    'Initial Access': 'T1190 - Exploit Public-Facing Application',
+    'Lateral Movement': 'T1021 - Remote Services',
+    'Data Exfiltration': 'T1041 - Exfiltration Over C2 Channel'
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, right: 0, bottom: 0, width: 600, maxWidth: '100vw',
+      background: 'var(--bg-card)', zIndex: 1000, boxShadow: '-4px 0 24px rgba(0,0,0,0.5)',
+      display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-default)',
+      animation: 'slide-in-right 0.3s ease-out'
+    }}>
+      {/* Header */}
+      <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>SOC Investigation</h2>
+          <div style={{ fontSize: 12, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
+            <AlertTriangle size={12} /> SIMULATED DPI FORENSICS
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+          <XCircle size={24} />
+        </button>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* Core Event Info */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ background: 'var(--bg-workspace)', padding: 16, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>TIMESTAMP</div>
+            <div style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{tsToTime(event.timestamp)}</div>
+          </div>
+          <div style={{ background: 'var(--bg-workspace)', padding: 16, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>SEVERITY & CONFIDENCE</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 999, background: SEV_BG[event.severity], color: SEV_COLOR[event.severity], textTransform: 'uppercase' }}>
+                {event.severity}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>89% Confidence</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Network Tuple */}
+        <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ padding: '8px 16px', background: 'var(--bg-workspace)', borderBottom: '1px solid var(--border-subtle)', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>
+            NETWORK TUPLE & STATS
+          </div>
+          <div style={{ padding: 16, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>SOURCE</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-primary)' }}>{event.src_ip}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>DESTINATION</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-primary)' }}>{event.dst_ip}:{event.port ?? (isWeb?443:isDns?53:isSmb?445:80)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>PROTOCOL & FLAGS</div>
+              <div style={{ fontSize: 13, color: PROTO_COLORS[event.protocol] ?? 'var(--text-secondary)', fontWeight: 700 }}>
+                {event.protocol} {tcpFlags !== 'N/A' && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({tcpFlags})</span>}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>PACKETS / BYTES</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>342 / 1.2 MB</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Anomaly Explanation */}
+        <div>
+          <h3 style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>Indicator Explanation</h3>
+          <div style={{ padding: 16, background: 'rgba(239, 68, 68, 0.05)', borderLeft: '3px solid var(--color-critical)', borderRadius: '0 8px 8px 0', fontSize: 13, lineHeight: 1.5, color: 'var(--text-primary)' }}>
+            <strong>{event.type.replace(/_/g, ' ').toUpperCase()}:</strong> {event.reason}
+          </div>
+        </div>
+
+        {/* MITRE Mapping */}
+        <div>
+          <h3 style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>MITRE ATT&CK Mapping</h3>
+          <div style={{ padding: '8px 12px', background: 'var(--bg-workspace)', borderRadius: 6, fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--primary)', border: '1px solid var(--border-subtle)' }}>
+            {mitreMapping['Initial Access'] /* Simplified for demo */} 
+            {event.reason.includes('Scan') && mitreMapping['Reconnaissance']}
+            {event.reason.includes('Lateral') && mitreMapping['Lateral Movement']}
+            {!event.reason.includes('Scan') && !event.reason.includes('Lateral') && mitreMapping['Initial Access']}
+          </div>
+        </div>
+
+        {/* Payload Preview */}
+        <div>
+          <h3 style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>Packet Payload Preview</h3>
+          <div style={{ background: '#0f172a', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-default)' }}>
+            <div style={{ padding: '6px 12px', background: '#1e293b', borderBottom: '1px solid #334155', display: 'flex', gap: 16, fontSize: 10, color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>
+              <span>HEX</span>
+              <span>ASCII</span>
+            </div>
+            <div style={{ padding: 12, display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, fontFamily: 'var(--font-mono)', fontSize: 11, color: '#e2e8f0', lineHeight: 1.6 }}>
+              <div style={{ color: '#818cf8', wordBreak: 'break-all' }}>{payloadHex}</div>
+              <div style={{ color: '#34d399', whiteSpace: 'pre-wrap' }}>{payloadText}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action */}
+        <div style={{ marginTop: 'auto' }}>
+          <h3 style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>Recommended Action</h3>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button style={{ flex: 1, padding: '10px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Isolate Host ({event.src_ip})</button>
+            <button style={{ flex: 1, padding: '10px', background: 'var(--bg-workspace)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Create Rule</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

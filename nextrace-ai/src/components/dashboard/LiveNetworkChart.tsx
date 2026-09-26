@@ -127,7 +127,7 @@ export function LiveNetworkChart({ data: externalData, isLive: externalIsLive }:
                 borderRadius: 6,
                 border: '1px solid',
                 borderColor: range === r ? 'var(--primary)' : 'var(--border-default)',
-                background: range === r ? 'var(--primary-light)' : 'white',
+                background: range === r ? 'var(--primary-light)' : 'var(--bg-workspace)',
                 color: range === r ? 'var(--primary)' : 'var(--text-muted)',
                 cursor: 'pointer',
                 transition: 'all var(--transition-fast)',
