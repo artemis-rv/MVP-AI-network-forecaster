@@ -50,7 +50,7 @@ export interface SessionStatus {
 }
 
 export interface WSMessage {
-  type: 'packet_event' | 'temporal_state' | 'session_status' | 'forecast_update' | 'ping';
+  type: 'packet_event' | 'temporal_state' | 'session_status' | 'forecast_update' | 'new_alert' | 'ping';
   data: Record<string, unknown>;
 }
 

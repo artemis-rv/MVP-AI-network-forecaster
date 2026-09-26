@@ -5,6 +5,8 @@ import type { WSMessage, PacketEvent, TemporalState, SessionStatus } from '@/typ
 import type { ForecastResult } from '@/types/forecast';
 import { useLiveStore } from '@/store/liveStore';
 import { useForecastStore } from '@/store/forecastStore';
+import { useAlertStore } from '@/store/alertStore';
+import { useAppStore } from '@/store/appStore';
 
 const WS_BASE = import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000';
 const WS_URL  = `${WS_BASE}/ws/live`;
@@ -96,7 +98,7 @@ class WebSocketService {
 
   private _handleMessage(raw: string): void {
     try {
-      const msg = JSON.parse(raw) as WSMessage;
+      const msg = JSON.parse(raw) as WSMessage & { type: string; data: any };
       const store = useLiveStore.getState();
 
       switch (msg.type) {
@@ -112,6 +114,23 @@ class WebSocketService {
           break;
         case 'forecast_update':
           useForecastStore.getState().setForecast(msg.data as unknown as ForecastResult);
+          break;
+        case 'new_alert':
+          if (msg.data && msg.data.id) {
+            const currentAlerts = useAlertStore.getState().alerts;
+            if (!currentAlerts.some(a => a.id === msg.data.id)) {
+              useAlertStore.setState({
+                alerts: [msg.data, ...currentAlerts],
+                totalAlerts: (useAlertStore.getState().totalAlerts || 0) + 1,
+              });
+            }
+          }
+          // Dynamically refresh alerts and stats from backend
+          useAlertStore.getState().fetchAlerts();
+          useAlertStore.getState().fetchStats();
+          if (msg.data?.title) {
+            useAppStore.getState().addToast(`🚨 Security Alert: ${msg.data.title}`, 'error');
+          }
           break;
         case 'ping':
           break;

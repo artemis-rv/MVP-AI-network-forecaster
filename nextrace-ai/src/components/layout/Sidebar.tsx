@@ -10,13 +10,21 @@ import { useAlertStore } from '@/store/alertStore';
 
 export function Sidebar() {
   const { setActivePage, userRole, sidebarCollapsed, setSidebarCollapsed } = useAppStore();
-  const { stats, fetchStats } = useAlertStore();
+  const { stats, alerts, fetchStats, fetchAlerts } = useAlertStore();
 
   useEffect(() => {
     fetchStats();
-  }, [fetchStats]);
+    fetchAlerts();
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchAlerts();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchStats, fetchAlerts]);
 
-  const activeAlertsBadge = (stats?.open ?? 0) + (stats?.in_progress ?? 0);
+  const activeAlertsBadge = alerts.length > 0
+    ? alerts.filter(a => a.status === 'OPEN' || a.status === 'IN_PROGRESS').length
+    : (stats?.open ?? 0) + (stats?.in_progress ?? 0);
 
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     live: true,
@@ -326,9 +334,10 @@ function SidebarNavItem({ item, onNavigate, collapsed }: { item: any; onNavigate
                 position: 'absolute',
                 top: -4,
                 right: -6,
-                width: 16,
+                minWidth: 16,
                 height: 16,
-                borderRadius: '50%',
+                borderRadius: 9999,
+                padding: '0 4px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -336,7 +345,8 @@ function SidebarNavItem({ item, onNavigate, collapsed }: { item: any; onNavigate
                 fontWeight: 700,
                 background: 'var(--color-critical)',
                 color: 'white',
-                pointerEvents: 'none'
+                pointerEvents: 'none',
+                boxShadow: '0 0 6px rgba(239, 68, 68, 0.6)',
               }}
             >
               {item.badge}
