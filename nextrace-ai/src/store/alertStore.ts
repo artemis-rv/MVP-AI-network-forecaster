@@ -42,19 +42,9 @@ const defaultFilters: AlertFilters = {
 
 export const useAlertStore = create<AlertStore>((set, get) => ({
   alerts: [],
-  totalAlerts: 7,
+  totalAlerts: 0,
   selectedAlertId: null,
-  stats: {
-    total: 7,
-    open: 5,
-    acknowledged: 0,
-    in_progress: 1,
-    resolved: 1,
-    critical: 2,
-    high: 3,
-    medium: 1,
-    low: 1,
-  },
+  stats: null,
   loading: false,
   error: null,
   filters: { ...defaultFilters },

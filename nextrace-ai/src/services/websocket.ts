@@ -124,13 +124,12 @@ class WebSocketService {
                 totalAlerts: (useAlertStore.getState().totalAlerts || 0) + 1,
               });
             }
+            // Push directly into notification panel (no bottom-toast flood)
+            useAppStore.getState().addAlertNotification(msg.data);
           }
-          // Dynamically refresh alerts and stats from backend
+          // Refresh alert list and stats from backend
           useAlertStore.getState().fetchAlerts();
           useAlertStore.getState().fetchStats();
-          if (msg.data?.title) {
-            useAppStore.getState().addToast(`🚨 Security Alert: ${msg.data.title}`, 'error');
-          }
           break;
         case 'ping':
           break;
