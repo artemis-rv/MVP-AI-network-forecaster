@@ -3,9 +3,11 @@ NEXTRACE AI — FastAPI Application Entry Point
 """
 from __future__ import annotations
 
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# ... other imports ...
 from backend.api.health import router as health_router
 from backend.api.live import router as live_router
 from backend.api.forecast import router as forecast_router
@@ -25,16 +27,21 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-# ── CORS — allow local Vite dev server ────────────────────────
+# ── CORS — allow local Vite dev server and production frontend ────────────────────────
+# You can pass FRONTEND_URL like FRONTEND_URL="https://my-frontend.vercel.app,http://localhost:5173"
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:4173",  # Vite preview
+]
+if os.environ.get("FRONTEND_URL"):
+    allowed_origins.extend(os.environ.get("FRONTEND_URL", "").split(","))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:4173",  # Vite preview
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
