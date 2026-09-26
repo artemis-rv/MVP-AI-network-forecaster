@@ -157,11 +157,16 @@ export const useLiveStore = create<LiveStore>()(
 
             const key = `${ev.src_ip}->${ev.dst_ip}`;
             if (nodesMap.has(ev.src_ip) && nodesMap.has(ev.dst_ip)) {
+              const existing = edgesMap.get(key);
               edgesMap.set(key, {
+                id: key,
                 from: ev.src_ip,
                 to: ev.dst_ip,
                 label: ev.protocol,
-                suspicious: ev.classification === 'suspicious',
+                suspicious: existing?.suspicious || ev.classification === 'suspicious',
+                packetCount: (existing?.packetCount || 0) + 1,
+                bytes: (existing?.bytes || 0) + (ev.packet_size || 0),
+                lastSeen: ev.timestamp,
               });
             }
           }

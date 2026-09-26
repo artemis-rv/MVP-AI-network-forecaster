@@ -7,7 +7,6 @@ import { useAlertStore } from '@/store/alertStore';
 
 export function TopBar() {
   const navigate = useNavigate();
-  const { alerts, fetchAlerts, selectAlert } = useAlertStore();
   const {
     searchOpen, setSearchOpen,
     userMenuOpen, setUserMenuOpen,
@@ -16,6 +15,12 @@ export function TopBar() {
     addToast,
     userRole, currentUser, logout
   } = useAppStore();
+
+  const { alerts, fetchAlerts, selectAlert, stats } = useAlertStore();
+
+  const activeAlertsBadge = alerts.length > 0
+    ? alerts.filter(a => a.status === 'OPEN' || a.status === 'IN_PROGRESS').length
+    : (stats?.open ?? 0) + (stats?.in_progress ?? 0);
 
   const { session } = useLiveStore();
   const isLiveRunning = session?.running ?? false;
@@ -213,7 +218,7 @@ export function TopBar() {
       <div ref={notifRef} style={{ position: 'relative' }}>
         <button
           onClick={() => { setNotifPanelOpen(!notifPanelOpen); setUserMenuOpen(false); }}
-          title={unreadCount > 0 ? `${unreadCount} unread alert notifications` : 'Notifications'}
+          title={activeAlertsBadge > 0 ? `${activeAlertsBadge} active alerts` : 'Notifications'}
           style={{
             position: 'relative',
             width: 38,
@@ -229,7 +234,7 @@ export function TopBar() {
           }}
         >
           <Bell size={16} color={notifPanelOpen ? 'var(--primary)' : 'var(--text-secondary)'} />
-          {unreadCount > 0 && (
+          {activeAlertsBadge > 0 && (
             <span
               style={{
                 position: 'absolute',
@@ -251,7 +256,7 @@ export function TopBar() {
                 lineHeight: 1,
               }}
             >
-              {unreadCount > 9 ? '9+' : unreadCount}
+              {activeAlertsBadge > 9 ? '9+' : activeAlertsBadge}
             </span>
           )}
         </button>
@@ -284,9 +289,9 @@ export function TopBar() {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
-                  Security Notifications
+                  Security Alerts
                 </span>
-                {unreadCount > 0 ? (
+                {activeAlertsBadge > 0 ? (
                   <span style={{
                     fontSize: 10,
                     background: 'var(--color-critical-light)',
@@ -295,7 +300,7 @@ export function TopBar() {
                     borderRadius: 999,
                     fontWeight: 700,
                   }}>
-                    {unreadCount} active
+                    {activeAlertsBadge} active
                   </span>
                 ) : (
                   <span style={{
@@ -306,25 +311,10 @@ export function TopBar() {
                     borderRadius: 999,
                     fontWeight: 700,
                   }}>
-                    All read
+                    All resolved
                   </span>
                 )}
               </div>
-              {unreadCount > 0 && (
-                <button
-                  onClick={markAllRead}
-                  style={{
-                    fontSize: 11,
-                    color: 'var(--primary)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                  }}
-                >
-                  Mark all read
-                </button>
-              )}
             </div>
 
             <div style={{ maxHeight: 380, overflowY: 'auto' }}>

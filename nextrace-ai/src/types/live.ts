@@ -64,10 +64,14 @@ export interface LiveNode {
 }
 
 export interface LiveEdge {
+  id: string;
   from: string;
   to: string;
   label: string;
   suspicious: boolean;
+  packetCount: number;
+  bytes: number;
+  lastSeen: string;
 }
 
 export type DemoMode    = 'benign' | 'suspicious';

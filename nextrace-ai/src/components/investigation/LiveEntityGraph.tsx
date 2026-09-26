@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Radio } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { Radio, Focus } from 'lucide-react';
 import type { LiveNode, LiveEdge } from '@/types/live';
 
 export interface LiveEntityGraphProps {
@@ -14,6 +14,18 @@ export interface LiveEntityGraphProps {
 export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, onNodeSelect }: LiveEntityGraphProps) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
+
+  // Find "now" in the graph context to handle demo/live safely
+  const maxTimestamp = useMemo(() => {
+    let max = 0;
+    edges.forEach(e => {
+      if (!e.lastSeen) return;
+      const t = new Date(e.lastSeen).getTime();
+      if (t > max) max = t;
+    });
+    return max || Date.now();
+  }, [edges]);
 
   useEffect(() => {
     if (focusIp) {
@@ -70,8 +82,92 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
     return positioned;
   }, [categorized, isExpanded]);
 
-  const maxNodeY = Math.max(260, ...layoutNodes.map(n => n.renderY + 100));
-  const maxNodeX = Math.max(isExpanded ? 1100 : 750, ...layoutNodes.map(n => n.renderX + 160));
+  const { vbX, vbY, vbWidth, vbHeight } = useMemo(() => {
+    if (layoutNodes.length === 0) return { vbX: 0, vbY: 0, vbWidth: 800, vbHeight: 600 };
+    
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    
+    layoutNodes.forEach(n => {
+      if (n.renderX < minX) minX = n.renderX;
+      if (n.renderX > maxX) maxX = n.renderX;
+      if (n.renderY < minY) minY = n.renderY;
+      if (n.renderY > maxY) maxY = n.renderY;
+    });
+
+    // Account for column headers
+    minY = Math.min(minY, 20);
+
+    // Padding ensures nodes don't clip at edges
+    const paddingX = 120;
+    const paddingY = 80;
+    
+    return {
+      vbX: minX - paddingX,
+      vbY: minY - paddingY,
+      vbWidth: (maxX - minX) + (paddingX * 2),
+      vbHeight: (maxY - minY) + (paddingY * 2)
+    };
+  }, [layoutNodes]);
+
+  const svgRef = useRef<SVGSVGElement>(null);
+  const transformRef = useRef({ zoom: 1, panX: 0, panY: 0 });
+  const [, forceRender] = useState({});
+  const vbRef = useRef({ vbX: 0, vbY: 0, vbWidth: 800, vbHeight: 600 });
+  
+  useEffect(() => {
+    vbRef.current = { vbX, vbY, vbWidth, vbHeight };
+  }, [vbX, vbY, vbWidth, vbHeight]);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault(); // Stop page scroll
+      
+      const { zoom: prevZoom, panX: prevPanX, panY: prevPanY } = transformRef.current;
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1; // down = out, up = in
+      const nextZoom = Math.max(0.2, Math.min(prevZoom * zoomFactor, 5));
+      if (nextZoom === prevZoom) return;
+
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return;
+      
+      const svgP = pt.matrixTransform(ctm.inverse());
+      
+      const { vbX: bx, vbY: by, vbWidth: bw, vbHeight: bh } = vbRef.current;
+      
+      const old_w = bw / prevZoom;
+      const old_h = bh / prevZoom;
+      
+      const current_vbX = bx + (bw - old_w) / 2 - prevPanX;
+      const current_vbY = by + (bh - old_h) / 2 - prevPanY;
+      
+      const relX = (svgP.x - current_vbX) / old_w;
+      const relY = (svgP.y - current_vbY) / old_h;
+      
+      const new_w = bw / nextZoom;
+      const new_h = bh / nextZoom;
+      
+      const new_vbX = svgP.x - relX * new_w;
+      const new_vbY = svgP.y - relY * new_h;
+      
+      const new_panX = bx + (bw - new_w) / 2 - new_vbX;
+      const new_panY = by + (bh - new_h) / 2 - new_vbY;
+
+      transformRef.current = { zoom: nextZoom, panX: new_panX, panY: new_panY };
+      forceRender({});
+    };
+
+    svg.addEventListener('wheel', handleWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', handleWheel);
+  }, []);
 
   if (nodes.length === 0) {
     return (
@@ -87,27 +183,35 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
   return (
     <div style={{
       position: 'relative',
-      height: isExpanded ? '100%' : 260,
+      width: '100%',
+      height: '100%',
+      minHeight: isExpanded ? 0 : 260,
       flex: isExpanded ? 1 : undefined,
-      minHeight: 0,
       background: 'var(--bg-workspace)',
       borderRadius: 12,
       border: '1px solid var(--border-subtle)',
-      overflowY: 'auto',
-      overflowX: 'auto',
+      overflow: 'hidden',
     }}>
       <svg
-        width={isExpanded ? '100%' : Math.max(750, maxNodeX)}
-        height={maxNodeY}
-        viewBox={isExpanded ? `0 0 ${Math.max(1200, maxNodeX)} ${Math.max(700, maxNodeY)}` : undefined}
-        style={{ minHeight: isExpanded ? '100%' : undefined, display: 'block', minWidth: isExpanded ? '100%' : 750 }}
+        ref={svgRef}
+        width="100%"
+        height="100%"
+        viewBox={`${vbX + (vbWidth - vbWidth / transformRef.current.zoom) / 2 - transformRef.current.panX} ${vbY + (vbHeight - vbHeight / transformRef.current.zoom) / 2 - transformRef.current.panY} ${vbWidth / transformRef.current.zoom} ${vbHeight / transformRef.current.zoom}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: 'block' }}
       >
         <defs>
+          <style>{`
+            @keyframes pulse-ring {
+              0% { transform: scale(0.8); opacity: 0.8; stroke-width: 2px; }
+              100% { transform: scale(1.8); opacity: 0; stroke-width: 1px; }
+            }
+          `}</style>
           <pattern id="lgrid" width="30" height="30" patternUnits="userSpaceOnUse">
             <path d="M 30 0 L 0 0 0 30" fill="none" stroke="var(--border-subtle)" strokeWidth="0.5" />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill="url(#lgrid)" />
+        <rect x={vbX} y={vbY} width={vbWidth} height={vbHeight} fill="url(#lgrid)" />
 
         {/* Column Header Titles */}
         <g opacity={0.6}>
@@ -126,35 +230,51 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
           const from = layoutNodes.find(n => n.id === edge.from);
           const to = layoutNodes.find(n => n.id === edge.to);
           if (!from || !to) return null;
-          const active = hoveredNode === from.id || hoveredNode === to.id;
-          const isAttack = edge.suspicious;
-
+          
+          const isHovered = hoveredEdge === edge.id;
+          const nodeHovered = hoveredNode === from.id || hoveredNode === to.id;
+          const isAttackPath = edge.suspicious;
+          const isActive = edge.lastSeen ? (maxTimestamp - new Date(edge.lastSeen).getTime() < 5000) : false;
+          
           const midX = (from.renderX + to.renderX) / 2;
           const midY = (from.renderY + to.renderY) / 2;
 
+          // Traffic volume edge thickness: minimum 1, max 6, scales smoothly
+          const thickness = Math.min(6, Math.max(1, 1 + (edge.packetCount || 0) / 10));
+
           return (
-            <g key={i}>
-              <title>{edge.label} ({isAttack ? 'Suspicious' : 'Normal'})</title>
+            <g key={edge.id || i}
+               onMouseEnter={() => setHoveredEdge(edge.id)}
+               onMouseLeave={() => setHoveredEdge(null)}
+               style={{ cursor: 'pointer' }}>
+              
+              {/* Invisible thicker line for easier hovering */}
               <line
                 x1={from.renderX} y1={from.renderY} x2={to.renderX} y2={to.renderY}
-                stroke={isAttack ? '#ef4444' : (active ? '#6366f1' : '#cbd5e1')}
-                strokeWidth={isAttack ? (active ? 3 : 2) : (active ? 2 : 1)}
-                strokeDasharray={isAttack ? '5,5' : undefined}
+                stroke="transparent"
+                strokeWidth={20}
+              />
+              
+              <line
+                x1={from.renderX} y1={from.renderY} x2={to.renderX} y2={to.renderY}
+                stroke={isAttackPath ? '#ef4444' : (nodeHovered || isHovered ? '#6366f1' : '#cbd5e1')}
+                strokeWidth={isAttackPath ? thickness + 1 : thickness}
                 style={{
                   transition: 'stroke 0.2s',
-                  animation: isAttack ? 'dash-flow 1.5s linear infinite' : 'none'
+                  filter: isAttackPath ? 'drop-shadow(0 0 4px rgba(239,68,68,0.5))' : 'none'
                 }}
               />
-              <text x={midX} y={midY - 6} fontSize={8} fill={isAttack ? '#ef4444' : '#64748b'} textAnchor="middle" style={{ pointerEvents: 'none' }}>
-                {edge.label}
-              </text>
             </g>
           );
         })}
 
         {layoutNodes.map(node => {
           const c = NODE_COLORS[node.type] ?? NODE_COLORS.internal;
-          const active = hoveredNode === node.id || selectedNode === node.id;
+          const activeNode = hoveredNode === node.id || selectedNode === node.id;
+          
+          // Pulse effect if this node is actively involved in suspicious traffic
+          const isRecentAlert = edges.some(e => e.suspicious && (e.from === node.id || e.to === node.id) && (e.lastSeen && maxTimestamp - new Date(e.lastSeen).getTime() < 5000));
+
           return (
             <g key={node.id} transform={`translate(${node.renderX},${node.renderY})`}
               style={{ cursor: 'pointer' }}
@@ -165,18 +285,24 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
                 setSelectedNode(newId);
                 if (newId && onNodeSelect) {
                   onNodeSelect(node.ip);
+                } else if (!newId && onNodeSelect) {
+                  // Clear filter when clicking same node again
+                  onNodeSelect('');
                 }
               }}
             >
+              {isRecentAlert && (
+                <circle r={35} fill="none" stroke="#ef4444" style={{ transformOrigin: 'center', animation: 'pulse-ring 2s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
+              )}
               {node.type === 'internal' || node.type === 'external' ? (
                 <>
-                  {active && <rect x={-27} y={-27} width={54} height={54} rx={8} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}
-                  <rect x={active ? -22 : -18} y={active ? -22 : -18} width={active ? 44 : 36} height={active ? 44 : 36} rx={6} fill={c.bg} stroke={c.border} strokeWidth={active ? 2.5 : 1.5} filter={active ? `drop-shadow(0 0 8px ${c.shadow})` : 'none'} style={{ transition: 'all 0.2s' }} />
+                  {activeNode && <rect x={-27} y={-27} width={54} height={54} rx={8} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}
+                  <rect x={activeNode ? -22 : -18} y={activeNode ? -22 : -18} width={activeNode ? 44 : 36} height={activeNode ? 44 : 36} rx={6} fill={c.bg} stroke={c.border} strokeWidth={activeNode ? 2.5 : 1.5} filter={activeNode ? `drop-shadow(0 0 8px ${c.shadow})` : 'none'} style={{ transition: 'all 0.2s' }} />
                 </>
               ) : (
                 <>
-                  {active && <circle r={27} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}
-                  <circle r={active ? 22 : 18} fill={c.bg} stroke={c.border} strokeWidth={active ? 2.5 : 1.5} filter={active ? `drop-shadow(0 0 8px ${c.shadow})` : 'none'} style={{ transition: 'all 0.2s' }} />
+                  {activeNode && <circle r={27} fill="none" stroke={c.border} strokeWidth={1} opacity={0.4} />}
+                  <circle r={activeNode ? 22 : 18} fill={c.bg} stroke={c.border} strokeWidth={activeNode ? 2.5 : 1.5} filter={activeNode ? `drop-shadow(0 0 8px ${c.shadow})` : 'none'} style={{ transition: 'all 0.2s' }} />
                 </>
               )}
               <text textAnchor="middle" y={-27} fontSize={9} fill={c.border} fontWeight={700}>{node.ip}</text>
@@ -199,6 +325,36 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
         })}
       </svg>
 
+      <button
+        onClick={() => {
+          transformRef.current = { zoom: 1, panX: 0, panY: 0 };
+          forceRender({});
+        }}
+        title="Fit graph to view"
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: selectedNode ? 212 : 12,
+          zIndex: 20,
+          background: 'white',
+          border: '1px solid var(--border-default)',
+          borderRadius: 8,
+          width: 30,
+          height: 30,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: 'var(--text-secondary)',
+          boxShadow: 'var(--shadow-sm)',
+          transition: 'right 0.2s',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--primary)')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+      >
+        <Focus size={16} />
+      </button>
+
       {selectedNode && (() => {
         const n = nodes.find(nd => nd.id === selectedNode);
         if (!n) return null;
@@ -212,7 +368,29 @@ export function LiveEntityGraph({ nodes, edges, running, isExpanded, focusIp, on
               <div style={{ marginTop: 4 }}>Edges: {edges.filter(e => e.from === n.id || e.to === n.id).length}</div>
             </div>
 
-            <button onClick={() => setSelectedNode(null)} style={{ position: 'absolute', top: 8, right: 10, border: 'none', background: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text-muted)', lineHeight: 1 }}>×</button>
+            <button onClick={() => { setSelectedNode(null); if (onNodeSelect) onNodeSelect(''); }} style={{ position: 'absolute', top: 8, right: 10, border: 'none', background: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text-muted)', lineHeight: 1 }}>×</button>
+          </div>
+        );
+      })()}
+
+      {hoveredEdge && !selectedNode && (() => {
+        const e = edges.find(ed => ed.id === hoveredEdge);
+        if (!e) return null;
+        const isAttack = e.suspicious;
+        return (
+          <div className="animate-slide-in-right" style={{ pointerEvents: 'none', position: 'absolute', bottom: 10, right: 10, width: 220, background: 'white', borderRadius: 10, border: `1px solid ${isAttack ? '#ef4444' : '#cbd5e1'}`, padding: 12, boxShadow: 'var(--shadow-md)', zIndex: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: isAttack ? '#ef4444' : 'var(--text-primary)', marginBottom: 2 }}>
+              {isAttack ? 'Suspicious Path' : 'Network Flow'}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              {e.from} → {e.to}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+              <div>Protocol: <strong style={{color:'var(--text-primary)'}}>{e.label}</strong></div>
+              <div>Packets: <strong style={{color:'var(--text-primary)'}}>{e.packetCount || 0}</strong></div>
+              <div>Bytes: <strong style={{color:'var(--text-primary)'}}>{e.bytes || 0}</strong></div>
+              <div>Active: <strong style={{color:'var(--text-primary)'}}>{e.lastSeen ? e.lastSeen.slice(11, 19) : 'N/A'}</strong></div>
+            </div>
           </div>
         );
       })()}
