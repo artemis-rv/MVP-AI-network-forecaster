@@ -760,10 +760,17 @@ function ActivityTimeline({ entries }: { entries: ActivityTimelineEntry[] }) {
   );
 }
 
+interface MetaItem {
+  label: string;
+  value: string;
+  isMono?: boolean;
+  highlight?: boolean;
+}
+
 function MetadataGrid({ result, jobId, filename, isDemo }: {
   result: HistoricalResult; jobId: string | null; filename: string; isDemo: boolean;
 }) {
-  const groups = [
+  const groups: { title: string; items: MetaItem[] }[] = [
     {
       title: "Job Identity",
       items: [
