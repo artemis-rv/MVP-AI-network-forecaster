@@ -202,7 +202,7 @@ export function LiveMonitoringPage() {
               <div>
                 <div style={{ fontWeight: 700, color: 'var(--color-critical)', fontSize: 13 }}>Backend unavailable</div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                  Unable to connect to live demo backend at port 8000. Start uvicorn: <code style={{ fontFamily: 'var(--font-mono)', background: 'rgba(0,0,0,0.06)', padding: '1px 5px', borderRadius: 4 }}>python -m uvicorn backend.main:app --port 8000</code>
+                  Unable to connect to live demo backend at {import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'}.
                 </div>
               </div>
             </div>
