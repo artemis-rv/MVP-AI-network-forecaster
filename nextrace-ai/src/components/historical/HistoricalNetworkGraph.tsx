@@ -64,7 +64,7 @@ function HistIpNode({ data, selected }: { data: Record<string, unknown>; selecte
   return (
     <div
       style={{
-        background: d.isSuspicious ? '#fff5f5' : '#ffffff',
+        background: d.isSuspicious ? '#fff5f5' : 'var(--bg-card)',
         border: `2px solid ${selected ? '#2563eb' : borderColor}`,
         borderRadius: 12,
         padding: '10px 14px',
@@ -125,11 +125,11 @@ function HistIpNode({ data, selected }: { data: Record<string, unknown>; selecte
           </span>
         </div>
 
-        <div style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)', color: '#0f172a', letterSpacing: '-0.3px' }}>
+        <div style={{ fontSize: 12, fontWeight: 800, fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
           {d.ip}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, fontSize: 10, color: '#64748b' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, fontSize: 10, color: 'var(--text-muted)' }}>
           <span>{d.packetCount.toLocaleString()} pkts</span>
           <span>{formatBytes(d.byteCount)}</span>
         </div>
@@ -137,7 +137,7 @@ function HistIpNode({ data, selected }: { data: Record<string, unknown>; selecte
         {d.protocols && d.protocols.length > 0 && (
           <div style={{ display: 'flex', gap: 3, marginTop: 4, flexWrap: 'wrap' }}>
             {d.protocols.slice(0, 3).map(p => (
-              <span key={p} style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: '#f1f5f9', color: '#475569' }}>
+              <span key={p} style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
                 {p}
               </span>
             ))}
@@ -275,7 +275,7 @@ function _buildEdges(relationships: EntityRelationship[]): Edge[] {
         strokeWidth: rel.is_suspicious ? 2.5 : 1.5,
       },
       label:     labelParts.join(' '),
-      labelStyle: { fontSize: 9, fill: rel.is_suspicious ? '#dc2626' : '#64748b', fontWeight: 700 },
+      labelStyle: { fontSize: 9, fill: rel.is_suspicious ? '#dc2626' : 'var(--text-muted)', fontWeight: 700 },
       labelBgStyle: { fill: 'white', opacity: 0.88, rx: 4, ry: 4 },
       data:      { ...rel },
     };
@@ -366,7 +366,7 @@ export function HistoricalNetworkGraph({ relationships }: { relationships: Entit
             border: '1px solid var(--border-default)',
             borderRadius: 12,
             padding: '12px 16px',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -382,11 +382,11 @@ export function HistoricalNetworkGraph({ relationships }: { relationships: Entit
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11, marginBottom: 8 }}>
-            <div style={{ background: '#f8fafc', padding: '6px 8px', borderRadius: 6 }}>
+            <div style={{ background: 'var(--bg-workspace)', padding: '6px 8px', borderRadius: 6 }}>
               <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 9 }}>PACKETS</span>
               <strong>{selectedNode.packetCount.toLocaleString()}</strong>
             </div>
-            <div style={{ background: '#f8fafc', padding: '6px 8px', borderRadius: 6 }}>
+            <div style={{ background: 'var(--bg-workspace)', padding: '6px 8px', borderRadius: 6 }}>
               <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 9 }}>BYTES</span>
               <strong>{formatBytes(selectedNode.byteCount)}</strong>
             </div>
@@ -415,16 +415,16 @@ export function HistoricalNetworkGraph({ relationships }: { relationships: Entit
         fitView
         fitViewOptions={{ padding: 0.2 }}
         nodesDraggable
-        style={{ background: '#f8fafc' }}
+        style={{ background: 'var(--bg-workspace)' }}
       >
         <Background color="#cbd5e1" gap={20} />
-        <Controls showInteractive={false} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8 }} />
+        <Controls showInteractive={false} style={{ background: 'var(--bg-card)', border: '1px solid #e2e8f0', borderRadius: 8 }} />
         <MiniMap
           nodeColor={n => {
             const d = n.data as unknown as HistNodeData;
             return d?.isSuspicious ? '#ef4444' : d?.isSrc ? '#6366f1' : '#06b6d4';
           }}
-          style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}
+          style={{ background: 'var(--bg-workspace)', border: '1px solid #e2e8f0', borderRadius: 8 }}
         />
       </ReactFlow>
     </div>
@@ -435,7 +435,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-      <span style={{ color: '#475569', fontWeight: 500 }}>{label}</span>
+      <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</span>
     </div>
   );
 }

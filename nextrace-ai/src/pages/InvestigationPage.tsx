@@ -42,9 +42,9 @@ function getRiskFromStage(stage: string): { label: string; color: string; bg: st
     'Initial Access':    { label: 'HIGH',     color: '#f97316', bg: '#ffedd5' },
     'Reconnaissance':    { label: 'MEDIUM',   color: '#f59e0b', bg: '#fef3c7' },
     'Normal Activity':   { label: 'LOW',      color: '#10b981', bg: '#d1fae5' },
-    'No Active Session': { label: 'NONE',     color: '#94a3b8', bg: '#f1f5f9' },
+    'No Active Session': { label: 'NONE',     color: '#94a3b8', bg: 'var(--bg-input)' },
   };
-  return map[stage] ?? { label: 'NONE', color: '#94a3b8', bg: '#f1f5f9' };
+  return map[stage] ?? { label: 'NONE', color: '#94a3b8', bg: 'var(--bg-input)' };
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────

@@ -52,21 +52,21 @@ export function DashboardPage() {
   // Chart data: use real temporal history if available, else mock
   const chartData = (isLive && temporalHistory.length > 0)
     ? temporalHistory.map(t => {
-        let dateObj = new Date();
-        if (t.window_end) {
-           if (typeof t.window_end === 'number') {
-             dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
-           } else {
-             const str = String(t.window_end);
-             dateObj = new Date(!isNaN(Number(str)) ? Number(str) * 1000 : str);
-           }
+      let dateObj = new Date();
+      if (t.window_end) {
+        if (typeof t.window_end === 'number') {
+          dateObj = new Date(t.window_end < 1e11 ? t.window_end * 1000 : t.window_end);
+        } else {
+          const str = String(t.window_end);
+          dateObj = new Date(!isNaN(Number(str)) ? Number(str) * 1000 : str);
         }
-        return {
-          time: dateObj.toLocaleTimeString('en-US', { hour12: false }),
-          total: t.packet_count,
-          events: t.suspicious_count,
-        };
-      })
+      }
+      return {
+        time: dateObj.toLocaleTimeString('en-US', { hour12: false }),
+        total: t.packet_count,
+        events: t.suspicious_count,
+      };
+    })
     : undefined;
 
   const handleKpiClick = (kpiId: string, defaultLink: string) => {
@@ -99,7 +99,7 @@ export function DashboardPage() {
       >
         {kpiData.map((kpi, i) => {
           const links = ['/alerts', '/live-monitoring', '/attack-prediction', '/reports'];
-          
+
           let val = kpi.value;
           let comp = kpi.comparison;
           let change = kpi.change;
@@ -133,7 +133,7 @@ export function DashboardPage() {
             hoverDetails = {
               title: 'Recent Resolutions',
               items: [
-                { label: 'Total Resolved', value: stats?.resolved ?? 0, highlight: 'live' as const }
+                { label: 'Total Resolved', value: String(stats?.resolved ?? 0), highlight: 'live' as const }
               ]
             };
           } else if (liveKpiValues) {
@@ -188,7 +188,7 @@ export function DashboardPage() {
         />
         <RecentAlerts />
       </div>
-      
+
       {/* Bottom Area */}
       <div style={{ paddingBottom: 16 }}>
         <LatestReports />

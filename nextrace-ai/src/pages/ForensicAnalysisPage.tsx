@@ -27,12 +27,12 @@ const HYP_STATUS_STYLE: Record<string, { color: string; bg: string }> = {
   SUPPORTED:            { color: '#059669', bg: '#d1fae5' },
   PLAUSIBLE:            { color: '#d97706', bg: '#fef3c7' },
   WEAK:                 { color: '#6366f1', bg: 'rgba(99,102,241,0.1)' },
-  INSUFFICIENT_EVIDENCE:{ color: '#94a3b8', bg: '#f1f5f9' },
+  INSUFFICIENT_EVIDENCE:{ color: '#94a3b8', bg: 'var(--bg-input)' },
 };
 const INTEGRITY_STYLE: Record<string, { color: string; bg: string; border: string; icon: React.ReactNode }> = {
   VERIFIED:   { color: '#059669', bg: '#d1fae5', border: '#6ee7b7', icon: <CheckCircle size={16}/> },
   SIMULATED:  { color: '#d97706', bg: '#fef3c7', border: '#fcd34d', icon: <AlertTriangle size={16}/> },
-  UNAVAILABLE:{ color: '#94a3b8', bg: '#f1f5f9', border: '#e2e8f0', icon: <XCircle size={16}/> },
+  UNAVAILABLE:{ color: '#94a3b8', bg: 'var(--bg-input)', border: 'var(--border-subtle)', icon: <XCircle size={16}/> },
 };
 
 const STAGE_LABELS: Record<string, string> = {
@@ -762,7 +762,7 @@ function ForensicSection({
 
 function ConfidencePill({ value }: { value: number }) {
   const color = value >= 65 ? '#059669' : value >= 45 ? '#d97706' : '#94a3b8';
-  const bg    = value >= 65 ? '#d1fae5' : value >= 45 ? '#fef3c7' : '#f1f5f9';
+  const bg    = value >= 65 ? '#d1fae5' : value >= 45 ? '#fef3c7' : 'var(--bg-input)';
   return (
     <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999, background: bg, color, border: `1px solid ${color}40`, flexShrink: 0 }}>
       {value}% conf.

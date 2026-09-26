@@ -61,3 +61,7 @@ Thumbs.db
 *.tmp
 temp/
 scratch/
+
+# Accidental root npm files
+/package.json
+/package-lock.json

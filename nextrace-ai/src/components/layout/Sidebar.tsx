@@ -33,47 +33,47 @@ export function Sidebar() {
     adminOperations: true,
   });
 
-  const filteredNavGroups = userRole === 'admin' 
+  const filteredNavGroups = userRole === 'admin'
     ? [
-        {
-          id: 'adminOperations',
-          title: 'Admin Operations',
-          items: [
-            { id: 'overview', label: 'Dashboard', icon: LayoutGrid, path: '/' },
-            { id: 'reports', label: 'View Reports', icon: FileText, path: '/reports' },
-          ]
-        },
-        {
-          id: 'system',
-          title: 'System Management',
-          items: [
-            { id: 'admin', label: 'User Management', icon: ShieldCheck, path: '/admin' },
-            { id: 'system-status', label: 'System Health', icon: Activity, path: '/system-status' },
-          ]
-        }
-      ]
+      {
+        id: 'adminOperations',
+        title: 'Admin Operations',
+        items: [
+          { id: 'overview', label: 'Dashboard', icon: LayoutGrid, path: '/' },
+          { id: 'reports', label: 'View Reports', icon: FileText, path: '/reports' },
+        ]
+      },
+      {
+        id: 'system',
+        title: 'System Management',
+        items: [
+          { id: 'admin', label: 'User Management', icon: ShieldCheck, path: '/admin' },
+          { id: 'system-status', label: 'System Health', icon: Activity, path: '/system-status' },
+        ]
+      }
+    ]
     : [
-        {
-          id: 'live',
-          title: 'Live Operations',
-          items: [
-            { id: 'overview', label: 'Dashboard', icon: LayoutGrid, path: '/' },
-            { id: 'live-monitoring', label: 'Live Monitoring', icon: Radar, path: '/live-monitoring' },
-            { id: 'investigation', label: 'Investigation', icon: Search, path: '/investigation' },
-            { id: 'attack-prediction', label: 'Attack Prediction', icon: TrendingUp, path: '/attack-prediction' },
-            { id: 'path-forecaster', label: 'Attack Path Forecaster', icon: Target, path: '/simulation' },
-            { id: 'alerts', label: 'Alerts', icon: Bell, path: '/alerts', badge: activeAlertsBadge > 0 ? activeAlertsBadge : undefined },
-          ]
-        },
-        {
-          id: 'historical',
-          title: 'Forensic & Historical',
-          items: [
-            { id: 'historical-pcap', label: 'Historical PCAP', icon: Database, path: '/historical-pcap' },
-            { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
-          ]
-        }
-      ];
+      {
+        id: 'live',
+        title: 'Live Operations',
+        items: [
+          { id: 'overview', label: 'Dashboard', icon: LayoutGrid, path: '/' },
+          { id: 'live-monitoring', label: 'Live Monitoring', icon: Radar, path: '/live-monitoring' },
+          { id: 'investigation', label: 'Investigation', icon: Search, path: '/investigation' },
+          { id: 'attack-prediction', label: 'Attack Prediction', icon: TrendingUp, path: '/attack-prediction' },
+          { id: 'path-forecaster', label: 'Attack Path Forecaster', icon: Target, path: '/simulation' },
+          { id: 'alerts', label: 'Alerts', icon: Bell, path: '/alerts', badge: activeAlertsBadge > 0 ? activeAlertsBadge : undefined },
+        ]
+      },
+      {
+        id: 'historical',
+        title: 'Forensic & Historical',
+        items: [
+          { id: 'historical-pcap', label: 'Historical PCAP', icon: Database, path: '/historical-pcap' },
+          { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
+        ]
+      }
+    ];
 
   const toggleGroup = (id: string) => {
     setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
@@ -176,9 +176,9 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav style={{ 
-        flex: 1, 
-        padding: '12px', 
+      <nav style={{
+        flex: 1,
+        padding: '12px',
         overflowY: 'auto',
         display: 'flex',
         flexDirection: 'column',
@@ -198,7 +198,7 @@ export function Sidebar() {
                 marginBottom: 4,
               }}
             >
-              <span style={{ 
+              <span style={{
                 fontSize: 10, color: '#4a5568', fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase',
                 opacity: sidebarCollapsed ? 0 : 1,
                 width: sidebarCollapsed ? 0 : 'auto',
@@ -247,7 +247,7 @@ export function Sidebar() {
               flexShrink: 0,
             }}
           />
-          <span style={{ 
+          <span style={{
             fontSize: 11, color: '#10b981', fontWeight: 600,
             opacity: sidebarCollapsed ? 0 : 1,
             width: sidebarCollapsed ? 0 : 'auto',
@@ -256,13 +256,13 @@ export function Sidebar() {
             transition: 'all var(--transition-fast)'
           }}>All Systems Operational</span>
         </div>
-        <div style={{ 
-            fontSize: 10, color: '#4a5568', fontWeight: 500,
-            opacity: sidebarCollapsed ? 0 : 1,
-            height: sidebarCollapsed ? 0 : 'auto',
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            transition: 'all var(--transition-fast)'
+        <div style={{
+          fontSize: 10, color: '#4a5568', fontWeight: 500,
+          opacity: sidebarCollapsed ? 0 : 1,
+          height: sidebarCollapsed ? 0 : 'auto',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          transition: 'all var(--transition-fast)'
         }}>v0.1.0 (Demo)</div>
       </div>
     </aside>
@@ -319,7 +319,7 @@ function SidebarNavItem({ item, onNavigate, collapsed }: { item: any; onNavigate
             }}
           />
         )}
-        
+
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <item.icon
             size={20}

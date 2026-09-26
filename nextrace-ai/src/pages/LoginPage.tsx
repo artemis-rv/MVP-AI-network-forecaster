@@ -46,9 +46,9 @@ export function LoginPage() {
       <div style={{
         width: '100%',
         maxWidth: 460,
-        background: 'var(--bg-card, #ffffff)',
+        background: 'var(--bg-card)',
         borderRadius: 16,
-        border: '1px solid var(--border-default, #e2e8f0)',
+        border: '1px solid var(--border-default)',
         boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.08), 0 0 1px 1px rgba(0, 0, 0, 0.03)',
         overflow: 'hidden'
       }}>
@@ -56,7 +56,7 @@ export function LoginPage() {
         <div style={{
           padding: '28px 28px 20px',
           textAlign: 'center',
-          borderBottom: '1px solid var(--border-subtle, #f1f5f9)',
+          borderBottom: '1px solid var(--border-subtle)',
           background: 'linear-gradient(180deg, rgba(99, 102, 241, 0.04) 0%, transparent 100%)'
         }}>
           <div style={{
@@ -85,9 +85,9 @@ export function LoginPage() {
           <div style={{
             marginBottom: 20,
             padding: '12px 14px',
-            background: 'var(--bg-workspace, #f8fafc)',
+            background: 'var(--bg-workspace)',
             borderRadius: 10,
-            border: '1px solid var(--border-subtle, #e2e8f0)'
+            border: '1px solid var(--border-subtle)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary, #475569)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -103,8 +103,8 @@ export function LoginPage() {
                 style={{
                   padding: '8px 10px',
                   borderRadius: 8,
-                  background: 'white',
-                  border: '1px solid var(--border-default, #e2e8f0)',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-default)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -134,8 +134,8 @@ export function LoginPage() {
                 style={{
                   padding: '8px 10px',
                   borderRadius: 8,
-                  background: 'white',
-                  border: '1px solid var(--border-default, #e2e8f0)',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-default)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -199,7 +199,7 @@ export function LoginPage() {
                     padding: '10px 12px 10px 36px',
                     borderRadius: 8,
                     border: '1px solid var(--border-default, #cbd5e1)',
-                    background: 'var(--bg-card, #ffffff)',
+                    background: 'var(--bg-card)',
                     color: 'var(--text-primary, #0f172a)',
                     fontSize: 13,
                     outline: 'none',
@@ -228,7 +228,7 @@ export function LoginPage() {
                     padding: '10px 38px 10px 36px',
                     borderRadius: 8,
                     border: '1px solid var(--border-default, #cbd5e1)',
-                    background: 'var(--bg-card, #ffffff)',
+                    background: 'var(--bg-card)',
                     color: 'var(--text-primary, #0f172a)',
                     fontSize: 13,
                     outline: 'none',
@@ -289,7 +289,7 @@ export function LoginPage() {
         {/* Footer info */}
         <div style={{
           padding: '12px 28px',
-          background: 'var(--bg-workspace, #f8fafc)',
+          background: 'var(--bg-workspace)',
           borderTop: '1px solid var(--border-subtle, #f1f5f9)',
           textAlign: 'center',
           fontSize: 11,

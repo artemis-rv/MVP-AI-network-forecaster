@@ -128,6 +128,10 @@ interface AppState {
   // Notification panel
   notifPanelOpen: boolean;
   setNotifPanelOpen: (open: boolean) => void;
+
+  // Theme
+  isDark: boolean;
+  toggleTheme: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -338,6 +342,13 @@ export const useAppStore = create<AppState>()(
 
       sidebarCollapsed: false,
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+
+      isDark: false,
+      toggleTheme: () => {
+        const next = !get().isDark;
+        set({ isDark: next });
+        document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+      },
     }),
     {
       name: 'app-storage',
@@ -348,6 +359,7 @@ export const useAppStore = create<AppState>()(
         users: state.users,
         activePage: state.activePage,
         sidebarCollapsed: state.sidebarCollapsed,
+        isDark: state.isDark,
       }),
     }
   )
