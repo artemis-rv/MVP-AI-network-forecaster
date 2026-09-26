@@ -125,6 +125,17 @@ export function DashboardPage() {
                 { label: 'Total Tracked', value: entityCounts.total },
               ]
             };
+          } else if (kpi.id === 'resolutions') {
+            val = stats?.resolved ?? 0;
+            comp = 'resolved alerts';
+            change = '';
+            changeType = 'neutral';
+            hoverDetails = {
+              title: 'Recent Resolutions',
+              items: [
+                { label: 'Total Resolved', value: stats?.resolved ?? 0, highlight: 'live' as const }
+              ]
+            };
           } else if (liveKpiValues) {
             val = liveKpiValues[i].value;
           }

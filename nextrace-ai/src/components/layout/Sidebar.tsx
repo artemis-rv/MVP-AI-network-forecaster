@@ -95,44 +95,20 @@ export function Sidebar() {
         transition: 'width var(--transition-base)',
       }}
     >
-      <button
-        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        style={{
-          position: 'absolute',
-          right: -12,
-          top: 24,
-          width: 24,
-          height: 24,
-          borderRadius: '50%',
-          background: 'var(--sidebar-bg)',
-          border: '1px solid var(--sidebar-border)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 101,
-          color: 'var(--sidebar-text)',
-          padding: 0
-        }}
-      >
-        {sidebarCollapsed ? <ChevronRight size={14} strokeWidth={2} /> : <ChevronLeft size={14} strokeWidth={2} />}
-      </button>
-
       {/* Brand & Header */}
       <div
         style={{
-          padding: '20px 16px',
+          padding: sidebarCollapsed ? '20px 4px' : '20px 16px',
           borderBottom: '1px solid var(--sidebar-border)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: 'space-between',
           height: '77px', // Fixed height to prevent any layout shifts
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          overflow: 'hidden'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', justifyContent: sidebarCollapsed ? 'center' : 'flex-start' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: sidebarCollapsed ? 0 : '10px' }}>
           <div
             style={{
               width: 36,
@@ -174,6 +150,29 @@ export function Sidebar() {
             </div>
           </div>
         </div>
+
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: '6px',
+            background: 'transparent',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: 'var(--sidebar-text)',
+            padding: 0,
+            flexShrink: 0,
+            transition: 'all var(--transition-fast)'
+          }}
+        >
+          {sidebarCollapsed ? <ChevronRight size={14} strokeWidth={2} /> : <ChevronLeft size={14} strokeWidth={2} />}
+        </button>
       </div>
 
       {/* Navigation */}
