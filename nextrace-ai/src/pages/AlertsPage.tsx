@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAlertStore } from '@/store/alertStore';
 import { useLiveStore } from '@/store/liveStore';
+import { useAppStore } from '@/store/appStore';
 import { ShieldAlert, AlertCircle, AlertTriangle, List, Search as SearchIcon, RefreshCw } from 'lucide-react';
 import { AlertTable } from '@/components/alerts/AlertTable';
 import { AlertDetailsDrawer } from '@/components/alerts/AlertDetailsDrawer';
@@ -12,6 +13,7 @@ export function AlertsPage() {
     fetchAlerts, fetchStats, setFilter, resetFilters, selectAlert, selectedAlertId
   } = useAlertStore();
 
+  const { addToast } = useAppStore();
   const { session } = useLiveStore();
 
   const [searchParams] = useSearchParams();
@@ -46,8 +48,11 @@ export function AlertsPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={() => { fetchAlerts(); fetchStats(); }}
+        <button
+            onClick={async () => {
+              await Promise.all([fetchAlerts(), fetchStats()]);
+              addToast('Alert list refreshed', 'success');
+            }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
           >
             <RefreshCw size={14} className={loading ? 'spin' : ''} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />

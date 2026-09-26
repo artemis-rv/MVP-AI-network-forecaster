@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { notifications as mockNotifs } from '@/data/mockData';
 import type { Alert } from '@/types/alert';
 
 export interface UserAccount {
@@ -101,6 +100,7 @@ interface AppState {
   notifications: AppNotification[];
   markAllRead: () => void;
   markNotificationAsRead: (id: string) => void;
+  addAlertNotification: (alert: Alert) => void;
   syncNotificationsFromAlerts: (alerts: Alert[]) => void;
   unreadCount: number;
 
@@ -244,8 +244,8 @@ export const useAppStore = create<AppState>()(
         }));
       },
 
-      notifications: mockNotifs.map((n) => ({ ...n, alertId: undefined })),
-      unreadCount: mockNotifs.filter((n) => !n.read).length,
+      notifications: [],
+      unreadCount: 0,
       markAllRead: () =>
         set((state) => ({
           notifications: state.notifications.map((n) => ({ ...n, read: true })),
@@ -261,6 +261,40 @@ export const useAppStore = create<AppState>()(
             unreadCount: updated.filter((n) => !n.read).length,
           };
         }),
+
+      addAlertNotification: (alert: Alert) => {
+        const notifId = `alert-${alert.id}`;
+        const existing = get().notifications.find((n) => n.id === notifId);
+        if (existing) {
+          // Already tracked — just update status without re-adding
+          set((state) => {
+            const updated = state.notifications.map((n) =>
+              n.id === notifId ? { ...n, status: alert.status } : n
+            );
+            return { notifications: updated, unreadCount: updated.filter((n) => !n.read).length };
+          });
+          return;
+        }
+        const sevLabel = alert.severity?.toLowerCase() ?? 'info';
+        const newNotif: AppNotification = {
+          id: notifId,
+          alertId: alert.id,
+          title: alert.title,
+          desc: alert.source_ip
+            ? `${alert.source_ip} · ${alert.description}`
+            : alert.description,
+          time: 'Just now',
+          read: false,
+          severity: sevLabel,
+          status: alert.status,
+          sourceIp: alert.source_ip,
+        };
+        set((state) => ({
+          notifications: [newNotif, ...state.notifications].slice(0, 50),
+          unreadCount: state.unreadCount + 1,
+        }));
+      },
+
       syncNotificationsFromAlerts: (alerts: Alert[]) => {
         if (!alerts || alerts.length === 0) return;
         const currentReadSet = new Set(

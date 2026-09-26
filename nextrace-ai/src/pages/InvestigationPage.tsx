@@ -107,6 +107,9 @@ export function InvestigationPage() {
   const risk      = getRiskFromStage(stage);
   const entityIp  = investigation.selectedEntityIp;
   const hostname  = getHostname(entityIp);
+  
+  const entityNode = liveNodes.find(n => n.ip === entityIp);
+  const actualEntityType = entityNode ? entityNode.type : investigation.entityType;
 
   // Connection counts from live events (in current display window)
   const nodeEvents = displayEvents.filter(e => e.src_ip === entityIp || e.dst_ip === entityIp);
@@ -184,10 +187,10 @@ export function InvestigationPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <DetailRow label="IP Address"    value={entityIp}                     mono />
               <DetailRow label="Hostname"      value={hostname}                     mono />
-              <DetailRow label="Entity Type"   value={investigation.entityType} valueColor={
-                investigation.entityType.toLowerCase().includes('suspicious') ? '#ef4444' :
-                investigation.entityType.toLowerCase().includes('server') ? '#10b981' :
-                investigation.entityType.toLowerCase().includes('external') ? '#8b5cf6' :
+              <DetailRow label="Entity Type"   value={actualEntityType} valueColor={
+                actualEntityType.toLowerCase().includes('suspicious') ? '#ef4444' :
+                actualEntityType.toLowerCase().includes('server') ? '#10b981' :
+                actualEntityType.toLowerCase().includes('external') ? '#8b5cf6' :
                 '#3b82f6'
               } />
               <DetailRow label="First Seen"    value={firstSeen}                    mono />

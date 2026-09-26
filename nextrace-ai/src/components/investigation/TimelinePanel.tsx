@@ -33,9 +33,9 @@ export function TimelinePanel() {
       </div>
 
       {timeline.length === 0 ? (
-        <EmptyState text="Start a live session to populate the timeline." />
+        <EmptyState text="No events observed for this entity." />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, overflowY: 'auto', maxHeight: 340 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {timeline.map((entry, i) => {
             const cfg = TYPE_CONFIG[entry.type] ?? TYPE_CONFIG.info;
             const isLast = i === timeline.length - 1;

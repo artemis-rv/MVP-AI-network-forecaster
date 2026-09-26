@@ -15,27 +15,27 @@ export function TopBar() {
     addToast,
     userRole, currentUser, logout,
     isDark, toggleTheme,
+    unreadCount,
   } = useAppStore();
 
-  const { alerts, fetchAlerts, selectAlert, stats } = useAlertStore();
+  const { fetchAlerts, selectAlert } = useAlertStore();
 
-  const activeAlertsBadge = alerts.length > 0
-    ? alerts.filter(a => a.status === 'OPEN' || a.status === 'IN_PROGRESS').length
-    : (stats?.open ?? 0) + (stats?.in_progress ?? 0);
+  // Bell badge = unread notifications in the panel
+  const activeAlertsBadge = unreadCount;
 
   const { session } = useLiveStore();
   const isLiveRunning = session?.running ?? false;
 
-  // Sync notifications whenever alerts are fetched or changed
+  // Load alerts and sync notifications once on mount
   useEffect(() => {
-    fetchAlerts();
-  }, [fetchAlerts]);
-
-  useEffect(() => {
-    if (alerts && alerts.length > 0) {
-      syncNotificationsFromAlerts(alerts);
-    }
-  }, [alerts, syncNotificationsFromAlerts]);
+    fetchAlerts().then(() => {
+      const loaded = useAlertStore.getState().alerts;
+      if (loaded.length > 0) {
+        syncNotificationsFromAlerts(loaded);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Restore theme from persisted state on load
   useEffect(() => {
