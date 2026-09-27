@@ -66,8 +66,23 @@ scratch/
 /package.json
 /package-lock.json
 
-# Dataset and ML Outputs
+# Root Backend (ML experiments, pipelines, training scripts)
+/backend/
+
+# Dataset and ML Outputs / Model Artifacts / Weights / Arrays
 Dataset/
+Dataset*/
+*.npy
+*.npz
+*.pt
+*.pth
+*.joblib
+*.pkl
+*.parquet
+*.feather
+*.h5
+*.onnx
+*.weights
 backend/ml/baseline/output/
 backend/ml/data_pipeline/output/
 backend/ml/data_pipeline/temporal_output/
