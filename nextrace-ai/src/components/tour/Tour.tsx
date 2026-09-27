@@ -77,7 +77,10 @@ export function Tour() {
         </div>
         <p style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--text-secondary)', margin: '8px 0 12px' }}>{step.body}</p>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{index + 1} / {steps.length}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{index + 1} / {steps.length}</span>
+            <button type="button" onClick={close} style={{ background: 'none', border: 'none', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>Skip</button>
+          </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {index > 0 && (
               <button type="button" onClick={() => go(index - 1)} style={btn(false)}>Back</button>

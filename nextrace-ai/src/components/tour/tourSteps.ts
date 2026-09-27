@@ -9,10 +9,12 @@ export interface TourStep {
 }
 
 const GLOBAL: TourStep[] = [
-  { selector: '[data-tour="sidebar"]', title: 'Navigation', body: 'The workflow runs top to bottom: Dashboard for the overview, Live Monitoring and Attack Prediction for the live session, Historical and Forensic analysis for captured PCAPs, and Alerts and Reports for triage and hand-off.' },
-  { selector: '[data-tour="live-indicator"]', title: 'Live session status', body: 'Always visible. Grey means no session is running. While a session runs, it shows elapsed time and packets, coloured green, amber or red by the most severe activity still ongoing. Click it to jump to Live Monitoring.' },
-  { selector: '[data-tour="notifications"]', title: 'Alert notifications', body: 'One notification per grouped activity. Hundreds of packets from the same attack update a single alert instead of creating hundreds.' },
-  { selector: '[data-tour="search"]', title: 'Search', body: 'Press Ctrl + K to search for an IP, alert or investigation.' },
+  { selector: '[data-tour="sidebar"]', title: 'Platform Navigation', body: 'The workflow runs top to bottom. Let\'s explore the core capabilities of NEXTRACE AI.' },
+  { selector: 'a[href="/live-monitoring"]', title: 'Live Monitoring', body: 'Start a session to monitor real-time traffic. Suspicious packets are grouped into activities, and an attack timeline builds chronologically.' },
+  { selector: 'a[href="/attack-prediction"]', title: 'Attack Prediction', body: 'Track the kill-chain with the Attack Stage Map. It marks stages as Observed or Predicted. You can also generate comprehensive incident reports here.' },
+  { selector: 'a[href="/historical-pcap"]', title: 'Historical & Forensic Analysis', body: 'Upload PCAPs to get AI plain-language summaries of attacks. The forensic engine tests hypotheses which you validate for the final report.' },
+  { selector: 'a[href="/alerts"]', title: 'Alert Notifications', body: 'Intelligent triage. Instead of a flood of events, hundreds of related packets update a single, consolidated alert.' },
+  { selector: '[data-tour="search"]', title: 'Global Search', body: 'Press Ctrl + K anywhere to instantly search for an IP, alert, or investigation.' },
 ];
 
 const PAGES: { prefix: string; steps: TourStep[] }[] = [

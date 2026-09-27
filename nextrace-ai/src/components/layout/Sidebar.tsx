@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutGrid, Radar, TrendingUp, Bell, Search,
   Database, FileText, ShieldCheck, Activity, Zap, Target,
-  ChevronDown, ChevronLeft, ChevronRight
+  ChevronDown, ChevronLeft, ChevronRight, BarChart3
 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useAlertStore } from '@/store/alertStore';
@@ -31,7 +31,16 @@ export function Sidebar() {
     historical: true,
     system: true,
     adminOperations: true,
+    research: true,
   });
+
+  const researchGroup = {
+    id: 'research',
+    title: 'Model Research',
+    items: [
+      { id: 'model-benchmark', label: 'Model Benchmark', icon: BarChart3, path: '/model-benchmark' },
+    ]
+  };
 
   const filteredNavGroups = userRole === 'admin'
     ? [
@@ -50,7 +59,8 @@ export function Sidebar() {
           { id: 'admin', label: 'User Management', icon: ShieldCheck, path: '/admin' },
           { id: 'system-status', label: 'System Health', icon: Activity, path: '/system-status' },
         ]
-      }
+      },
+      researchGroup
     ]
     : [
       {
@@ -72,7 +82,8 @@ export function Sidebar() {
           { id: 'historical-pcap', label: 'Historical PCAP', icon: Database, path: '/historical-pcap' },
           { id: 'reports', label: 'Reports', icon: FileText, path: '/reports' },
         ]
-      }
+      },
+      researchGroup
     ];
 
   const toggleGroup = (id: string) => {

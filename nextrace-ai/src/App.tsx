@@ -18,6 +18,7 @@ import { SystemHealthPage } from '@/pages/SystemHealthPage';
 import { ReportsListPage } from '@/pages/ReportsListPage';
 import { AlertsPage } from '@/pages/AlertsPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { ModelBenchmarkPage } from '@/pages/ModelBenchmarkPage';
 import { InvestigationAssistant } from '@/components/dashboard/InvestigationAssistant';
 import { useAppStore } from '@/store/appStore';
 
@@ -52,6 +53,7 @@ function App() {
               <Route path="/" element={userRole === 'admin' ? <AdminDashboardPage /> : <DashboardPage />} />
               <Route path="/reports" element={<ReportsListPage />} />
               <Route path="/reports/:reportId" element={<ReportPage />} />
+              <Route path="/model-benchmark" element={<ModelBenchmarkPage />} />
 
               {/* SOC Analyst Routes */}
               {userRole === 'soc' && (
