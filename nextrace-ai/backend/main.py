@@ -18,6 +18,7 @@ from backend.api.simulator import router as simulator_router
 from backend.api.reports import router as reports_router
 from backend.api.admin import router as admin_router
 from backend.api.alerts import router as alerts_router
+from backend.api.explain import router as explain_router
 
 app = FastAPI(
     title="NEXTRACE AI Backend",
@@ -59,6 +60,18 @@ app.include_router(simulator_router,  prefix="/api")
 app.include_router(reports_router,    prefix="/api")
 app.include_router(admin_router,      prefix="/api")
 app.include_router(alerts_router,     prefix="/api")
+app.include_router(explain_router,    prefix="/api")
+
+
+# ── Baseline security headers on every API response ───────────
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 
 @app.get("/")

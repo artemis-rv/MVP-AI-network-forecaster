@@ -81,6 +81,7 @@ export function Sidebar() {
 
   return (
     <aside
+      data-tour="sidebar"
       style={{
         position: 'fixed',
         left: 0,

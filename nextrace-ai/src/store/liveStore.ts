@@ -11,6 +11,36 @@ import { raiseActivityAlerts, syncActivityAlerts, resetActivityAlertSync } from 
 const MAX_EVENTS  = 200;   // max events kept in the all-events buffer
 const MAX_TEMPORAL = 60;   // max temporal states kept in history
 
+// sessionStorage writes serialise the whole store; during a live run the store changes ~10×/s, so writes
+// are coalesced to at most one per second (and flushed when the page is hidden) to keep the UI responsive.
+const PERSIST_DEBOUNCE_MS = 1000;
+const pendingWrites = new Map<string, string>();
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushPersist(): void {
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+  for (const [k, v] of pendingWrites) {
+    try { sessionStorage.setItem(k, v); } catch { /* quota / private mode — state stays in memory */ }
+  }
+  pendingWrites.clear();
+}
+
+const debouncedSessionStorage = {
+  getItem: (k: string) => {
+    try { return pendingWrites.get(k) ?? sessionStorage.getItem(k); } catch { return null; }
+  },
+  setItem: (k: string, v: string) => {
+    pendingWrites.set(k, v);
+    if (!flushTimer) flushTimer = setTimeout(flushPersist, PERSIST_DEBOUNCE_MS);
+  },
+  removeItem: (k: string) => {
+    pendingWrites.delete(k);
+    try { sessionStorage.removeItem(k); } catch { /* ignore */ }
+  },
+};
+
+if (typeof window !== 'undefined') window.addEventListener('pagehide', flushPersist);
+
 // ─── IP role helpers ──────────────────────────────────────────────────────────
 // Role only (workstation / server / external). Whether a node is *suspicious* is decided by
 // observed behaviour — being the source of a significant grouped activity — never by its address.
@@ -59,6 +89,7 @@ interface LiveStore {
 
   // Temporal data
   temporalHistory: TemporalState[];
+  /** Latest state — the filling window (partial) or the window that just closed. */
   currentTemporal: TemporalState | null;
 
   // Network entities (derived from events)
@@ -268,6 +299,11 @@ export const useLiveStore = create<LiveStore>()(
       },
 
       setTemporal: (t) => {
+        if (t.partial) {
+          // The filling window replaces the current view only; history holds closed windows.
+          set({ currentTemporal: t });
+          return;
+        }
         set((state) => ({
           currentTemporal: t,
           temporalHistory: [...state.temporalHistory, t].slice(-MAX_TEMPORAL),
@@ -284,9 +320,10 @@ export const useLiveStore = create<LiveStore>()(
     }),
     {
       name: 'live-storage',
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => debouncedSessionStorage),
       // Connection flags describe this page instance only; persisting them made a reload skip reconnecting.
-      partialize: ({ wsConnected: _ws, backendAvailable: _be, ...rest }) => rest,
+      // Raw packet buffers refill within a second of reconnecting, so they are not written to storage.
+      partialize: ({ wsConnected: _ws, backendAvailable: _be, allEvents: _all, displayEvents: _disp, ...rest }) => rest,
     }
   )
 );

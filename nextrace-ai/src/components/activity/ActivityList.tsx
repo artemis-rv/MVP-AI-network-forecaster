@@ -1,6 +1,7 @@
 // NEXTRACE AI — Grouped activity table (Live Monitoring, Attack Prediction, Historical analysis)
 // One row per grouped activity — never one row per packet.
 
+import { useEffect, useRef } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import type { AlertSeverity } from '@/types/alert';
 import { SEVERITY_STYLE } from '@/components/activity/severity';
@@ -20,15 +21,28 @@ function clock(ms: number): string {
 }
 
 export function ActivityList({
-  activities, onSelect, live = false, maxHeight = 320, emptyText,
+  activities, onSelect, live = false, maxHeight = 320, emptyText, highlight,
 }: {
   activities: GroupedActivity[];
   onSelect: (a: GroupedActivity) => void;
   live?: boolean;
   maxHeight?: number;
   emptyText?: string;
+  /** Deep-linked activity: scrolled into view and briefly highlighted. */
+  highlight?: { id: string; key: string | number } | null;
 }) {
   const rows = [...activities].sort((a, b) => b.lastSeen - a.lastSeen);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!highlight) return;
+    const row = scrollRef.current?.querySelector<HTMLElement>(`[data-activity-id="${CSS.escape(highlight.id)}"]`);
+    if (!row) return;
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.classList.remove('focus-flash');
+    void row.offsetWidth; // restart the animation when the same row is focused again
+    row.classList.add('focus-flash');
+  }, [highlight]);
 
   if (rows.length === 0) {
     return (
@@ -39,7 +53,7 @@ export function ActivityList({
   }
 
   return (
-    <div style={{ maxHeight, overflowY: 'auto', overflowX: 'auto' }}>
+    <div ref={scrollRef} style={{ maxHeight, overflowY: 'auto', overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
           <tr style={{ background: 'var(--bg-workspace)' }}>
@@ -54,6 +68,7 @@ export function ActivityList({
             return (
               <tr
                 key={a.id}
+                data-activity-id={a.id}
                 onClick={() => onSelect(a)}
                 style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-workspace)')}

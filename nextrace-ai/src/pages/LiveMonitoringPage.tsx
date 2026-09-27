@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Play, Square, WifiOff, RotateCcw, Trash2,
   Filter, RefreshCw, AlertTriangle, ShieldAlert, CheckCircle2, ShieldCheck, Clock, Activity,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -18,6 +19,8 @@ import { significantActivities } from '@/lib/activityGrouping';
 import { ActivityList } from '@/components/activity/ActivityList';
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline';
 import { ActivityInspector } from '@/components/activity/ActivityInspector';
+import { useFocusParam } from '@/hooks/useFocusParam';
+import type { TemporalState } from '@/types/live';
 
 
 const WINDOW_OPTIONS: WindowSecs[] = [5, 10, 15, 30, 60];
@@ -60,6 +63,17 @@ export function LiveMonitoringPage() {
   const grouped = useMemo(() => significantActivities(activities), [activities]);
   const inspected = inspectId ? activities.find(a => a.id === inspectId) ?? null : null;
   const alertCount = grouped.reduce((n, a) => n + a.alertIds.length, 0);
+  const [showPackets, setShowPackets] = useState(false);
+
+  // Deep link (?focus=ACT-0003) and timeline "Show in activity list" → exact row, highlighted
+  const [highlight, setHighlight] = useState<{ id: string; key: string | number } | null>(null);
+  const focus = useFocusParam();
+  const [handledFocus, setHandledFocus] = useState<string | null>(null);
+  if (focus && focus.key !== handledFocus && activities.some(a => a.id === focus.id)) {
+    setHandledFocus(focus.key);
+    setHighlight(focus);
+    setInspectId(focus.id);
+  }
 
   const isRunning = session?.running ?? false;
   const [starting, setStarting] = useState(false);
@@ -114,8 +128,23 @@ export function LiveMonitoringPage() {
     return list;
   }, [temporalHistory]);
 
-  const chartData = realChartData.length > 0 
-    ? realChartData 
+  // The filling window is appended as the newest point, so the chart moves every second.
+  const liveChartData = useMemo(() => {
+    if (!currentTemporal?.partial || currentTemporal.packet_count === 0) return realChartData;
+    const now = new Date();
+    const scale = 1 / Math.max(0.05, currentTemporal.window_progress ?? 1);
+    return [...realChartData, {
+      timestamp: now.getTime(),
+      time: `${now.toLocaleTimeString('en-US', { hour12: false })} (filling)`,
+      // Projected to a full window so the point is comparable with closed windows
+      packets: Math.round(currentTemporal.packet_count * scale),
+      flows: Math.round(currentTemporal.flow_count * scale),
+      suspicious: Math.round(currentTemporal.suspicious_count * scale),
+    }];
+  }, [realChartData, currentTemporal]);
+
+  const chartData = liveChartData.length > 0
+    ? liveChartData
     : generateZeroChartData(chartTimeRange);
 
   // Check backend health and sync running session status on mount / route switch
@@ -311,7 +340,7 @@ export function LiveMonitoringPage() {
             <div style={{ flex: 1 }} />
 
             {/* Start / Stop */}
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div data-tour="live-controls" style={{ display: 'flex', gap: 8 }}>
               {!isRunning ? (
                 <button
                   onClick={handleStart}
@@ -357,7 +386,7 @@ export function LiveMonitoringPage() {
 
         {/* ── Grouped activities + Attack Timeline ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: 20 }}>
-          <div style={panelStyle}>
+          <div data-tour="live-activities" style={panelStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: 8 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Detected Activities</h3>
@@ -371,12 +400,13 @@ export function LiveMonitoringPage() {
               activities={grouped}
               live
               onSelect={a => setInspectId(a.id)}
+              highlight={highlight}
               maxHeight={320}
               emptyText={isRunning ? 'No suspicious activity grouped yet — benign traffic is summarised in the chart below.' : 'Start a live session to group suspicious traffic into activities.'}
             />
           </div>
 
-          <div style={{ ...panelStyle, padding: '14px 16px' }}>
+          <div data-tour="live-timeline" style={{ ...panelStyle, padding: '14px 16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Attack Timeline</h3>
               <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Activity-level events · newest at bottom</span>
@@ -384,77 +414,13 @@ export function LiveMonitoringPage() {
             <ActivityTimeline
               activities={grouped}
               onSelect={a => setInspectId(a.id)}
+              onLocate={a => setHighlight({ id: a.id, key: Date.now() })}
               predicted={currentForecast && !currentForecast.is_benign && isRunning
                 ? { stage: currentForecast.predicted_next_stage, target: currentForecast.target }
                 : null}
               maxHeight={320}
               emptyText="Major events appear here when an activity is detected, escalates or changes shape."
             />
-          </div>
-        </div>
-
-        {/* ── Filters + Packet Table ── */}
-        <div style={{ flexShrink: 0, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
-          {/* Table header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Packet Events</h3>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                {filteredEvents.length} / {displayEvents.length}
-              </span>
-              {isRunning && <PulseDot color="var(--color-live)" label="LIVE" />}
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={clearEvents} style={btnStyle('ghost-sm')}>
-                <Trash2 size={12} /> Clear
-              </button>
-            </div>
-          </div>
-
-          {/* Filter Row */}
-          <div style={{ display: 'flex', gap: 10, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center', background: 'var(--bg-workspace)' }}>
-            <Filter size={14} color="var(--text-muted)" />
-            <input
-              type="text"
-              placeholder="Apply a display filter (e.g. 192.168.1.1, tcp, .exe)..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ flex: 1, padding: '6px 12px', fontSize: 13, border: '1px solid var(--border-default)', borderRadius: 6, outline: 'none', fontFamily: 'var(--font-mono)' }}
-            />
-          </div>
-
-          {/* Packet Table */}
-          <div style={{ overflowX: 'auto', maxHeight: 340, overflowY: 'auto' }}>
-            {filteredEvents.length === 0 ? (
-              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                {isRunning ? (
-                  <>
-                    <Clock size={15} color="var(--primary)" />
-                    <span>Waiting for events…</span>
-                  </>
-                ) : (
-                  <>
-                    <Play size={15} color="var(--color-live)" />
-                    <span>Start a live demo session to see packet events.</span>
-                  </>
-                )}
-              </div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                  <tr style={{ background: 'var(--bg-workspace)' }}>
-                    {['Timestamp', 'Protocol', 'Source IP', 'Dest IP', 'Size', 'Info', 'Class'].map(col => (
-                      <th key={col} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-default)' }}>{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEvents.map((ev, i) => (
-                    <PacketRow key={ev.id ?? i} event={ev} />
-                  ))}
-                </tbody>
-              </table>
-            )}
           </div>
         </div>
 
@@ -526,7 +492,86 @@ export function LiveMonitoringPage() {
           </div>
 
           {/* Temporal State Panel */}
-          <TemporalStatePanel state={currentTemporal} windowSeconds={windowSeconds} />
+          <TemporalStatePanel
+            state={currentTemporal}
+            baseline={currentTemporal?.partial ? temporalHistory[temporalHistory.length - 1] ?? null : temporalHistory[temporalHistory.length - 2] ?? null}
+            windowSeconds={windowSeconds}
+          />
+        </div>
+
+        {/* ── Filters + Packet Table ── */}
+        <div data-tour="live-packets" style={{ flexShrink: 0, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+          {/* Table header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: showPackets ? '1px solid var(--border-subtle)' : 'none', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowPackets(v => !v)}
+                aria-expanded={showPackets}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              >
+                {showPackets ? <ChevronDown size={16} color="var(--text-muted)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Raw Packet Stream</h3>
+              </button>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                {filteredEvents.length} / {displayEvents.length}
+              </span>
+              {isRunning && <PulseDot color="var(--color-live)" label="LIVE" />}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={clearEvents} style={btnStyle('ghost-sm')}>
+                <Trash2 size={12} /> Clear
+              </button>
+            </div>
+          </div>
+
+          {showPackets && <>
+          {/* Filter Row */}
+          <div style={{ display: 'flex', gap: 10, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center', background: 'var(--bg-workspace)' }}>
+            <Filter size={14} color="var(--text-muted)" />
+            <input
+              type="text"
+              placeholder="Apply a display filter (e.g. 192.168.1.1, tcp, .exe)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ flex: 1, padding: '6px 12px', fontSize: 13, border: '1px solid var(--border-default)', borderRadius: 6, outline: 'none', fontFamily: 'var(--font-mono)' }}
+            />
+          </div>
+
+          {/* Packet Table */}
+          <div style={{ overflowX: 'auto', maxHeight: 340, overflowY: 'auto' }}>
+            {filteredEvents.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {isRunning ? (
+                  <>
+                    <Clock size={15} color="var(--primary)" />
+                    <span>Waiting for events…</span>
+                  </>
+                ) : (
+                  <>
+                    <Play size={15} color="var(--color-live)" />
+                    <span>Start a live demo session to see packet events.</span>
+                  </>
+                )}
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                  <tr style={{ background: 'var(--bg-workspace)' }}>
+                    {['Timestamp', 'Protocol', 'Source IP', 'Dest IP', 'Size', 'Info', 'Class'].map(col => (
+                      <th key={col} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.3px', textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-default)' }}>{col}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEvents.map((ev, i) => (
+                    <PacketRow key={ev.id ?? i} event={ev} />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          </>}
         </div>
 
       </div>
@@ -567,16 +612,26 @@ function StatusBadge({ running, wsConnected }: { running: boolean; wsConnected: 
 
 function PulseDot({ color, label }: { color: string; label: string }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 999, border: `1px solid ${color}30`, background: `${color}10`, color }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, display: 'inline-block', animation: 'pulse-dot 1.5s infinite' }} />
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 999, border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`, background: `color-mix(in srgb, ${color} 10%, transparent)`, color }}>
+      <span className="live-dot" style={{ width: 6, height: 6, background: color }} />
       {label}
     </span>
   );
 }
 
-function TemporalStatePanel({ state, windowSeconds }: { state: import('@/types/live').TemporalState | null; windowSeconds: number }) {
+/** Current window vs the last closed window; values flash when they change and show ▲/▼ deltas. */
+function TemporalStatePanel({ state, baseline, windowSeconds }: {
+  state: TemporalState | null;
+  baseline: TemporalState | null;
+  windowSeconds: number;
+}) {
+  const progress = state?.partial ? Math.round((state.window_progress ?? 0) * 100) : 100;
+  // Counts in a filling window are compared pro-rata, so a half-full window is not reported as a drop.
+  const scale = state?.partial ? Math.max(0.05, state.window_progress ?? 1) : 1;
+  const base = (k: keyof TemporalState) => (baseline ? Number(baseline[k]) * scale : undefined);
+  const rateBase = (k: keyof TemporalState) => (baseline ? Number(baseline[k]) : undefined);
   return (
-    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div data-tour="temporal-state" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Temporal State</h3>
         <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'var(--primary-light)', color: 'var(--primary)' }}>
@@ -586,26 +641,36 @@ function TemporalStatePanel({ state, windowSeconds }: { state: import('@/types/l
 
       {!state ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', minHeight: 120 }}>
-          Waiting for first temporal window…
+          Waiting for traffic — the first figures appear about a second after Start.
         </div>
       ) : (
         <>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>
+              <span>{state.partial ? `Window filling · ${Math.round(progress * windowSeconds / 100)}/${windowSeconds}s` : 'Window closed'}</span>
+              <span>{baseline ? 'Δ vs previous window' : 'first window'}</span>
+            </div>
+            <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-input)', overflow: 'hidden' }}>
+              <div style={{ width: `${progress}%`, height: '100%', background: 'var(--primary)', transition: 'width 0.9s linear' }} />
+            </div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <FeatureChip label="Packets" value={state.packet_count.toString()} />
-            <FeatureChip label="Bytes" value={`${(state.byte_count / 1024).toFixed(1)} KB`} />
-            <FeatureChip label="Benign" value={state.benign_count.toString()} color="var(--color-live)" />
-            <FeatureChip label="Suspicious" value={state.suspicious_count.toString()} color="var(--color-critical)" />
-            <FeatureChip label="Flows" value={state.flow_count.toString()} />
-            <FeatureChip label="Src IPs" value={state.unique_src_ips.toString()} />
-            <FeatureChip label="Dst IPs" value={state.unique_dst_ips.toString()} />
-            <FeatureChip label="Dst Ports" value={state.unique_dst_ports.toString()} />
+            <FeatureChip label="Packets" value={state.packet_count} prev={base('packet_count')} />
+            <FeatureChip label="Bytes" value={state.byte_count} prev={base('byte_count')} format={v => `${(v / 1024).toFixed(1)} KB`} />
+            <FeatureChip label="Benign" value={state.benign_count} prev={base('benign_count')} color="var(--color-live)" />
+            <FeatureChip label="Suspicious" value={state.suspicious_count} prev={base('suspicious_count')} color="var(--color-critical)" riskUp />
+            <FeatureChip label="Flows" value={state.flow_count} prev={base('flow_count')} />
+            <FeatureChip label="Src IPs" value={state.unique_src_ips} prev={rateBase('unique_src_ips')} />
+            <FeatureChip label="Dst IPs" value={state.unique_dst_ips} prev={rateBase('unique_dst_ips')} riskUp />
+            <FeatureChip label="Dst Ports" value={state.unique_dst_ports} prev={rateBase('unique_dst_ports')} riskUp />
           </div>
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Derived Features</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <FeatureRow label="Conn Rate" value={`${state.connection_rate.toFixed(2)} pkt/s`} />
-              <FeatureRow label="Mean Size" value={`${state.mean_packet_size.toFixed(0)} B`} />
-              <FeatureRow label="Susp Ratio" value={`${(state.suspicious_ratio * 100).toFixed(1)}%`} color={state.suspicious_ratio > 0.3 ? 'var(--color-critical)' : undefined} />
+              <FeatureRow label="Conn Rate" value={`${state.connection_rate.toFixed(2)} pkt/s`} delta={deltaText(state.connection_rate, rateBase('connection_rate'), 2)} />
+              <FeatureRow label="Mean Size" value={`${state.mean_packet_size.toFixed(0)} B`} delta={deltaText(state.mean_packet_size, rateBase('mean_packet_size'), 0)} />
+              <FeatureRow label="Susp Ratio" value={`${(state.suspicious_ratio * 100).toFixed(1)}%`} color={state.suspicious_ratio > 0.3 ? 'var(--color-critical)' : undefined}
+                delta={deltaText(state.suspicious_ratio * 100, baseline ? baseline.suspicious_ratio * 100 : undefined, 1, 'pt')} />
               <FeatureRow label="TCP" value={state.tcp_count.toString()} />
               <FeatureRow label="UDP / DNS" value={`${state.udp_count} / ${state.dns_count}`} />
             </div>
@@ -614,6 +679,13 @@ function TemporalStatePanel({ state, windowSeconds }: { state: import('@/types/l
       )}
     </div>
   );
+}
+
+function deltaText(v: number, prev: number | undefined, digits: number, unit = ''): string | undefined {
+  if (prev === undefined) return undefined;
+  const d = v - prev;
+  if (Math.abs(d) < Math.pow(10, -digits)) return '±0';
+  return `${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(digits)}${unit}`;
 }
 
 function PacketRow({ event }: { event: import('@/types/live').PacketEvent & { id?: string } }) {
@@ -661,20 +733,38 @@ function PacketRow({ event }: { event: import('@/types/live').PacketEvent & { id
 
 
 
-function FeatureChip({ label, value, color }: { label: string; value: string; color?: string }) {
+/** A figure that flashes when it changes; ▲/▼ compares with the previous window (red when a rise means more risk). */
+function FeatureChip({ label, value, prev, color, format, riskUp }: {
+  label: string; value: number; prev?: number; color?: string; format?: (v: number) => string; riskUp?: boolean;
+}) {
+  const diff = prev === undefined ? 0 : value - prev;
+  const pct = prev ? Math.round((diff / prev) * 100) : 0;
+  const significant = prev !== undefined && Math.abs(pct) >= 10;
+  const deltaColor = !significant ? 'var(--text-muted)' : (diff > 0) === Boolean(riskUp) ? 'var(--color-critical)' : 'var(--color-live)';
   return (
-    <div style={{ background: 'var(--bg-workspace)', borderRadius: 8, padding: '6px 10px' }}>
-      <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: color ?? 'var(--text-primary)', letterSpacing: '-0.5px' }}>{value}</div>
+    <div key={value} className={riskUp && diff > 0 && significant ? 'value-up' : undefined}
+      style={{ background: 'var(--bg-workspace)', borderRadius: 8, padding: '6px 10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
+        <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{label}</span>
+        {prev !== undefined && (
+          <span title="Change vs previous window (pro-rata while the window fills)" style={{ fontSize: 9, fontWeight: 700, color: deltaColor }}>
+            {diff === 0 || pct === 0 ? '±0' : `${diff > 0 ? '▲' : '▼'}${Math.abs(pct)}%`}
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 800, color: color ?? 'var(--text-primary)', letterSpacing: '-0.5px' }}>{format ? format(value) : value.toLocaleString()}</div>
     </div>
   );
 }
 
-function FeatureRow({ label, value, color }: { label: string; value: string; color?: string }) {
+function FeatureRow({ label, value, color, delta }: { label: string; value: string; color?: string; delta?: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: color ?? 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+        {delta && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{delta}</span>}
+        <span style={{ fontSize: 12, fontWeight: 700, color: color ?? 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</span>
+      </span>
     </div>
   );
 }

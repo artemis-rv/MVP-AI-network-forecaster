@@ -18,6 +18,9 @@ import {
   formatActivityBytes, formatActivityDuration,
 } from '@/lib/activityGrouping';
 import { deriveRiskEntities } from '@/utils/entityRisk';
+import {
+  affectedAssets, recommendedActions, buildStageMap, explainActivity, countLabel,
+} from '@/lib/socPlaybook';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -44,7 +47,7 @@ function worst(activities: GroupedActivity[]): FindingSeverity | 'NONE' {
 function activityLine(a: GroupedActivity): string {
   const targets = a.targets.length > 3 ? `${a.targets.slice(0, 3).join(', ')} +${a.targets.length - 3}` : a.targets.join(', ');
   return `[${a.severity}] ${a.id} ${a.label} — ${a.sources.join(', ')} → ${targets} · ${a.protocols.join('/')} · ` +
-    `${a.eventCount} events · ${a.portCount ? `${a.portCount} port(s)` : "ports n/a"} · ${range(a)} · confidence ${a.confidence}%`;
+    `${countLabel(a)} · ${a.portCount ? `${a.portCount} port(s)` : 'ports n/a'} · ${range(a)} · confidence ${a.confidence}%`;
 }
 
 function activityFinding(a: GroupedActivity, source: Finding['source_type'], sourceId: string): Finding {
@@ -58,8 +61,8 @@ function activityFinding(a: GroupedActivity, source: Finding['source_type'], sou
     evidence: [
       `Source: ${a.sources.join(', ')}`,
       `Target(s): ${a.targets.join(', ')}`,
-      `Protocol(s): ${a.protocols.join(', ')} · ports: ${a.ports.slice(0, 12).join(', ')}${a.portCount > 12 ? ' …' : ''}`,
-      `Events grouped: ${a.eventCount} · time range ${range(a)}`,
+      `Protocol(s): ${a.protocols.join(', ')} · ports: ${a.ports.length ? `${a.ports.slice(0, 12).join(', ')}${a.portCount > 12 ? ' …' : ''}` : 'n/a'}`,
+      `Grouped: ${countLabel(a)} · time range ${range(a)}`,
       ...(a.bytes !== null ? [`Bytes: ${formatActivityBytes(a.bytes)}`] : []),
       ...(Object.keys(a.tcpFlags).length ? [`TCP flags: ${Object.entries(a.tcpFlags).map(([f, c]) => `${f}×${c}`).join(', ')}`] : []),
       ...(a.mitre ? [`MITRE ATT&CK: ${a.mitre.id} ${a.mitre.name} (${a.mitre.tactic})`] : []),
@@ -109,6 +112,70 @@ function mitreSection(order: number, activities: GroupedActivity[]): ReportSecti
       note: 'Techniques are mapped deterministically from each activity type and dominant service port.',
     },
     evidence_refs: Array.from(byTech.keys()),
+  };
+}
+
+/** Plain-language summary: the explanation of the most severe activities, in order of severity. */
+function plainLanguage(activities: GroupedActivity[]): string[] {
+  return [...activities]
+    .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || a.firstSeen - b.firstSeen)
+    .slice(0, 4)
+    .map(explainActivity);
+}
+
+/** Attack stage map, affected assets and recommended actions — the three sections a SOC reads first. */
+function socSections(activities: GroupedActivity[], predictedStage: string | null): ReportSection[] {
+  const map = buildStageMap(activities, predictedStage);
+  const assets = affectedAssets(activities);
+  const actions = recommendedActions(activities);
+  return [
+    {
+      order: 0,
+      title: 'Attack Stage Map',
+      content: {
+        progression: stageProgression(activities),
+        stage_map: map.map(m => ({
+          stage: m.stage,
+          status: m.status,
+          severity: m.severity,
+          first_seen: m.firstSeen ? clock(m.firstSeen) : null,
+          activities: m.activityIds,
+          summary: m.summary,
+        })),
+      },
+      evidence_refs: map.flatMap(m => m.activityIds),
+    },
+    {
+      order: 0,
+      title: 'Affected Assets',
+      content: {
+        summary: assets.length
+          ? `${assets.length} internal asset(s) are affected. External addresses are listed as threat infrastructure, not assets.`
+          : 'No internal asset was affected by the observed activity.',
+        assets: assets.map(x => ({ ip: x.ip, role: x.role, impact: x.impact, severity: x.severity, activities: x.activityIds })),
+      },
+      evidence_refs: assets.flatMap(x => x.activityIds).filter((v, i, arr) => arr.indexOf(v) === i),
+    },
+    {
+      order: 0,
+      title: 'Recommended Actions',
+      content: {
+        summary: actions.length
+          ? 'Ordered by urgency. Every action references the activity that justifies it.'
+          : 'No action required — no suspicious activity was observed.',
+        actions: actions.map(r => ({ priority: r.priority, action: r.action, rationale: r.rationale, activities: r.activityIds })),
+      },
+      evidence_refs: actions.flatMap(r => r.activityIds).filter((v, i, arr) => arr.indexOf(v) === i),
+    },
+  ];
+}
+
+const numbered = (sections: ReportSection[]) => sections.map((sec, i) => ({ ...sec, order: i + 1 }));
+
+function severityCounts(activities: GroupedActivity[]): { critical: number; high: number } {
+  return {
+    critical: activities.filter(a => a.severity === 'CRITICAL').length,
+    high: activities.filter(a => a.severity === 'HIGH').length,
   };
 }
 
@@ -176,10 +243,12 @@ export function buildLiveSessionReport(input: LiveReportInput): Report {
             `Highest severity: ${sev}. Observed progression: ${stageProgression(acts)}.`
           : `No suspicious activity was grouped during this session (${t.total.toLocaleString()} packets observed).`,
         overall_severity: sev,
+        in_plain_language: plainLanguage(acts),
         what_to_investigate_next: nextSteps(acts),
       },
       evidence_refs: [],
     },
+    ...socSections(acts, hasForecast && f && !f.is_benign ? f.predicted_next_stage : null),
     {
       order: 2,
       title: 'Capture / Source Information',
@@ -275,6 +344,8 @@ export function buildLiveSessionReport(input: LiveReportInput): Report {
     });
   }
 
+  const counts = severityCounts(acts);
+  const durationMs = t.firstTs && t.lastTs ? t.lastTs - t.firstTs : 0;
   return {
     report_id: reportId,
     report_type: 'live',
@@ -282,7 +353,7 @@ export function buildLiveSessionReport(input: LiveReportInput): Report {
     title: `Live Session Incident Report — ${sessionId}`,
     generated_at: nowSec(),
     status: 'GENERATED',
-    sections,
+    sections: numbered(sections),
     findings,
     disclaimer: 'Prototype report generated from a simulated live session. Findings are heuristic and require analyst validation.',
     metadata: {
@@ -292,6 +363,13 @@ export function buildLiveSessionReport(input: LiveReportInput): Report {
       generated_at: nowSec(),
       analysis_status: input.session?.running ? 'session running' : 'session stopped',
       local: true,
+      kpis: [
+        { label: 'Packets Observed', value: t.total.toLocaleString() },
+        { label: 'Activities', value: String(acts.length) },
+        { label: 'Duration', value: t.firstTs ? formatActivityDuration(durationMs) : 'No traffic' },
+        { label: 'Critical', value: String(counts.critical), tone: 'critical' },
+        { label: 'High', value: String(counts.high), tone: 'high' },
+      ],
     },
   };
 }
@@ -357,7 +435,7 @@ export function buildInvestigationReport(input: InvestigationReportInput): Repor
     ...base,
     report_id: `RPT-INV-${stamp()}`,
     title: `Investigation Report — ${input.investigationId} · ${ip}`,
-    sections: [scope, ...base.sections.map(s => ({ ...s, order: s.order + 1 }))],
+    sections: numbered([scope, ...base.sections]),
     findings,
     metadata: { ...base.metadata, investigation_id: input.investigationId, entity_ip: ip },
   };
@@ -367,12 +445,20 @@ export function buildInvestigationReport(input: InvestigationReportInput): Repor
 // HISTORICAL / FORENSIC REPORT
 // ═══════════════════════════════════════════════════════════════════════════
 
+export interface HypothesisValidation {
+  verdict: 'Confirmed' | 'Rejected' | 'Needs more data';
+  note: string;
+  at: number;
+}
+
 export interface ForensicReportPart {
   forensicId: string | null;
   integrity: EvidenceIntegrity | null;
   hypotheses: Hypothesis[];
   finalAssessment: FinalAssessment | null;
   indicators: AntiForensicIndicator[];
+  /** Analyst validation per hypothesis id. */
+  validations?: Record<string, HypothesisValidation>;
 }
 
 /** Adapts forensic store state; returns null unless forensic analysis completed for this job. */
@@ -384,6 +470,7 @@ export function forensicPartFrom(fz: {
   hypotheses: Hypothesis[];
   finalAssessment: FinalAssessment | null;
   antiForensicIndicators: AntiForensicIndicator[];
+  validations?: Record<string, HypothesisValidation>;
 }, jobId: string): ForensicReportPart | null {
   if (fz.selectedHistoricalJobId !== jobId || String(fz.status).toLowerCase() !== 'completed') return null;
   return {
@@ -392,6 +479,7 @@ export function forensicPartFrom(fz: {
     hypotheses: fz.hypotheses,
     finalAssessment: fz.finalAssessment,
     indicators: fz.antiForensicIndicators,
+    validations: fz.validations,
   };
 }
 
@@ -434,11 +522,13 @@ export function buildHistoricalReport(input: HistoricalReportInput): Report {
             `Highest severity: ${sev}. Observed progression: ${stageProgression(acts)}.`
           : `No suspicious activity was detected in ${r.packet_count.toLocaleString()} packets.`,
         overall_severity: sev,
+        in_plain_language: plainLanguage(acts),
         forensic_assessment: fz?.finalAssessment?.assessment_text ?? 'Forensic reasoning not run for this capture.',
         what_to_investigate_next: nextSteps(acts),
       },
       evidence_refs: [],
     },
+    ...socSections(acts, null),
     {
       order: 2,
       title: 'Capture / Source Information',
@@ -503,7 +593,13 @@ export function buildHistoricalReport(input: HistoricalReportInput): Report {
       order: 9,
       title: 'Forensic Hypotheses',
       content: {
-        hypotheses: fz.hypotheses.map(h => `${h.title} — ${h.status.replace('_', ' ')}, ${h.confidence}% (${h.supporting_evidence.length} supporting / ${h.contradicting_evidence.length} contradicting)`),
+        summary: 'Each hypothesis is tested against the capture; the verdict and the analyst\'s validation are listed separately.',
+        hypotheses: fz.hypotheses.map(h => {
+          const v = fz.validations?.[h.id];
+          return `${h.title} — engine verdict ${h.status.replace('_', ' ')} (${h.confidence}%, ` +
+            `${h.supporting_evidence.length} supporting / ${h.contradicting_evidence.length} contradicting); ` +
+            `analyst: ${v ? `${v.verdict}${v.note ? ` — ${v.note}` : ''}` : 'not yet validated'}`;
+        }),
       },
       evidence_refs: fz.hypotheses.map(h => h.id),
     });
@@ -524,7 +620,10 @@ export function buildHistoricalReport(input: HistoricalReportInput): Report {
 
   const findings: Finding[] = acts.map(a => activityFinding(a, 'historical', input.jobId));
   for (const h of fz?.hypotheses ?? []) {
-    if (h.status !== 'SUPPORTED' && h.status !== 'PLAUSIBLE') continue;
+    // An analyst rejection overrides the engine verdict; an analyst confirmation always includes it.
+    const verdict = fz?.validations?.[h.id]?.verdict;
+    if (verdict === 'Rejected') continue;
+    if (verdict !== 'Confirmed' && h.status !== 'SUPPORTED' && h.status !== 'PLAUSIBLE') continue;
     findings.push({
       id: h.id,
       title: h.title,
@@ -539,6 +638,7 @@ export function buildHistoricalReport(input: HistoricalReportInput): Report {
     });
   }
 
+  const counts = severityCounts(acts);
   return {
     report_id: `RPT-HIST-${stamp()}`,
     report_type: 'historical',
@@ -546,7 +646,7 @@ export function buildHistoricalReport(input: HistoricalReportInput): Report {
     title: `Forensic Analysis Report — ${input.filename || input.jobId}`,
     generated_at: nowSec(),
     status: 'GENERATED',
-    sections,
+    sections: numbered(sections),
     findings,
     disclaimer: 'Prototype forensic report. Heuristic findings require expert validation and are not legally admissible evidence.',
     metadata: {
@@ -557,6 +657,13 @@ export function buildHistoricalReport(input: HistoricalReportInput): Report {
       generated_at: nowSec(),
       analysis_status: fz?.finalAssessment ? 'historical + forensic completed' : 'historical completed',
       local: true,
+      kpis: [
+        { label: 'Packets Parsed', value: r.packet_count.toLocaleString() },
+        { label: 'Flows Extracted', value: r.flow_count.toLocaleString() },
+        { label: 'Duration', value: formatActivityDuration(r.duration_seconds * 1000) },
+        { label: 'Critical', value: String(counts.critical), tone: 'critical' },
+        { label: 'High', value: String(counts.high), tone: 'high' },
+      ],
     },
   };
 }

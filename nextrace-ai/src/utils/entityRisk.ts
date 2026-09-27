@@ -10,6 +10,7 @@
 // Target (victim) score = 0.6 · highest severity weight + 2 per distinct attacker, capped at 60 (Medium),
 // so a host is never High risk just for being targeted.
 
+import { countLabel } from '@/lib/socPlaybook';
 import type { GroupedActivity } from '@/lib/activityGrouping';
 import type { AlertSeverity } from '@/types/alert';
 
@@ -97,7 +98,7 @@ export function deriveRiskEntities(activities: GroupedActivity[]): {
       threatCount: unique.length,
       activityIds: unique.map(a => a.id),
       topActivity: unique[0]?.label ?? '—',
-      reasons: unique.slice(0, 3).map(a => `${a.label} (${a.eventCount} events, ${a.severity})`),
+      reasons: unique.slice(0, 3).map(a => `${a.label} (${countLabel(a)}, ${a.severity})`),
     });
   }
 

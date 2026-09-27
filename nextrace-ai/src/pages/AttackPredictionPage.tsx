@@ -15,6 +15,10 @@ import { significantActivities } from '@/lib/activityGrouping';
 import { buildLiveSessionReport } from '@/lib/reportBuilder';
 import { ActivityList } from '@/components/activity/ActivityList';
 import { ActivityInspector } from '@/components/activity/ActivityInspector';
+import { StageMap } from '@/components/activity/StageMap';
+import { toStageMapItems } from '@/components/activity/stageMapItems';
+import { buildStageMap } from '@/lib/socPlaybook';
+import { useFocusParam } from '@/hooks/useFocusParam';
 
 // ─────────────────────────────────────────────────────────────────────────────
 export function AttackPredictionPage() {
@@ -29,6 +33,18 @@ export function AttackPredictionPage() {
   const [inspectId, setInspectId] = useState<string | null>(null);
   const inspected = inspectId ? grouped.find(a => a.id === inspectId) ?? null : null;
   const requestedSession = searchParams.get('session');
+  const [highlight, setHighlight] = useState<{ id: string; key: string | number } | null>(null);
+  const focus = useFocusParam();
+  const [handledFocus, setHandledFocus] = useState<string | null>(null);
+  if (focus && focus.key !== handledFocus && grouped.some(a => a.id === focus.id)) {
+    setHandledFocus(focus.key);
+    setHighlight(focus);
+    setInspectId(focus.id);
+  }
+  const stageMap = useMemo(() => toStageMapItems(buildStageMap(
+    grouped,
+    currentForecast && !currentForecast.is_benign ? currentForecast.predicted_next_stage : null,
+  )), [grouped, currentForecast]);
 
   function handleGenerateReport() {
     const report = buildLiveSessionReport({
@@ -167,6 +183,15 @@ export function AttackPredictionPage() {
             <ForecastCard forecast={forecast} />
           </div>
 
+          {/* ── Evidence-based kill chain: observed stages (with activities) + forecast ── */}
+          <div data-tour="stage-map" style={{ ...cardStyle, padding: '14px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Attack Stage Map</h3>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Observed = backed by grouped activity · Predicted = rule-based forecast</span>
+            </div>
+            <StageMap items={stageMap} onSelectActivity={id => { setInspectId(id); setHighlight({ id, key: Date.now() }); }} />
+          </div>
+
           {/* ── Attack Progression ── */}
           <AttackProgressionBar
             forecast={forecast}
@@ -192,6 +217,7 @@ export function AttackPredictionPage() {
               activities={grouped}
               live
               onSelect={a => setInspectId(a.id)}
+              highlight={highlight}
               maxHeight={260}
               emptyText="No suspicious activity observed in this session."
             />
@@ -280,6 +306,11 @@ function ForecastCard({ forecast }: { forecast: ForecastResult | null }) {
     <div style={{ ...cardStyle, border: `1px solid ${isBenign ? 'var(--border-default)' : colors.border}`, boxShadow: isBenign ? 'var(--shadow-sm)' : `0 0 24px ${colors.glow}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Predicted Next Stage</h3>
+        {forecast?.provisional && (
+          <span title="Based on the first, still-filling window; refined when the window closes" style={{ fontSize: 9, fontWeight: 800, padding: '2px 8px', borderRadius: 999, background: 'var(--color-warning-light)', color: 'var(--color-warning)' }}>
+            PROVISIONAL
+          </span>
+        )}
         <Shield size={16} color={isBenign ? 'var(--color-live)' : colors.text} />
       </div>
 

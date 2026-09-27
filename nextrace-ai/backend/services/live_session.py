@@ -11,6 +11,7 @@ historical-PCAP processing (see SRS §6 — Data Isolation).
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import random
 from datetime import datetime, timezone
@@ -22,6 +23,12 @@ from backend.forecasting.engine import RuleBasedForecastEngine
 
 # ─── Type alias for WebSocket client queues ───────────────────
 Queue = asyncio.Queue
+
+# Partial temporal state is pushed this often inside a window, so the UI fills within ~1 s of Start
+# instead of waiting for the first full window (15 s by default).
+PARTIAL_TICK_SECONDS = 1.0
+# A provisional forecast (on a copy of the engine) is shown this long after Start if none exists yet.
+PROVISIONAL_FORECAST_AFTER = 3.0
 
 
 class LiveSession:
@@ -150,47 +157,73 @@ class LiveSession:
     # ─── Temporal window timer ────────────────────────────────
 
     async def _run_window_timer(self) -> None:
-        """Every window_seconds, aggregate events and broadcast temporal state."""
+        """Pushes a partial temporal state every second and the final state (plus forecast) per window."""
+        provisional_sent = False
         try:
             while self.running:
-                await asyncio.sleep(self.window_seconds)
+                await asyncio.sleep(PARTIAL_TICK_SECONDS)
                 if not self.running:
                     break
 
-                window_end = datetime.now(timezone.utc)
-                events_snapshot = self._window_events[:]
-                window_start = self._window_start or window_end
+                now = datetime.now(timezone.utc)
+                window_start = self._window_start or now
+                elapsed = (now - window_start).total_seconds()
 
-                # Feature engineering
-                state = compute_temporal_state(
-                    events_snapshot,
-                    window_start,
-                    window_end,
-                    self.window_seconds,
-                )
-                # Reset for next window
-                self._window_events = []
-                self._window_start = window_end
+                if elapsed < self.window_seconds:
+                    # Partial window: same features over the events seen so far, flagged as partial.
+                    partial = compute_temporal_state(self._window_events[:], window_start, now, self.window_seconds)
+                    partial["partial"] = True
+                    partial["window_progress"] = round(min(1.0, elapsed / self.window_seconds), 3)
+                    self._broadcast({"type": "temporal_state", "data": partial})
 
-                self._broadcast({"type": "temporal_state", "data": state})
+                    if not provisional_sent and elapsed >= PROVISIONAL_FORECAST_AFTER and self._window_events:
+                        provisional_sent = True
+                        self._broadcast_provisional_forecast(partial)
+                    continue
 
-                # Alerts are raised by the frontend activity-grouping layer (one alert per grouped
-                # activity, see src/lib/activityGrouping.ts) — not per packet or per window here.
-
-                # Run forecast engine
-                try:
-                    suspicious_dsts = [e["dst_ip"] for e in events_snapshot if e.get("classification") == "suspicious"]
-                    observed_target = max(set(suspicious_dsts), key=suspicious_dsts.count) if suspicious_dsts else None
-                    forecast = self._forecast_engine.predict(state, self.mode, observed_target)
-                    self._current_forecast = forecast
-                    self._broadcast({"type": "forecast_update", "data": forecast})
-                except Exception:
-                    pass  # Never let forecasting crash the generator loop
-
-                # Also broadcast updated session status
-                self._broadcast_status()
+                self._close_window(window_start, now)
 
         except asyncio.CancelledError:
+            pass
+
+    def _close_window(self, window_start: datetime, window_end: datetime) -> None:
+        events_snapshot = self._window_events[:]
+        state = compute_temporal_state(events_snapshot, window_start, window_end, self.window_seconds)
+        state["partial"] = False
+        state["window_progress"] = 1.0
+        # Reset for next window
+        self._window_events = []
+        self._window_start = window_end
+
+        self._broadcast({"type": "temporal_state", "data": state})
+
+        # Alerts are raised by the frontend activity-grouping layer (one alert per grouped
+        # activity, see src/lib/activityGrouping.ts) — not per packet or per window here.
+
+        try:
+            forecast = self._forecast_engine.predict(state, self.mode, self._observed_target(events_snapshot))
+            self._current_forecast = forecast
+            self._broadcast({"type": "forecast_update", "data": forecast})
+        except Exception:
+            pass  # Never let forecasting crash the generator loop
+
+        self._broadcast_status()
+
+    @staticmethod
+    def _observed_target(events: list[dict]) -> Optional[str]:
+        suspicious_dsts = [e["dst_ip"] for e in events if e.get("classification") == "suspicious"]
+        return max(set(suspicious_dsts), key=suspicious_dsts.count) if suspicious_dsts else None
+
+    def _broadcast_provisional_forecast(self, partial: dict) -> None:
+        """Early forecast from the partial first window, computed on a copy so the real sequence is untouched."""
+        try:
+            engine = copy.deepcopy(self._forecast_engine)
+            forecast = engine.predict(partial, self.mode, self._observed_target(self._window_events[:]))
+            forecast["provisional"] = True
+            self._current_forecast = forecast
+            self._broadcast({"type": "forecast_update", "data": forecast})
+            self._broadcast_status()
+        except Exception:
             pass
 
     def broadcast_alert(self, alert: dict) -> None:

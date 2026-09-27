@@ -62,7 +62,7 @@ export function AlertsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+      <div data-tour="alert-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
         <KpiCard title="Critical" count={stats?.critical || 0} icon={<AlertCircle size={18} />} color="var(--color-critical)" onClick={() => setFilter('severity', 'CRITICAL')} active={filters.severity === 'CRITICAL'} />
         <KpiCard title="High" count={stats?.high || 0} icon={<AlertTriangle size={18} />} color="#f97316" onClick={() => setFilter('severity', 'HIGH')} active={filters.severity === 'HIGH'} />
         <KpiCard title="Open" count={stats?.open || 0} icon={<ShieldAlert size={18} />} color="#d97706" onClick={() => setFilter('status', 'OPEN')} active={filters.status === 'OPEN'} />
@@ -70,7 +70,7 @@ export function AlertsPage() {
       </div>
 
       {/* Filters & Table */}
-      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div data-tour="alert-table" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', flex: 1 }}>
 
         {/* Filter Bar */}
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>

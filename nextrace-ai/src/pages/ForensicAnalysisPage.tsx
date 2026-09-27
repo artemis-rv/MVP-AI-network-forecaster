@@ -323,7 +323,7 @@ function ForensicResultView({
         subtitle="Evidence-weighted hypotheses · expand for supporting and contradicting evidence"
         badge={hypotheses.length > 0 ? { label: `${hypotheses.length} hypothes${hypotheses.length === 1 ? 'is' : 'es'}`, color: 'var(--primary)', bg: 'rgba(99,102,241,0.1)' } : undefined}
       >
-        <HypothesesSection hypotheses={hypotheses}/>
+        <div data-tour="hypotheses"><HypothesesSection hypotheses={hypotheses}/></div>
       </ForensicSection>
 
       {/* 3 — Evidence (what supports it) */}
@@ -531,8 +531,62 @@ function AntiForensicSection({ indicators }: { indicators: AntiForensicIndicator
 // SECTION 4 — HYPOTHESES
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** Checks an analyst runs to confirm or refute each hypothesis type (H1–H5 from the forensic engine). */
+const VALIDATION_STEPS: Record<string, string[]> = {
+  H1: [
+    'Confirm the source is not an authorised vulnerability scanner (asset inventory / change calendar).',
+    'In the capture, count distinct destination ports per source: many ports and few completed handshakes indicates a scan.',
+  ],
+  H2: [
+    'Check the target host login logs (e.g. /var/log/auth.log, Windows 4625/4624) for failures, and for any success from the source.',
+    'Confirm the connections are short-lived (few packets each). Long sessions suggest a successful login.',
+  ],
+  H3: [
+    'Check the target for network logons from the source (Windows 4624 type 3/10) and new services (7045).',
+    'Confirm the admin traffic does not come from an approved management host.',
+  ],
+  H4: [
+    'Compare the outbound volume with this host\'s normal baseline.',
+    'Identify who owns the destination (WHOIS / threat intel), and check proxy or DLP logs for the files involved.',
+  ],
+  H5: [
+    'Measure the interval between connections. Regular timing (beaconing) supports C2.',
+    'Look up the destinations or domains in threat intelligence.',
+  ],
+};
+
+function validationSteps(h: Hypothesis): string[] {
+  return VALIDATION_STEPS[h.title.slice(0, 2)] ?? ['Re-examine each supporting item in the raw capture before acting on this hypothesis.'];
+}
+
+/** Wireshark display filter for the hosts named in the evidence, so the analyst can verify it in the raw PCAP. */
+function wiresharkFilter(h: Hypothesis): string | null {
+  const text = [...h.supporting_evidence, h.description].join(' ');
+  const ips = Array.from(new Set(text.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) ?? [])).slice(0, 4);
+  const ports = Array.from(new Set((text.match(/\bport[s]?\s+(\d{1,5})/gi) ?? []).map(m => m.replace(/\D/g, '')))).slice(0, 3);
+  if (ips.length === 0) return null;
+  const ipPart = ips.map(ip => `ip.addr == ${ip}`).join(' || ');
+  const portPart = ports.length ? ` && (${ports.map(pt => `tcp.port == ${pt} || udp.port == ${pt}`).join(' || ')})` : '';
+  return ips.length > 1 && portPart ? `(${ipPart})${portPart}` : `${ipPart}${portPart}`;
+}
+
+/** The engine's score, decomposed: base + 5 per supporting − 8 per contradicting − 3 per limitation, capped 0–90. */
+function scoreBreakdown(h: Hypothesis): string {
+  const s = h.supporting_evidence.length, c = h.contradicting_evidence.length, l = h.limitations.length;
+  const base = h.confidence - 5 * s + 8 * c + 3 * l;
+  const capped = h.confidence === 90 || h.confidence === 0;
+  return `${capped ? '≈' : ''}base ${base} + ${s}×5 supporting − ${c}×8 contradicting − ${l}×3 limitations = ${h.confidence}%${capped ? ' (capped)' : ''}`;
+}
+
+const VERDICT_STYLE: Record<string, { color: string; bg: string }> = {
+  Confirmed: { color: '#047857', bg: '#d1fae5' },
+  Rejected: { color: '#b91c1c', bg: '#fee2e2' },
+  'Needs more data': { color: '#b45309', bg: '#fef3c7' },
+};
+
 function HypothesesSection({ hypotheses }: { hypotheses: Hypothesis[] }) {
-  const { expandedHypothesisId, toggleHypothesis } = useForensicStore();
+  const { expandedHypothesisId, toggleHypothesis, validations, validateHypothesis } = useForensicStore();
+  const [notes, setNotes] = useState<Record<string, string>>({});
 
   if (hypotheses.length === 0) {
     return (
@@ -542,97 +596,151 @@ function HypothesesSection({ hypotheses }: { hypotheses: Hypothesis[] }) {
     );
   }
 
+  const validated = hypotheses.filter(h => validations[h.id]).length;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* Prototype note */}
-      <div style={{ background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-        <Info size={11} style={{ display: 'inline', marginRight: 4, color: 'var(--primary)' }}/>
-        <strong style={{ color: 'var(--primary)' }}>Prototype reasoning model.</strong> Confidence values are deterministic heuristic estimates. Click a hypothesis to expand evidence details.
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        <span>
+          <Info size={11} style={{ display: 'inline', marginRight: 4, color: 'var(--primary)' }}/>
+          The engine <strong>proposes</strong> a verdict from the evidence weighting. You <strong>validate</strong> it with the checks listed for each hypothesis.
+        </span>
+        <span style={{ fontWeight: 700, color: validated === hypotheses.length ? '#047857' : 'var(--text-secondary)' }}>
+          {validated}/{hypotheses.length} validated
+        </span>
       </div>
 
       {hypotheses.map((hyp) => {
         const isExpanded = expandedHypothesisId === hyp.id;
         const statusStyle = HYP_STATUS_STYLE[hyp.status] ?? HYP_STATUS_STYLE['INSUFFICIENT_EVIDENCE'];
+        const v = validations[hyp.id];
+        const filter = wiresharkFilter(hyp);
 
         return (
-          <div key={hyp.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-            {/* Hypothesis header — clickable */}
+          <div key={hyp.id} style={{ background: 'var(--bg-card)', border: `1px solid ${v ? VERDICT_STYLE[v.verdict].color + '55' : 'var(--border-default)'}`, borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
             <button
               onClick={() => toggleHypothesis(hyp.id)}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              aria-expanded={isExpanded}
+              style={{ width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
-              {isExpanded ? <ChevronDown size={14} style={{ flexShrink: 0, color: 'var(--primary)' }}/> : <ChevronRight size={14} style={{ flexShrink: 0, color: 'var(--text-muted)' }}/>}
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{hyp.title}</span>
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 10px', borderRadius: 999, background: statusStyle.bg, color: statusStyle.color, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                  {hyp.status.replace('_', ' ')}
-                </span>
+              {isExpanded ? <ChevronDown size={14} style={{ flexShrink: 0, marginTop: 3, color: 'var(--primary)' }}/> : <ChevronRight size={14} style={{ flexShrink: 0, marginTop: 3, color: 'var(--text-muted)' }}/>}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{hyp.title}</span>
+                  <span title="Engine verdict" style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: statusStyle.bg, color: statusStyle.color, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                    Engine: {hyp.status.replace('_', ' ')}
+                  </span>
+                  {v && (
+                    <span title={v.note || 'Analyst validation'} style={{ fontSize: 9, fontWeight: 800, padding: '2px 8px', borderRadius: 999, background: VERDICT_STYLE[v.verdict].bg, color: VERDICT_STYLE[v.verdict].color, textTransform: 'uppercase' }}>
+                      Analyst: {v.verdict}
+                    </span>
+                  )}
+                </div>
+                {/* The claim is readable without expanding */}
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 4 }}>{hyp.description}</div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 11, fontWeight: 600 }}>
+                  <span style={{ color: '#059669' }}>+{hyp.supporting_evidence.length} supporting</span>
+                  <span style={{ color: '#dc2626' }}>−{hyp.contradicting_evidence.length} contradicting</span>
+                  <span style={{ color: '#b45309' }}>{hyp.limitations.length} gap{hyp.limitations.length === 1 ? '' : 's'}</span>
+                </div>
               </div>
-              <ConfidencePill value={hyp.confidence}/>
+              <div style={{ width: 90, flexShrink: 0, textAlign: 'right' }}>
+                <ConfidencePill value={hyp.confidence}/>
+                <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-input)', marginTop: 6, overflow: 'hidden' }}>
+                  <div style={{ width: `${hyp.confidence}%`, height: '100%', background: statusStyle.color }} />
+                </div>
+              </div>
             </button>
 
-            {/* Collapsible body */}
             {isExpanded && (
               <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid var(--border-subtle)' }}>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, paddingTop: 12 }}>
-                  {hyp.description}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingTop: 10, fontFamily: 'var(--font-mono)' }}>
+                  How the confidence was scored: {scoreBreakdown(hyp)}
                 </div>
 
-                {/* Evidence evaluation grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {/* Supporting */}
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
-                      <CheckCircle size={12} /> Supporting ({hyp.supporting_evidence.length})
-                    </div>
-                    {hyp.supporting_evidence.length === 0 ? (
-                      <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>No supporting evidence.</div>
-                    ) : (
-                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {hyp.supporting_evidence.map((ev, i) => (
-                          <li key={i} style={{ fontSize: 11, color: '#065f46', lineHeight: 1.5 }}>+ {ev}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  {/* Contradicting */}
-                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
-                      <XCircle size={12} /> Contradicting ({hyp.contradicting_evidence.length})
-                    </div>
-                    {hyp.contradicting_evidence.length === 0 ? (
-                      <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>No contradicting evidence identified.</div>
-                    ) : (
-                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {hyp.contradicting_evidence.map((ev, i) => (
-                          <li key={i} style={{ fontSize: 11, color: '#991b1b', lineHeight: 1.5 }}>− {ev}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+                  <EvidenceColumn title="Supporting" items={hyp.supporting_evidence} sign="+" tone={{ fg: '#065f46', head: '#059669', bg: '#f0fdf4', border: '#bbf7d0' }} empty="No supporting evidence." icon={<CheckCircle size={12}/>} />
+                  <EvidenceColumn title="Contradicting" items={hyp.contradicting_evidence} sign="−" tone={{ fg: '#991b1b', head: '#dc2626', bg: '#fef2f2', border: '#fecaca' }} empty="No contradicting evidence identified." icon={<XCircle size={12}/>} />
+                  <EvidenceColumn title="Evidence gaps" items={hyp.limitations} sign="•" tone={{ fg: '#78350f', head: '#b45309', bg: '#fefce8', border: '#fde68a' }} empty="No gaps recorded." icon={<AlertTriangle size={12}/>} />
                 </div>
 
-                {/* Limitations */}
-                {hyp.limitations.length > 0 && (
-                  <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
-                      <AlertTriangle size={12} /> Evidence Limitations ({hyp.limitations.length})
+                {/* Validation checklist */}
+                <div style={{ background: 'var(--bg-workspace)', borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 6 }}>How to validate</div>
+                  <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {validationSteps(hyp).map((step, i) => <li key={i} style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>{step}</li>)}
+                  </ol>
+                  {filter && (
+                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Wireshark filter:</span>
+                      <code style={{ fontSize: 11, background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '2px 8px', fontFamily: 'var(--font-mono)' }}>{filter}</code>
+                      <button type="button" onClick={() => navigator.clipboard?.writeText(filter)} style={{ ...ghostBtnStyle, padding: '3px 8px', fontSize: 11 }}>
+                        <Copy size={11}/> Copy
+                      </button>
                     </div>
-                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      {hyp.limitations.map((lim, i) => (
-                        <li key={i} style={{ fontSize: 11, color: '#78350f', lineHeight: 1.5 }}>• {lim}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>{hyp.prototype_note}</div>
+                {/* Analyst verdict */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Analyst validation</div>
+                  <input
+                    type="text"
+                    maxLength={500}
+                    placeholder="Note (optional) — e.g. 'auth.log shows 0 successful logins'"
+                    value={notes[hyp.id] ?? v?.note ?? ''}
+                    onChange={e => setNotes(n => ({ ...n, [hyp.id]: e.target.value }))}
+                    style={{ padding: '6px 10px', fontSize: 12, border: '1px solid var(--border-default)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                  />
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {(['Confirmed', 'Rejected', 'Needs more data'] as const).map(verdict => (
+                      <button
+                        key={verdict}
+                        type="button"
+                        onClick={() => validateHypothesis(hyp.id, verdict, notes[hyp.id] ?? v?.note ?? '')}
+                        style={{
+                          ...ghostBtnStyle, padding: '5px 12px', fontSize: 12,
+                          ...(v?.verdict === verdict ? { background: VERDICT_STYLE[verdict].bg, color: VERDICT_STYLE[verdict].color, borderColor: VERDICT_STYLE[verdict].color } : {}),
+                        }}
+                      >
+                        {verdict}
+                      </button>
+                    ))}
+                    {v && (
+                      <button type="button" onClick={() => validateHypothesis(hyp.id, null)} style={{ ...ghostBtnStyle, padding: '5px 12px', fontSize: 12 }}>
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                    The validation is included in the generated report. A rejected hypothesis is left out of the report findings.
+                  </div>
+                </div>
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function EvidenceColumn({ title, items, sign, tone, empty, icon }: {
+  title: string; items: string[]; sign: string; empty: string; icon: React.ReactNode;
+  tone: { fg: string; head: string; bg: string; border: string };
+}) {
+  return (
+    <div style={{ background: tone.bg, border: `1px solid ${tone.border}`, borderRadius: 10, padding: '10px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: tone.head, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>
+        {icon} {title} ({items.length})
+      </div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>{empty}</div>
+      ) : (
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {items.map((ev, i) => <li key={i} style={{ fontSize: 11.5, color: tone.fg, lineHeight: 1.5 }}>{sign} {ev}</li>)}
+        </ul>
+      )}
     </div>
   );
 }

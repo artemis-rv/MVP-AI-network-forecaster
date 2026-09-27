@@ -65,3 +65,12 @@ scratch/
 # Accidental root npm files
 /package.json
 /package-lock.json
+
+# Dataset and ML Outputs
+Dataset/
+backend/ml/baseline/output/
+backend/ml/data_pipeline/output/
+backend/ml/data_pipeline/temporal_output/
+backend/ml/temporal/output/
+backend/ml/models/lstm_attention/output/
+backend/ml/models/lstm_attention/experiments/

@@ -1,7 +1,11 @@
 import { Badge } from '@/components/ui/Badge';
 import type { Alert } from '@/types/alert';
-import { Target, Clock, Hash, Tag, FileText, CheckCircle, AlertTriangle, RotateCcw, Search } from 'lucide-react';
+import { Target, Clock, Hash, Tag, FileText, CheckCircle, AlertTriangle, RotateCcw, Search, Server, ListChecks, Lightbulb, Layers } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useLiveStore } from '@/store/liveStore';
+import {
+  affectedAssetsOf, assetLine, recommendedActionsFor, actionLine, explainActivity,
+} from '@/lib/socPlaybook';
 
 interface AlertDetailsProps {
   alert: Alert;
@@ -15,8 +19,20 @@ const severityMap: Record<string, 'Critical' | 'High' | 'Medium' | 'Low'> = {
   CRITICAL: 'Critical', HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low'
 };
 
-export function AlertDetails({ alert, onAcknowledge, onResolve, onReopen, onUpdateStatus }: AlertDetailsProps) {
+export function AlertDetails({ alert: stored, onAcknowledge, onResolve, onReopen, onUpdateStatus }: AlertDetailsProps) {
   const navigate = useNavigate();
+  // While the activity behind this alert is still in the current run, show its live state (counts,
+  // assets and actions grow with it). Ids restart every run, so older alerts keep their stored snapshot.
+  const activity = useLiveStore(st => {
+    if (!stored.activity_id || !st.runStartedAt || Date.parse(stored.created_at) < st.runStartedAt) return null;
+    return st.activities.find(a => a.id === stored.activity_id) ?? null;
+  });
+  const alert = activity ? {
+    ...stored,
+    explanation: explainActivity(activity),
+    affected_assets: affectedAssetsOf(activity).map(assetLine),
+    recommended_actions: recommendedActionsFor(activity).map(actionLine),
+  } : stored;
 
   function handleInvestigate() {
     if (!alert.source_ip) return;
@@ -60,6 +76,59 @@ export function AlertDetails({ alert, onAcknowledge, onResolve, onReopen, onUpda
         </p>
       </div>
 
+      {/* Plain-language meaning */}
+      {alert.explanation && (
+        <div style={{ display: 'flex', gap: 10, background: 'var(--primary-light)', borderRadius: 8, padding: '12px 14px' }}>
+          <Lightbulb size={16} color="var(--primary)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{alert.explanation}</div>
+        </div>
+      )}
+
+      {/* Affected assets — shown from the moment the alert is raised, updated when the activity reaches a new host */}
+      <div>
+        <h4 style={sectionTitle}><Server size={14} /> Affected Assets</h4>
+        {alert.affected_assets && alert.affected_assets.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {alert.affected_assets.map(line => {
+              const [host, impact] = line.split(' — ');
+              return (
+                <div key={line} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline', background: 'var(--bg-workspace)', padding: '8px 12px', borderRadius: 6 }}>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{host}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{impact}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            No internal asset identified — {alert.destination_ip ? `destination ${alert.destination_ip} is outside the monitored network.` : 'no destination recorded.'}
+          </div>
+        )}
+      </div>
+
+      {/* Recommended actions */}
+      {alert.recommended_actions && alert.recommended_actions.length > 0 && (
+        <div>
+          <h4 style={sectionTitle}><ListChecks size={14} /> Recommended Actions</h4>
+          <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {alert.recommended_actions.map(line => {
+              const m = line.match(/^\[(Immediate|Next|Follow-up)\]\s*(.*?)(?:\s—\s(.*))?$/);
+              const priority = m?.[1] ?? 'Next';
+              const color = priority === 'Immediate' ? 'var(--color-critical)' : priority === 'Next' ? '#d97706' : 'var(--text-muted)';
+              return (
+                <li key={line} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: 'var(--bg-workspace)', padding: '8px 12px', borderRadius: 6 }}>
+                  <span style={{ fontSize: 9, fontWeight: 800, color, border: `1px solid ${color}`, borderRadius: 999, padding: '1px 6px', whiteSpace: 'nowrap', marginTop: 2 }}>{priority.toUpperCase()}</span>
+                  <span style={{ fontSize: 12.5, color: 'var(--text-primary)', lineHeight: 1.45 }}>
+                    {m?.[2] ?? line}
+                    {m?.[3] && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{m[3]}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      )}
+
       {/* Entity Context */}
       <div style={{ background: 'var(--bg-workspace)', borderRadius: 8, padding: 16 }}>
         <h4 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -98,8 +167,16 @@ export function AlertDetails({ alert, onAcknowledge, onResolve, onReopen, onUpda
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
               <span style={{ color: 'var(--text-secondary)' }}>Events</span>
-              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{alert.event_count}</span>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{alert.event_count.toLocaleString()}</span>
             </div>
+            {alert.activity_id && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Layers size={12} /> Aggregated</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }} title="Similar packets are grouped into one activity; further packets update this alert instead of creating new ones.">
+                  {alert.event_count.toLocaleString()} → 1 alert
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <div>
@@ -190,6 +267,15 @@ export function AlertDetails({ alert, onAcknowledge, onResolve, onReopen, onUpda
           </button>
         )}
 
+        {alert.activity_id && (
+          <button
+            onClick={() => navigate(`${alert.activity_id!.startsWith('HACT') ? '/historical-pcap' : '/live-monitoring'}?focus=${encodeURIComponent(alert.activity_id!)}`)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '10px', background: 'var(--bg-workspace)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          >
+            <Layers size={16} /> View grouped activity {alert.activity_id}
+          </button>
+        )}
+
         <button
           onClick={handleInvestigate}
           disabled={!alert.source_ip}
@@ -201,3 +287,8 @@ export function AlertDetails({ alert, onAcknowledge, onResolve, onReopen, onUpda
     </div>
   );
 }
+
+const sectionTitle: React.CSSProperties = {
+  fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px',
+  marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6,
+};

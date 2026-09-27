@@ -254,6 +254,7 @@ body {
   overflow-y: auto;
   padding: 24px;
   padding-top: calc(var(--topbar-height) + 24px);
+  padding-bottom: 96px; /* Provide extra space at the bottom for the floating chat button */
 }
 
 /* ═══ Typography Utilities ═══ */
@@ -423,4 +424,55 @@ body {
 ::placeholder {
   color: var(--text-muted);
   opacity: 1;
+}
+/* ═══ Deep-link focus (timeline → exact element) ═══ */
+@keyframes focus-flash {
+  0%   { box-shadow: inset 0 0 0 2px var(--primary); background: var(--primary-light); }
+  70%  { box-shadow: inset 0 0 0 2px var(--primary); background: var(--primary-light); }
+  100% { box-shadow: inset 0 0 0 0 transparent; background: transparent; }
+}
+.focus-flash { animation: focus-flash 2.4s ease-out both; }
+
+/* ═══ Live indicator — calm ring, not a flashing light ═══ */
+@keyframes live-ring {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  80%  { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+@keyframes live-sweep {
+  0%   { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
+.live-dot { position: relative; display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.live-dot::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; background: inherit;
+  animation: live-ring 2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+.live-sweep {
+  background: linear-gradient(90deg, transparent 0%, var(--live-accent, #10b981) 25%, transparent 50%, var(--live-accent, #10b981) 75%, transparent 100%);
+  background-size: 200% 100%;
+  animation: live-sweep 3.5s linear infinite;
+}
+
+/* ═══ Value changed (temporal state updates) ═══ */
+@keyframes value-up   { from { background: rgba(239, 68, 68, 0.16); } to { background: var(--bg-workspace); } }
+@keyframes value-down { from { background: rgba(16, 185, 129, 0.16); } to { background: var(--bg-workspace); } }
+.value-up   { animation: value-up 1.2s ease-out; }
+.value-down { animation: value-down 1.2s ease-out; }
+
+/* ═══ Guided tour ═══ */
+.tour-spotlight {
+  position: fixed; z-index: 2000; border-radius: 10px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55), 0 0 0 2px var(--primary);
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+}
+.tour-card {
+  position: fixed; z-index: 2001; width: 320px; max-width: calc(100vw - 32px);
+  background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-default);
+  border-radius: 12px; box-shadow: var(--shadow-lg); padding: 16px; animation: popover-in 0.2s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after, .live-sweep, .focus-flash, .value-up, .value-down { animation: none !important; }
+  .tour-spotlight { transition: none; }
 }

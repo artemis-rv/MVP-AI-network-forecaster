@@ -14,6 +14,7 @@ import type {
   Hypothesis,
   FinalAssessment,
 } from '@/types/forensic';
+import type { HypothesisValidation } from '@/lib/reportBuilder';
 
 const POLL_INTERVAL_MS = 600;
 
@@ -39,6 +40,8 @@ interface ForensicStore {
 
   // ── UI state ───────────────────────────────────────────────────────────────
   expandedHypothesisId:    string | null;
+  /** Analyst verdict per hypothesis id — the engine proposes, the analyst validates. */
+  validations:             Record<string, HypothesisValidation>;
 
   // ── Actions ────────────────────────────────────────────────────────────────
   /** Initiate forensic analysis for a completed historical job. */
@@ -51,6 +54,8 @@ interface ForensicStore {
   reset:           () => void;
   /** Toggle hypothesis expand/collapse. */
   toggleHypothesis:(id: string) => void;
+  /** Record (or clear with null) the analyst's validation of a hypothesis. */
+  validateHypothesis: (id: string, verdict: HypothesisValidation['verdict'] | null, note?: string) => void;
 }
 
 // Internal polling handle — isolated from any live/historical polling handles.
@@ -84,6 +89,7 @@ const _initialState = {
   isDemo:                  false,
   prototypeDisclaimer:     null,
   expandedHypothesisId:    null,
+  validations:             {} as Record<string, HypothesisValidation>,
 };
 
 export const useForensicStore = create<ForensicStore>((set, get) => ({
@@ -169,5 +175,14 @@ export const useForensicStore = create<ForensicStore>((set, get) => ({
     set(s => ({
       expandedHypothesisId: s.expandedHypothesisId === id ? null : id,
     }));
+  },
+
+  validateHypothesis: (id, verdict, note = '') => {
+    set(s => {
+      const next = { ...s.validations };
+      if (verdict === null) delete next[id];
+      else next[id] = { verdict, note: note.slice(0, 500), at: Date.now() };
+      return { validations: next };
+    });
   },
 }));

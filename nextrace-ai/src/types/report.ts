@@ -62,6 +62,14 @@ export interface ReportMetadata {
   capture_source?: string;
   /** Reports built in the browser from the current session / analysis state (not stored on the backend). */
   local?:          boolean;
+  /** Headline figures shown at the top of the report and PDF, taken from the analysed data. */
+  kpis?:           ReportKpi[];
+}
+
+export interface ReportKpi {
+  label: string;
+  value: string;
+  tone?: 'critical' | 'high' | 'neutral';
 }
 
 export interface Report {

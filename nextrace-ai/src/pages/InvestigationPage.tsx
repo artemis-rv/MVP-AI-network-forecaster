@@ -20,6 +20,8 @@ import { useLiveStore } from '@/store/liveStore';
 import { useAppStore } from '@/store/appStore';
 import { LiveEntityGraph } from '@/components/investigation/LiveEntityGraph';
 import { TimelinePanel } from '@/components/investigation/TimelinePanel';
+import { EntityBehaviour } from '@/components/activity/EntityBehaviour';
+import { activityHref } from '@/hooks/useFocusParam';
 import { RelatedActivityTable } from '@/components/investigation/RelatedActivityTable';
 import { ATTACK_STAGES, STAGE_COLORS } from '@/types/forecast';
 import type { InvestigationContext } from '@/types/investigation';
@@ -327,8 +329,17 @@ export function InvestigationPage() {
           {/* Stage overlay bar */}
           <AttackStageBar currentStage={stage} predictedStage={nextStage} isBenign={currentForecast?.is_benign ?? true} />
 
+          {/* What this entity did — every attempt/attack aggregated per activity, behind its single alert */}
+          <div data-tour="entity-behaviour" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', padding: '12px 14px', marginRight: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, gap: 8 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Behaviour of {entityIp}</h3>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Click a row to open the activity</span>
+            </div>
+            <EntityBehaviour ip={entityIp} activities={activities.filter(a => a.significant)} compact onSelect={id => navigate(activityHref(id))} />
+          </div>
+
           {/* Graph */}
-          <div style={{ flex: 1, minHeight: 500, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', overflow: 'hidden', position: 'relative', marginRight: 24 }}>
+          <div style={{ flex: 1, minHeight: 420, background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', overflow: 'hidden', position: 'relative', marginRight: 24 }}>
             <LiveEntityGraph
               nodes={liveNodes}
               edges={liveEdges}
