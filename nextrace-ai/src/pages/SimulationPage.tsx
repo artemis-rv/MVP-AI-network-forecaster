@@ -55,7 +55,7 @@ export function SimulationPage() {
   const bestCandidate = candidateEdges.length > 0 ? candidateEdges[0] : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0, paddingBottom: 40 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 10 }}>
       {/* ── Page Header ── */}
       <div style={{ paddingBottom: 14, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
@@ -175,10 +175,10 @@ export function SimulationPage() {
               <button
                 onClick={start}
                 style={{
-                  width: '100%', padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
+                  width: '100%', padding: '10px 0', borderRadius: 8, border: '1px solid var(--border-default)', cursor: 'pointer',
+                  background: 'var(--primary)',
                   color: 'white', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  boxShadow: '0 4px 12px rgba(99,102,241,0.35)',
+                  boxShadow: 'var(--shadow-sm)',
                 }}
               >
                 <Play size={14} /> Start Simulation (K={k})
@@ -321,7 +321,7 @@ export function SimulationPage() {
         </div>
 
         {/* Right Column: Tabbed Content View */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           {activeTab === 'topology' && (
             <>
               <SimplifiedWholeNetworkGraph onNodeClick={setSelectedNode} />
@@ -343,19 +343,18 @@ export function SimulationPage() {
                     if (!target || !source) return null;
 
                     return (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          <InfoRow label="Active Attacker Compromise" value={source.name} highlight />
-                          <InfoRow label="Target Entity Under Threat" value={`${target.name} (${target.ip})`} />
-                          <InfoRow label="Adversary Priority Risk Score" value={`${step.priority} / 100`} />
-                          <InfoRow label="Vulnerability / Exposure" value={target.vulnerabilities[0] || 'Unprotected Network Port'} highlight={target.vulnerabilities.length > 0} />
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          <InfoRow label="MITRE Attack Vector" value={`${step.technique} (Target Ports: ${target.ports})`} />
-                          <InfoRow label="Asset Criticality Level" value={target.criticality} highlight={target.criticality === 'Critical' || target.criticality === 'High'} />
-                          <InfoRow label="Network Reachability" value={`Reachable across ${source.zone} to ${target.zone}`} />
-                          <InfoRow label="Recommended Defensive Action" value={step.mitigation || target.vulnerabilities[0] ? `Patch ${target.vulnerabilities[0]} and apply firewall rule` : `Restrict ingress access on ${target.ports}`} />
-                        </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', rowGap: 16, columnGap: 24 }}>
+                        <InfoRow label="Active Attacker Compromise" value={source.name} highlight />
+                        <InfoRow label="MITRE Attack Vector" value={`${step.technique} (Target Ports: ${target.ports})`} />
+
+                        <InfoRow label="Target Entity Under Threat" value={`${target.name} (${target.ip})`} />
+                        <InfoRow label="Asset Criticality Level" value={target.criticality} highlight={target.criticality === 'Critical' || target.criticality === 'High'} />
+
+                        <InfoRow label="Adversary Priority Risk Score" value={`${step.priority} / 100`} />
+                        <InfoRow label="Network Reachability" value={`Reachable across ${source.zone} to ${target.zone}`} />
+
+                        <InfoRow label="Vulnerability / Exposure" value={target.vulnerabilities[0] || 'Unprotected Network Port'} highlight={target.vulnerabilities.length > 0} />
+                        <InfoRow label="Recommended Defensive Action" value={step.mitigation || target.vulnerabilities[0] ? `Patch ${target.vulnerabilities[0]} and apply firewall rule` : `Restrict ingress access on ${target.ports}`} />
                       </div>
                     );
                   })()}
@@ -371,9 +370,7 @@ export function SimulationPage() {
           )}
 
           {activeTab === 'mitre' && (
-            <div style={cardStyle}>
-              <MitreMappingView />
-            </div>
+            <MitreMappingView />
           )}
         </div>
       </div>

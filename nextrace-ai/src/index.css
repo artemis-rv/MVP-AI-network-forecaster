@@ -254,6 +254,7 @@ body {
   overflow-y: auto;
   padding: 24px;
   padding-top: calc(var(--topbar-height) + 24px);
+  padding-bottom: 96px; /* Provide extra space at the bottom for the floating chat button */
 }
 
 /* ═══ Typography Utilities ═══ */

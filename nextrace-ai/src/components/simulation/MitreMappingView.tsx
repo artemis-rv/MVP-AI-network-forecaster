@@ -3,7 +3,8 @@ import {
   Shield,
   Search,
   Layers,
-  BookOpen
+  BookOpen,
+  X
 } from 'lucide-react';
 import { useSimplifiedSimulatorStore } from '@/store/simplifiedSimulatorStore';
 
@@ -215,16 +216,17 @@ export function MitreMappingView() {
   const filteredTechniques = useMemo(() => {
     return allTechniques.filter(t => {
       const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            t.tactic.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            t.mitigation.toLowerCase().includes(searchTerm.toLowerCase());
+        t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.tactic.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.mitigation.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesTactic = selectedTactic === 'ALL' || t.tactic === selectedTactic;
       return matchesSearch && matchesTactic;
     });
   }, [allTechniques, searchTerm, selectedTactic]);
+  const [selectedTechnique, setSelectedTechnique] = useState<any | null>(null);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
       {/* Header Banner */}
       <div style={{
         background: 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(245,158,11,0.06))',
@@ -290,113 +292,114 @@ export function MitreMappingView() {
         <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Layers size={15} color="var(--primary)" /> Tactical Progression Matrix
         </div>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${MITRE_TACTICAL_COLUMNS.length}, minmax(170px, 1fr))`,
-          gap: 12,
-          overflowX: 'auto',
-          paddingBottom: 8,
-        }}>
-          {MITRE_TACTICAL_COLUMNS.map((col, idx) => (
-            <div
-              key={idx}
-              style={{
-                background: 'var(--bg-card)',
-                borderRadius: 10,
-                border: '1px solid var(--border-default)',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              {/* Column Header */}
-              <div style={{
-                background: 'var(--bg-workspace)',
-                padding: '10px 12px',
-                borderBottom: '1px solid var(--border-subtle)',
-                fontSize: 12,
-                fontWeight: 800,
-                color: 'var(--text-primary)',
-                textAlign: 'center',
-                letterSpacing: '-0.2px'
-              }}>
-                {col.tactic}
-              </div>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: 8 }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${MITRE_TACTICAL_COLUMNS.length}, minmax(210px, 1fr))`,
+            gap: 12,
+            minWidth: 'max-content',
+          }}>
+            {MITRE_TACTICAL_COLUMNS.map((col, idx) => (
+              <div
+                key={idx}
+                style={{
+                  background: 'var(--bg-card)',
+                  borderRadius: 10,
+                  border: '1px solid var(--border-default)',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {/* Column Header */}
+                <div style={{
+                  background: 'var(--bg-workspace)',
+                  padding: '10px 12px',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: 'var(--text-primary)',
+                  textAlign: 'center',
+                  letterSpacing: '-0.2px'
+                }}>
+                  {col.tactic}
+                </div>
 
-              {/* Column Techniques */}
-              <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-                {col.techniques.map((tech) => {
-                  const statusInfo = techniqueStatusMap.get(tech.id);
-                  const isExecuted = statusInfo?.status === 'executed';
-                  const isCandidate = statusInfo?.status === 'candidate';
-                  const isProjected = statusInfo?.status === 'projected';
+                {/* Column Techniques */}
+                <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                  {col.techniques.map((tech) => {
+                    const statusInfo = techniqueStatusMap.get(tech.id);
+                    const isExecuted = statusInfo?.status === 'executed';
+                    const isCandidate = statusInfo?.status === 'candidate';
+                    const isProjected = statusInfo?.status === 'projected';
 
-                  let border = 'var(--border-subtle)';
-                  let bg = 'var(--bg-workspace)';
-                  let titleColor = 'var(--text-primary)';
-                  let badge = null;
+                    let border = 'var(--border-subtle)';
+                    let bg = 'var(--bg-workspace)';
+                    let titleColor = 'var(--text-primary)';
+                    let badge = null;
 
-                  if (isExecuted) {
-                    border = '#dc2626';
-                    bg = '#fef2f2';
-                    titleColor = '#991b1b';
-                    badge = (
-                      <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 4, background: '#dc2626', color: 'white' }}>
-                        EXECUTED
-                      </span>
-                    );
-                  } else if (isCandidate) {
-                    border = '#f59e0b';
-                    bg = '#fffbeb';
-                    titleColor = '#92400e';
-                    badge = (
-                      <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 4, background: '#f59e0b', color: 'white' }}>
-                        NEXT TARGET
-                      </span>
-                    );
-                  } else if (isProjected) {
-                    border = '#8b5cf6';
-                    bg = '#f5f3ff';
-                    titleColor = '#6d28d9';
-                    badge = (
-                      <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 4, background: '#8b5cf6', color: 'white' }}>
-                        PROJECTED
-                      </span>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={tech.id}
-                      style={{
-                        background: bg,
-                        border: `1.5px solid ${border}`,
-                        borderRadius: 8,
-                        padding: '10px 10px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 4,
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--primary)', fontFamily: 'var(--font-mono)' }}>
-                          {tech.id}
+                    if (isExecuted) {
+                      border = '#dc2626';
+                      bg = '#fef2f2';
+                      titleColor = '#991b1b';
+                      badge = (
+                        <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 4, background: '#dc2626', color: 'white' }}>
+                          EXECUTED
                         </span>
-                        {badge}
+                      );
+                    } else if (isCandidate) {
+                      border = '#f59e0b';
+                      bg = '#fffbeb';
+                      titleColor = '#92400e';
+                      badge = (
+                        <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 4, background: '#f59e0b', color: 'white' }}>
+                          NEXT TARGET
+                        </span>
+                      );
+                    } else if (isProjected) {
+                      border = '#8b5cf6';
+                      bg = '#f5f3ff';
+                      titleColor = '#6d28d9';
+                      badge = (
+                        <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 4, background: '#8b5cf6', color: 'white' }}>
+                          PROJECTED
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={tech.id}
+                        style={{
+                          background: bg,
+                          border: `1.5px solid ${border}`,
+                          borderRadius: 8,
+                          padding: '10px 10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--primary)', fontFamily: 'var(--font-mono)' }}>
+                            {tech.id}
+                          </span>
+                          {badge}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: titleColor, lineHeight: 1.3 }}>
+                          {tech.name}
+                        </div>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                          Asset: {tech.defaultHost}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: titleColor, lineHeight: 1.3 }}>
-                        {tech.name}
-                      </div>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
-                        Asset: {tech.defaultHost}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
@@ -407,6 +410,7 @@ export function MitreMappingView() {
         border: '1px solid var(--border-default)',
         padding: 16,
         boxShadow: 'var(--shadow-sm)',
+        minWidth: 0,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -450,10 +454,10 @@ export function MitreMappingView() {
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 350, border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid var(--border-default)', background: 'var(--bg-workspace)', textAlign: 'left' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr style={{ background: 'var(--bg-workspace)', textAlign: 'left', boxShadow: '0 2px 0 var(--border-default)' }}>
                 <th style={{ padding: '10px 12px', fontWeight: 800, color: 'var(--text-secondary)' }}>ID</th>
                 <th style={{ padding: '10px 12px', fontWeight: 800, color: 'var(--text-secondary)' }}>Technique & Tactic</th>
                 <th style={{ padding: '10px 12px', fontWeight: 800, color: 'var(--text-secondary)' }}>Target Entity</th>
@@ -470,7 +474,11 @@ export function MitreMappingView() {
                 const isProjected = s?.status === 'projected';
 
                 return (
-                  <tr key={tech.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: isExecuted ? 'rgba(239,68,68,0.02)' : 'transparent' }}>
+                  <tr 
+                    key={tech.id} 
+                    onClick={() => setSelectedTechnique(tech)}
+                    style={{ borderBottom: '1px solid var(--border-subtle)', background: isExecuted ? 'rgba(239,68,68,0.02)' : 'transparent', cursor: 'pointer' }}
+                  >
                     <td style={{ padding: '12px 12px', fontFamily: 'var(--font-mono)', fontWeight: 800, color: 'var(--primary)' }}>
                       {tech.id}
                     </td>
@@ -513,6 +521,77 @@ export function MitreMappingView() {
           </table>
         </div>
       </div>
+
+      {/* ── Technique Details Modal ── */}
+      {selectedTechnique && (
+        <div 
+          onClick={() => setSelectedTechnique(null)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+            zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24
+          }}
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-card)', width: '100%', maxWidth: 600,
+              borderRadius: 12, border: '1px solid var(--border-default)',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+              display: 'flex', flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+          >
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-workspace)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ padding: '4px 8px', background: 'rgba(99,102,241,0.1)', color: 'var(--primary)', borderRadius: 6, fontWeight: 800, fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                  {selectedTechnique.id}
+                </div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{selectedTechnique.name}</h3>
+                {(() => {
+                  const s = selectedTechnique.statusInfo;
+                  const isExecuted = s?.status === 'executed';
+                  const isCandidate = s?.status === 'candidate';
+                  const isProjected = s?.status === 'projected';
+                  
+                  if (isExecuted) {
+                    return <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 999, background: '#fee2e2', color: '#dc2626' }}>✓ EXECUTED</span>;
+                  } else if (isCandidate) {
+                    return <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 999, background: '#fef3c7', color: '#d97706' }}>⚡ NEXT TARGET</span>;
+                  } else if (isProjected) {
+                    return <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 999, background: '#ede9fe', color: '#6d28d9' }}>🔮 PROJECTED</span>;
+                  } else {
+                    return <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: 'var(--border-default)', color: 'var(--text-muted)' }}>MONITORED</span>;
+                  }
+                })()}
+              </div>
+              <button onClick={() => setSelectedTechnique(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', maxHeight: '70vh' }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>Description</div>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{selectedTechnique.description}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>Target Asset Type</div>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{selectedTechnique.defaultHost}</div>
+              </div>
+              <div style={{ background: 'rgba(245,158,11,0.05)', padding: 14, borderRadius: 8, border: '1px solid rgba(245,158,11,0.2)' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#d97706', textTransform: 'uppercase', marginBottom: 6 }}>Detection Telemetry</div>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{selectedTechnique.detection}</div>
+              </div>
+              <div style={{ background: 'rgba(16,185,129,0.05)', padding: 14, borderRadius: 8, border: '1px solid rgba(16,185,129,0.2)' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#059669', textTransform: 'uppercase', marginBottom: 6 }}>SOC Playbook Mitigation</div>
+                <div style={{ fontSize: 13, color: '#047857', fontWeight: 600, lineHeight: 1.5 }}>{selectedTechnique.mitigation}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
