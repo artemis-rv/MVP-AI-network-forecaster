@@ -83,14 +83,18 @@ export function receiveAlert(alert: Alert): boolean {
   useAlertStore.setState({ alerts: [alert, ...store.alerts], totalAlerts: store.totalAlerts + 1 });
   const app = useAppStore.getState();
   app.addAlertNotification(alert);
-  // The popup names the affected asset (the thing the analyst must protect), not only the attacker.
   const assets = alert.affected_assets ?? [];
   const asset = assets[0]?.split(' — ')[0];
   const more = assets.length > 1 ? ` +${assets.length - 1} more` : '';
-  app.addToast(
-    `${alert.title} · ${alert.source_ip ?? '?'} → ${alert.destination_ip ?? '?'}${asset ? ` · affects ${asset}${more}` : ''} · ${alert.severity}`,
-    toastType(alert.severity),
-  );
+  
+  // Only show intrusive toast popups for CRITICAL alerts
+  if (alert.severity === 'CRITICAL') {
+    app.addToast(
+      `${alert.title} · ${alert.source_ip ?? '?'} → ${alert.destination_ip ?? '?'}${asset ? ` · affects ${asset}${more}` : ''} · ${alert.severity}`,
+      toastType(alert.severity),
+    );
+  }
+  
   lastSynced.set(alert.id, Date.now());
   assetCount.set(alert.id, alert.affected_assets?.length ?? 0);
   store.fetchStats();

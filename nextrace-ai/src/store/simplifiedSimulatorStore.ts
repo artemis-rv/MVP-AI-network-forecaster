@@ -337,7 +337,8 @@ function computeCandidates(
     if (uncompromised.length > 0) {
       uncompromised.sort((a, b) => calculatePriority(b) - calculatePriority(a));
       const targetNode = uncompromised[0];
-      const sourceNode = snapshotNodes.find(n => compromised.has(n.id)) || snapshotNodes[0];
+      const latestCompId = Array.from(compromised).pop();
+      const sourceNode = snapshotNodes.find(n => n.id === latestCompId) || snapshotNodes.find(n => compromised.has(n.id)) || snapshotNodes[0];
       const mitre = getMitreDetails(targetNode, sourceNode);
       const priority = calculatePriority(targetNode);
       const confidence = Math.max(65, 92 - stepIndex * 6);
@@ -429,11 +430,6 @@ interface SimplifiedSimulatorStore {
 let _autoPlayInterval: any = null;
 
 export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set, get) => {
-  // Initial state setup with default enterprise topology
-  const defaultCompromised = new Set<string>(['198.51.100.44', '10.0.0.1']);
-  const initialCandidates = computeCandidates(defaultCompromised, DEFAULT_ENTERPRISE_NODES, DEFAULT_ENTERPRISE_EDGES, 0);
-  const initialPlan = computeProjectedPlan(5, defaultCompromised, DEFAULT_ENTERPRISE_NODES, DEFAULT_ENTERPRISE_EDGES);
-
   return {
     k: 5,
     setK: (k: number) => {
@@ -445,29 +441,15 @@ export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set
     currentStep: 0,
     isPlaying: false,
 
-    snapshotNodes: DEFAULT_ENTERPRISE_NODES,
-    snapshotEdges: DEFAULT_ENTERPRISE_EDGES,
-    snapshotTime: new Date().toLocaleTimeString(),
+    snapshotNodes: [],
+    snapshotEdges: [],
+    snapshotTime: null,
 
-    compromisedNodes: defaultCompromised,
-    latestCompromisedId: '10.0.0.1',
-    attackChain: [
-      {
-        step: 0,
-        sourceId: '198.51.100.44',
-        targetId: '10.0.0.1',
-        techniqueId: 'T1190',
-        technique: 'T1190: Exploit Public-Facing Application',
-        tactic: 'Initial Access',
-        priority: 75,
-        confidence: 98,
-        timeWindow: 'T+0s',
-        reason: 'Observed perimeter probe against Fortinet edge gateway',
-        mitigation: 'Restrict gateway admin interfaces to internal management VPN',
-      }
-    ],
-    candidateEdges: initialCandidates,
-    projectedPlan: initialPlan,
+    compromisedNodes: new Set<string>(),
+    latestCompromisedId: null,
+    attackChain: [],
+    candidateEdges: [],
+    projectedPlan: [],
 
     captureSnapshot: () => {
       const liveNodes = useLiveStore.getState().liveNodes;
@@ -520,19 +502,14 @@ export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set
           };
         });
 
-        // Combine live nodes and ensure default crown jewels are preserved
+        // Use only live nodes
         snapshotNodes = liveEnriched;
-        DEFAULT_ENTERPRISE_NODES.forEach(dn => {
-          if (!snapshotNodes.some(sn => sn.ip === dn.ip)) {
-            snapshotNodes.push(dn);
-          }
-        });
 
-        // Merge live edges with default reachability edges
-        const mergedEdges: TopologyEdge[] = [...DEFAULT_ENTERPRISE_EDGES];
+        // Use only live edges
+        const liveEdgesEnriched: TopologyEdge[] = [];
         liveEdges.forEach(le => {
-          if (!mergedEdges.some(me => (me.source === le.from && me.target === le.to))) {
-            mergedEdges.push({
+          if (!liveEdgesEnriched.some(me => (me.source === le.from && me.target === le.to))) {
+            liveEdgesEnriched.push({
               id: le.id || `live-${le.from}-${le.to}`,
               source: le.from,
               target: le.to,
@@ -541,7 +518,7 @@ export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set
             });
           }
         });
-        snapshotEdges = mergedEdges;
+        snapshotEdges = liveEdgesEnriched;
       }
 
       const initialCompromised = new Set<string>();
@@ -556,7 +533,7 @@ export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set
         }
       });
 
-      if (!latestVictim) {
+      if (!latestVictim && snapshotNodes.length > 0) {
         const susp = snapshotNodes.find(n => n.category === 'suspicious') || snapshotNodes[0];
         initialCompromised.add(susp.id);
         latestVictim = susp.id;
@@ -566,8 +543,8 @@ export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set
       const plan = computeProjectedPlan(get().k, initialCompromised, snapshotNodes, snapshotEdges);
 
       const sourceNode = snapshotNodes.find(n => initialCompromised.has(n.id)) || snapshotNodes[0];
-      const targetNode = snapshotNodes.find(n => n.id === latestVictim) || snapshotNodes[1];
-      const mitre = getMitreDetails(targetNode, sourceNode);
+      const targetNode = snapshotNodes.find(n => n.id === latestVictim) || (snapshotNodes.length > 1 ? snapshotNodes[1] : snapshotNodes[0]);
+      const mitre = (targetNode && sourceNode) ? getMitreDetails(targetNode, sourceNode) : null;
 
       set({
         status: 'idle',
@@ -576,7 +553,7 @@ export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set
         snapshotEdges,
         snapshotTime: new Date().toLocaleTimeString(),
         compromisedNodes: initialCompromised,
-        attackChain: [
+        attackChain: sourceNode && targetNode && mitre ? [
           {
             step: 0,
             sourceId: sourceNode.id,
@@ -590,7 +567,7 @@ export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set
             reason: getReason(targetNode),
             mitigation: mitre.mitigation,
           }
-        ],
+        ] : [],
         latestCompromisedId: latestVictim,
         candidateEdges: candidates,
         projectedPlan: plan,
@@ -599,9 +576,7 @@ export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set
 
     start: () => {
       const state = get();
-      if (state.snapshotNodes.length === 0) {
-        state.captureSnapshot();
-      }
+      state.captureSnapshot();
       set({ status: 'running' });
     },
 
@@ -611,31 +586,51 @@ export const useSimplifiedSimulatorStore = create<SimplifiedSimulatorStore>((set
         _autoPlayInterval = null;
       }
       const { snapshotNodes, snapshotEdges, k } = get();
-      const defaultCompromised = new Set<string>(['198.51.100.44', '10.0.0.1']);
+      const defaultCompromised = new Set<string>();
+      let latestVictim: string | null = null;
+      
+      snapshotEdges.forEach(e => {
+        if (e.isObservedAttack) {
+          defaultCompromised.add(e.source);
+          defaultCompromised.add(e.target);
+          latestVictim = e.target;
+        }
+      });
+
+      if (!latestVictim && snapshotNodes.length > 0) {
+        const susp = snapshotNodes.find(n => n.category === 'suspicious') || snapshotNodes[0];
+        defaultCompromised.add(susp.id);
+        latestVictim = susp.id;
+      }
+
       const candidates = computeCandidates(defaultCompromised, snapshotNodes, snapshotEdges, 0);
       const plan = computeProjectedPlan(k, defaultCompromised, snapshotNodes, snapshotEdges);
+
+      const sourceNode = snapshotNodes.find(n => defaultCompromised.has(n.id)) || snapshotNodes[0];
+      const targetNode = snapshotNodes.find(n => n.id === latestVictim) || (snapshotNodes.length > 1 ? snapshotNodes[1] : snapshotNodes[0]);
+      const mitre = (targetNode && sourceNode) ? getMitreDetails(targetNode, sourceNode) : null;
 
       set({
         status: 'idle',
         currentStep: 0,
         isPlaying: false,
         compromisedNodes: defaultCompromised,
-        attackChain: [
+        attackChain: sourceNode && targetNode && mitre ? [
           {
             step: 0,
-            sourceId: '198.51.100.44',
-            targetId: '10.0.0.1',
-            techniqueId: 'T1190',
-            technique: 'T1190: Exploit Public-Facing Application',
-            tactic: 'Initial Access',
-            priority: 75,
+            sourceId: sourceNode.id,
+            targetId: targetNode.id,
+            techniqueId: mitre.id,
+            technique: `${mitre.id}: ${mitre.name}`,
+            tactic: mitre.tactic,
+            priority: calculatePriority(targetNode),
             confidence: 98,
             timeWindow: 'T+0s',
-            reason: 'Observed perimeter probe against Fortinet edge gateway',
-            mitigation: 'Restrict gateway admin interfaces to internal management VPN',
+            reason: getReason(targetNode),
+            mitigation: mitre.mitigation,
           }
-        ],
-        latestCompromisedId: '10.0.0.1',
+        ] : [],
+        latestCompromisedId: latestVictim,
         candidateEdges: candidates,
         projectedPlan: plan,
       });

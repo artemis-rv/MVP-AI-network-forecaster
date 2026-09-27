@@ -257,10 +257,10 @@ export function SimulationPage() {
                     <div style={{ background: 'var(--bg-workspace)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Predicted Next Target</div>
                       <div style={{ fontWeight: 800, fontSize: 13, marginTop: 2 }}>
-                        {sourceNode?.name} → <span style={{ color: '#d97706' }}>{targetNode?.name}</span>
+                        {sourceNode?.name} ({sourceNode?.ip}) → <span style={{ color: '#d97706' }}>{targetNode?.name} ({targetNode?.ip})</span>
                       </div>
                       <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginTop: 2 }}>
-                        {targetNode?.ip} ({targetNode?.role})
+                        Target Role: {targetNode?.role}
                       </div>
                     </div>
 

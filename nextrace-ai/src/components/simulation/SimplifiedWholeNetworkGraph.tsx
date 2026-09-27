@@ -38,7 +38,7 @@ function EnterpriseNodeComponent({ data }: NodeProps) {
           text: 'var(--text-primary)',
           badgeBg: '#fee2e2',
           badgeText: '#b91c1c',
-          badgeLabel: '💥 COMPROMISED',
+          badgeLabel: node.category === 'suspicious' ? '⚠️ SUSPICIOUS' : '💥 COMPROMISED',
           glow: '0 0 8px rgba(239,68,68,0.25)',
         };
       case 'candidate':
