@@ -120,10 +120,10 @@ export function HistoricalAnalysisPage() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             {view !== 'upload' && (
-              <button 
-                onClick={clearJob} 
-                style={{ 
-                  marginTop: 2, padding: 6, borderRadius: 8, background: 'var(--bg-card)', 
+              <button
+                onClick={clearJob}
+                style={{
+                  marginTop: 2, padding: 6, borderRadius: 8, background: 'var(--bg-card)',
                   border: '1px solid var(--border-default)', color: 'var(--text-secondary)',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}
@@ -175,13 +175,13 @@ export function HistoricalAnalysisPage() {
                   >
                     <FileText size={12} /> Generate Report
                   </button>
-                  <button 
-                    onClick={clearJob} 
+                  <button
+                    onClick={clearJob}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6,
                       fontSize: 12, fontWeight: 600, padding: '7px 16px', borderRadius: 8,
-                      background: 'var(--bg-card)', color: 'var(--text-primary)', 
-                      border: '1px solid var(--border-default)', cursor: 'pointer', 
+                      background: 'var(--bg-card)', color: 'var(--text-primary)',
+                      border: '1px solid var(--border-default)', cursor: 'pointer',
                       transition: 'all 0.15s', boxShadow: 'var(--shadow-sm)'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-workspace)'}
@@ -222,7 +222,7 @@ function UploadView({ onUpload, onDemo }: { onUpload: (f: File) => void; onDemo:
     if (!['pcap', 'pcapng', 'cap', 'gz', 'dmp'].includes(ext ?? ''))
       return `Unsupported format: .${ext}. Accepted: .pcap, .pcapng, .cap, .gz, .dmp`;
     if (file.size === 0) return 'File is empty.';
-    if (file.size > 50 * 1024 * 1024) return 'File too large (max 50 MB).';
+    if (file.size > 100 * 1024 * 1024) return 'File too large (max 100 MB).';
     return null;
   }
 
@@ -275,7 +275,7 @@ function UploadView({ onUpload, onDemo }: { onUpload: (f: File) => void; onDemo:
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
               Drop a PCAP file here or click to browse
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Supported: .pcap, .pcapng, .cap, .gz, .dmp · Max 50 MB</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Supported: .pcap, .pcapng, .cap, .gz, .dmp · Max 100 MB</div>
           </>
         )}
       </div>
@@ -452,13 +452,13 @@ function ResultView({ result, jobId, filename, isDemo }: {
   const [handledFocus, setHandledFocus] = useState<string | null>(null);
   if (focus && focus.key !== handledFocus && activities.some(a => a.id === focus.id)) {
     setHandledFocus(focus.key);
-    setTab('activities');
+    setTab('entities');
     setHighlight(focus);
     setInspectId(focus.id);
   }
 
   function locate(id: string) {
-    setTab('activities');
+    setTab('entities');
     setHighlight({ id, key: Date.now() });
   }
 
@@ -501,8 +501,7 @@ function ResultView({ result, jobId, filename, isDemo }: {
             onChange={setTab}
             tabs={[
               { id: 'overview', label: 'Overview' },
-              { id: 'activities', label: 'Activities', count: activities.length },
-              { id: 'entities', label: 'Entities', count: entities.length },
+              { id: 'entities', label: 'Entities & Activities', count: entities.length },
               { id: 'timeline', label: 'Timeline' },
               { id: 'relationships', label: 'Relationships', count: suspiciousPairs },
               { id: 'evidence', label: 'Evidence & Limits' },
@@ -562,20 +561,17 @@ function ResultView({ result, jobId, filename, isDemo }: {
             )
           )}
 
-          {tab === 'activities' && (
-            <ActivityList activities={activities} onSelect={a => setInspectId(a.id)} maxHeight={460} highlight={highlight}
-              emptyText="No suspicious activity detected in this capture." />
-          )}
-
           {tab === 'entities' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 16 }}>
-              <EntityRiskTable entities={entities} selectedIp={selectedEntity} onSelect={setEntityIp} />
-              <div>
-                <div style={subHeading}>What {selectedEntity ?? 'this entity'} did</div>
-                {selectedEntity
-                  ? <EntityBehaviour ip={selectedEntity} activities={activities} onSelect={id => setInspectId(id)} alertsApplicable={false} />
-                  : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No suspicious entities detected.</div>}
-              </div>
+            <div style={{ height: 500 }}>
+              <EntityRiskTable
+                entities={entities}
+                selectedIp={selectedEntity}
+                onSelect={ip => {
+                  setEntityIp(ip);
+                  const act = activities.find(a => a.sources.includes(ip) || a.targets.includes(ip));
+                  if (act) setInspectId(act.id);
+                }}
+              />
             </div>
           )}
 
@@ -585,7 +581,19 @@ function ResultView({ result, jobId, filename, isDemo }: {
                 emptyText="No major suspicious events in this capture." />
               <div>
                 <div style={subHeading}>Traffic volume per {result.window_seconds}s window</div>
-                <TrafficTimelineChart windows={result.temporal_windows} events={result.suspicious_events} />
+                <TrafficTimelineChart
+                  windows={result.temporal_windows}
+                  events={result.suspicious_events}
+                  onClick={(ts) => {
+                    const windowEnd = ts + result.window_seconds;
+                    const clickedActivity = activities.find(a =>
+                      a.milestones.some(m => m.ts >= ts && m.ts <= windowEnd)
+                    );
+                    if (clickedActivity) {
+                      setInspectId(clickedActivity.id);
+                    }
+                  }}
+                />
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.6 }}>
                   Normal traffic: {result.packet_count.toLocaleString()} packets over {result.temporal_windows.length} windows ·
                   protocol mix {result.protocol_distribution.map(pr => `${pr.protocol} ${Math.round((pr.count / protoTotal) * 100)}%`).join(', ')} ·
@@ -598,7 +606,7 @@ function ResultView({ result, jobId, filename, isDemo }: {
           {tab === 'relationships' && (
             <div style={{ height: 440, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
               <ReactFlowProvider>
-                <HistoricalNetworkGraph relationships={result.entity_relationships} />
+                <HistoricalNetworkGraph relationships={result.entity_relationships.filter(r => r.is_suspicious)} />
               </ReactFlowProvider>
             </div>
           )}
@@ -652,8 +660,9 @@ function ResultView({ result, jobId, filename, isDemo }: {
 // CHARTS & DATA COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function TrafficTimelineChart({ windows, events }: { windows: TemporalWindow[]; events: SuspiciousEvent[] }) {
+function TrafficTimelineChart({ windows, events, onClick }: { windows: TemporalWindow[]; events: SuspiciousEvent[]; onClick?: (ts: number) => void }) {
   const data = windows.map(w => ({
+    ts: w.window_start,
     t: tsToTime(w.window_start),
     packets: w.packet_count,
     flows: w.flow_count,
@@ -662,7 +671,11 @@ function TrafficTimelineChart({ windows, events }: { windows: TemporalWindow[]; 
 
   return (
     <ResponsiveContainer width="100%" height={180}>
-      <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }} onClick={(e) => {
+        if (e && e.activePayload && e.activePayload.length > 0 && onClick) {
+          onClick(e.activePayload[0].payload.ts);
+        }
+      }} style={{ cursor: onClick ? 'pointer' : 'default' }}>
         <defs>
           <linearGradient id="grad-pkt" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
@@ -690,34 +703,54 @@ function TrafficTimelineChart({ windows, events }: { windows: TemporalWindow[]; 
 }
 
 function EntityRiskTable({ entities, selectedIp, onSelect }: { entities: DashboardEntity[]; selectedIp: string | null; onSelect: (ip: string) => void }) {
+  const [search, setSearch] = useState('');
+
   if (entities.length === 0) {
     return <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '20px 0' }}>No suspicious entities detected.</div>;
   }
+
+  const filtered = search ? entities.filter(e => e.ip.toLowerCase().includes(search.toLowerCase())) : entities;
+
   return (
-    <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-        <thead style={{ position: 'sticky', top: 0 }}>
-          <tr style={{ background: 'var(--bg-workspace)' }}>
-            {['Entity', 'Risk', 'Status', 'Activities'].map(c => (
-              <th key={c} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {entities.map(e => (
-            <tr key={e.ip} onClick={() => onSelect(e.ip)} aria-selected={selectedIp === e.ip}
-              style={{ borderTop: '1px solid var(--border-subtle)', cursor: 'pointer', background: selectedIp === e.ip ? 'var(--primary-light)' : 'transparent' }}>
-              <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{e.ip}</td>
-              <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                <span style={{ fontWeight: 800, color: e.riskLevel === 'High' ? '#b91c1c' : e.riskLevel === 'Medium' ? '#b45309' : '#047857' }}>{e.riskLevel}</span>
-                <span style={{ marginLeft: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{e.riskScore}</span>
-              </td>
-              <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{e.status}</td>
-              <td style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontSize: 11 }}>{e.reasons.join('; ')}</td>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ marginBottom: 10, position: 'relative' }}>
+        <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+        <input
+          type="text"
+          placeholder="Search by IP address..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ width: '100%', padding: '6px 12px 6px 30px', fontSize: 12, border: '1px solid var(--border-default)', borderRadius: 4, background: 'var(--bg-workspace)', color: 'var(--text-primary)', outline: 'none' }}
+        />
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+            <tr style={{ background: 'var(--bg-workspace)' }}>
+              {['Entity', 'Risk', 'Status', 'Activities'].map(c => (
+                <th key={c} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{c}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {filtered.map(e => (
+              <tr key={e.ip} onClick={() => onSelect(e.ip)} aria-selected={selectedIp === e.ip}
+                style={{ borderTop: '1px solid var(--border-subtle)', cursor: 'pointer', background: selectedIp === e.ip ? 'var(--primary-light)' : 'transparent' }}>
+                <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{e.ip}</td>
+                <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontWeight: 800, color: e.riskLevel === 'High' ? '#b91c1c' : e.riskLevel === 'Medium' ? '#b45309' : '#047857' }}>{e.riskLevel}</span>
+                  <span style={{ marginLeft: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{e.riskScore}</span>
+                </td>
+                <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{e.status}</td>
+                <td style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontSize: 11 }}>{e.reasons.join('; ')}</td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>No IP matches your search.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,8 @@ interface HistNodeData {
   isSrc: boolean;
   isDst: boolean;
   isSuspicious: boolean;
+  isAttacker: boolean;
+  isVictim: boolean;
   packetCount: number;
   byteCount: number;
   protocols: string[];
@@ -37,41 +39,47 @@ function formatBytes(b: number): string {
 function HistIpNode({ data, selected }: { data: Record<string, unknown>; selected?: boolean }) {
   const d = data as unknown as HistNodeData;
   
-  const borderColor = d.isSuspicious
-    ? '#ef4444'
-    : d.isSrc && d.isDst
-      ? '#8b5cf6'
-      : d.isSrc
-        ? '#6366f1'
-        : '#06b6d4';
+  const borderColor = d.isAttacker
+    ? '#ef4444' // Red for attacker
+    : d.isVictim
+      ? '#eab308' // Yellow for victim
+      : d.isSrc && d.isDst
+        ? '#8b5cf6'
+        : d.isSrc
+          ? '#6366f1'
+          : '#06b6d4';
 
-  const badgeBg = d.isSuspicious
+  const badgeBg = d.isAttacker
     ? '#fee2e2'
-    : d.isSrc && d.isDst
-      ? '#ede9fe'
-      : d.isSrc
-        ? '#e0e7ff'
-        : '#cffafe';
+    : d.isVictim
+      ? '#fef9c3'
+      : d.isSrc && d.isDst
+        ? '#ede9fe'
+        : d.isSrc
+          ? '#e0e7ff'
+          : '#cffafe';
 
-  const badgeText = d.isSuspicious
+  const badgeText = d.isAttacker
     ? '#991b1b'
-    : d.isSrc && d.isDst
-      ? '#5b21b6'
-      : d.isSrc
-        ? '#3730a3'
-        : '#155e75';
+    : d.isVictim
+      ? '#854d0e'
+      : d.isSrc && d.isDst
+        ? '#5b21b6'
+        : d.isSrc
+          ? '#3730a3'
+          : '#155e75';
 
   return (
     <div
       style={{
-        background: d.isSuspicious ? '#fff5f5' : 'var(--bg-card)',
+        background: d.isAttacker ? '#fff5f5' : d.isVictim ? '#fefce8' : 'var(--bg-card)',
         border: `2px solid ${selected ? '#2563eb' : borderColor}`,
         borderRadius: 12,
         padding: '10px 14px',
         minWidth: 150,
         boxShadow: selected
           ? `0 0 0 3px rgba(37,99,235,0.3), 0 4px 14px rgba(0,0,0,0.12)`
-          : d.isSuspicious
+          : d.isAttacker || d.isVictim
             ? `0 0 14px ${borderColor}35`
             : '0 2px 10px rgba(0,0,0,0.06)',
         position: 'relative',
@@ -165,6 +173,8 @@ function _layoutNodes(relationships: EntityRelationship[]): Node[] {
     isSrc: boolean;
     isDst: boolean;
     isSuspicious: boolean;
+    isAttacker: boolean;
+    isVictim: boolean;
     packetCount: number;
     byteCount: number;
     protocols: Set<string>;
@@ -175,7 +185,7 @@ function _layoutNodes(relationships: EntityRelationship[]): Node[] {
   for (const rel of relationships) {
     // Source host
     const s = ipMeta.get(rel.src_ip) ?? {
-      isSrc: false, isDst: false, isSuspicious: false,
+      isSrc: false, isDst: false, isSuspicious: false, isAttacker: false, isVictim: false,
       packetCount: 0, byteCount: 0,
       protocols: new Set(), ports: new Set(), peers: new Set(),
     };
@@ -185,12 +195,15 @@ function _layoutNodes(relationships: EntityRelationship[]): Node[] {
     rel.protocols.forEach(p => s.protocols.add(p));
     rel.ports.forEach(p => s.ports.add(p));
     s.peers.add(rel.dst_ip);
-    if (rel.is_suspicious) s.isSuspicious = true;
+    if (rel.is_suspicious) {
+      s.isSuspicious = true;
+      s.isAttacker = true;
+    }
     ipMeta.set(rel.src_ip, s);
 
     // Destination host
     const d = ipMeta.get(rel.dst_ip) ?? {
-      isSrc: false, isDst: false, isSuspicious: false,
+      isSrc: false, isDst: false, isSuspicious: false, isAttacker: false, isVictim: false,
       packetCount: 0, byteCount: 0,
       protocols: new Set(), ports: new Set(), peers: new Set(),
     };
@@ -200,7 +213,10 @@ function _layoutNodes(relationships: EntityRelationship[]): Node[] {
     rel.protocols.forEach(p => d.protocols.add(p));
     rel.ports.forEach(p => d.ports.add(p));
     d.peers.add(rel.src_ip);
-    if (rel.is_suspicious) d.isSuspicious = true;
+    if (rel.is_suspicious) {
+      d.isSuspicious = true;
+      d.isVictim = true;
+    }
     ipMeta.set(rel.dst_ip, d);
   }
 
@@ -243,6 +259,8 @@ function _layoutNodes(relationships: EntityRelationship[]): Node[] {
           isSrc:        meta.isSrc,
           isDst:        meta.isDst,
           isSuspicious: meta.isSuspicious,
+          isAttacker:   meta.isAttacker,
+          isVictim:     meta.isVictim,
           packetCount:  meta.packetCount,
           byteCount:    meta.byteCount,
           protocols:    Array.from(meta.protocols),

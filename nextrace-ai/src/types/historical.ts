@@ -87,6 +87,8 @@ export interface SuspiciousEvent {
   protocol: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   reason: string;
+  bytes?: number;
+  payload_info?: string;
   demo_label: string;
 }
 

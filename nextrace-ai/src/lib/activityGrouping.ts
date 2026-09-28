@@ -178,6 +178,8 @@ export function fromSuspiciousEvent(e: SuspiciousEvent): ActivityInput {
     hintType: e.type,
     hintSeverity: e.severity.toUpperCase() as AlertSeverity,
     hintReason: e.reason,
+    bytes: e.bytes,
+    info: e.payload_info,
   };
 }
 

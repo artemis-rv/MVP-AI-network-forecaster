@@ -26,6 +26,7 @@ class HeuristicConfig:
     LARGE_TRANSFER_BYTES     = 250_000 # bytes per flow → exfiltration indicator
     DOS_PACKET_RATE          = 80    # packets/second in a window → DoS indicator
     DNS_ANOMALY_QUERY_COUNT  = 30    # DNS queries in a window
+    SAFE_INTERNAL_PORTS      = {53, 123, 88, 389}  # DNS, NTP, Kerberos, LDAP (to prevent false positive alerts)
 
 
 AUTH_PORTS = {21, 22, 23, 25, 110, 143, 445, 1433, 1521, 3306, 3389, 5432, 5900, 6379, 27017}
@@ -137,7 +138,8 @@ def _detect_suspicious_activity(
     seen_ids: set[str] = set()
 
     def _add_event(etype: str, ts: float, src: str, dst: str, proto: str,
-                   severity: str, reason: str, port: int = 0) -> None:
+                   severity: str, reason: str, port: int = 0,
+                   bytes_count: int | None = None, payload_info: str | None = None) -> None:
         eid = f"{etype}:{src}:{dst}:{port}:{int(ts)}"
         if eid in seen_ids:
             return
@@ -152,6 +154,8 @@ def _detect_suspicious_activity(
             "protocol":   proto,
             "severity":   severity,
             "reason":     reason,
+            "bytes":      bytes_count,
+            "payload_info": payload_info,
             "demo_label": "Suspicious Activity Indicator",
         })
 
@@ -166,6 +170,21 @@ def _detect_suspicious_activity(
         d = pkt["dst_ip"]
         p = pkt["dst_port"]
         ts = pkt["timestamp"]
+        
+        # Only count connection initiations (TCP SYN without ACK) or UDP for port scanning
+        if pkt["protocol"] == "TCP":
+            flags = pkt.get("flags", "")
+            if "S" not in flags or "A" in flags:
+                continue
+        elif pkt["protocol"] == "UDP":
+            # Ignore UDP return traffic (from standard server ports, or to ephemeral ports)
+            if pkt.get("src_port", 0) in (53, 443, 80, 123) or p >= 1024:
+                continue
+                
+        # Ignore safe internal infrastructure ports to avoid false positives (e.g. heavy DNS polling)
+        if p in HeuristicConfig.SAFE_INTERNAL_PORTS:
+            continue
+            
         if s not in src_first_ts or ts < src_first_ts[s]:
             src_first_ts[s] = ts
         if p > 0:
@@ -181,15 +200,25 @@ def _detect_suspicious_activity(
                 "port_scan_indicator", src_first_ts.get(src_ip, 0.0), src_ip, dst_ip, "TCP",
                 "high",
                 f"Vertical Port Scan: {len(ports)} distinct ports probed on {dst_ip} from {src_ip}.",
+                payload_info="[SYN] Seq=0",
             )
+
+    import ipaddress
+    def _is_private_ip(ip_str: str) -> bool:
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            return ip.is_private and not ip.is_multicast
+        except ValueError:
+            return False
 
     # Horizontal Sweep / Subnet Sweep
     for src_ip, dsts in src_all_dsts.items():
-        if len(dsts) >= HeuristicConfig.PORT_SCAN_HORIZONTAL_IPS and len(src_all_ports.get(src_ip, set())) >= 2:
+        internal_dsts = [d for d in dsts if _is_private_ip(d)]
+        if len(internal_dsts) >= HeuristicConfig.PORT_SCAN_HORIZONTAL_IPS and len(src_all_ports.get(src_ip, set())) >= 2:
             _add_event(
                 "port_scan_indicator", src_first_ts.get(src_ip, 0.0), src_ip, "multiple_targets", "TCP",
                 "medium",
-                f"Network Sweep: {len(dsts)} distinct destination hosts probed by {src_ip}.",
+                f"Network Sweep: {len(internal_dsts)} distinct internal hosts probed by {src_ip}.",
             )
 
     # Stealth Flag Scans (NULL, Xmas, FIN-only scans)
@@ -212,7 +241,7 @@ def _detect_suspicious_activity(
                 "port_scan_indicator", stealth_first.get((s, d, p), 0.0), s, d, "TCP",
                 "high",
                 f"Stealth TCP Scan: {cnt} abnormal flag probes (NULL/Xmas/FIN) to {d}:{p} from {s}.",
-                port=p,
+                port=p, payload_info="[FPU, URG, PSH, FIN]"
             )
 
     # ── 2. Brute-Force Authentication Probing ─────────────────────────────────
@@ -276,22 +305,36 @@ def _detect_suspicious_activity(
                 flow["src_ip"], flow["dst_ip"], flow["protocol"],
                 "high",
                 f"Large Data Transfer: {flow['byte_count']:,} bytes in single flow ({flow['src_ip']} → {flow['dst_ip']}:{flow['dst_port']}).",
-                port=flow["dst_port"],
+                port=flow["dst_port"], bytes_count=flow["byte_count"],
             )
 
     # ── 6. High Packet Rate / Denial-of-Service Flood ─────────────────────────
     for win in windows:
-        if win["connection_rate"] >= HeuristicConfig.DOS_PACKET_RATE:
+        # Proper DoS heuristic: High packet rate AND low average packet size (< 250 bytes)
+        # typical of SYN/UDP floods. Normal large file transfers have large packets (~1500B).
+        avg_pkt_size = win["byte_count"] / max(1, win["packet_count"])
+        is_dos = (win["connection_rate"] >= 1500) or (win["connection_rate"] >= 300 and avg_pkt_size < 250)
+        
+        if is_dos:
             pkts_in_win = [
                 p for p in packets
                 if win["window_start"] <= p["timestamp"] < win["window_end"]
             ]
-            src = pkts_in_win[0]["src_ip"] if pkts_in_win else "unknown"
-            dst = pkts_in_win[0]["dst_ip"] if pkts_in_win else "unknown"
+            if not pkts_in_win:
+                continue
+                
+            # Prevent false positive for heavy authorized internal traffic (like DNS)
+            dominant_port = Counter(p["dst_port"] for p in pkts_in_win if p["dst_port"] > 0).most_common(1)
+            if dominant_port and dominant_port[0][0] in HeuristicConfig.SAFE_INTERNAL_PORTS:
+                continue
+
+            src = pkts_in_win[0]["src_ip"]
+            dst = pkts_in_win[0]["dst_ip"]
             _add_event(
                 "high_rate_indicator", win["window_start"], src, dst, "TCP",
                 "critical",
-                f"Volumetric Anomaly: {win['connection_rate']:.1f} packets/sec observed in window #{win['window_index']}.",
+                f"Volumetric Anomaly: {win['connection_rate']:.1f} packets/sec (avg size: {avg_pkt_size:.0f}B) observed in window #{win['window_index']}.",
+                bytes_count=win["byte_count"],
             )
 
     # ── 7. Malicious Application Payload Detection (DPI) ──────────────────────
@@ -319,7 +362,8 @@ def _detect_suspicious_activity(
                         pkt["src_ip"], pkt["dst_ip"], pkt["protocol"],
                         "critical",
                         f"Malicious Application Payload Detected: Found signature '{sig_str}' in {pkt['protocol']} payload.",
-                        port=pkt["dst_port"]
+                        port=pkt["dst_port"],
+                        payload_info=f"Matched '{sig_str}' signature"
                     )
                     break
         except ValueError:

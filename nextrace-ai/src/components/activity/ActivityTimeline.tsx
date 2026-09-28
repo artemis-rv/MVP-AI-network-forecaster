@@ -80,8 +80,17 @@ export function ActivityTimeline({
                 role="button"
                 tabIndex={0}
                 aria-expanded={openKey === e.key}
-                onClick={() => setOpenKey(k => (k === e.key ? null : e.key))}
-                onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setOpenKey(k => (k === e.key ? null : e.key)); } }}
+                onClick={() => {
+                  setOpenKey(k => (k === e.key ? null : e.key));
+                  if (onSelect) onSelect(e.activity);
+                }}
+                onKeyDown={ev => {
+                  if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault();
+                    setOpenKey(k => (k === e.key ? null : e.key));
+                    if (onSelect) onSelect(e.activity);
+                  }
+                }}
                 style={{ display: 'flex', gap: 10, cursor: 'pointer', borderRadius: 8, padding: '2px 4px', background: openKey === e.key ? 'var(--bg-workspace)' : 'transparent' }}
                 onMouseEnter={ev => (ev.currentTarget.style.background = 'var(--bg-workspace)')}
                 onMouseLeave={ev => (ev.currentTarget.style.background = openKey === e.key ? 'var(--bg-workspace)' : 'transparent')}

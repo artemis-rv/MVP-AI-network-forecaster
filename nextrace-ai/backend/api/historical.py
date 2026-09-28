@@ -23,7 +23,7 @@ router = APIRouter(prefix="/historical", tags=["Historical Analysis"])
 _JOBS: dict[str, dict[str, Any]] = {}
 
 _ALLOWED_EXTENSIONS = {".pcap", ".pcapng", ".cap", ".gz", ".dmp"}
-_MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB guard
+_MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB guard
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
