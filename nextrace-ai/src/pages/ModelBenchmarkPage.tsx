@@ -37,9 +37,6 @@ const MODEL_STYLE: Record<ModelKey, { color: string; label: string }> = {
   lr53: { color: '#64748b', label: 'Logistic Regression (53 features)' },
 };
 const TEMPORAL = '#06b6d4';
-const TARGET = { precision: 50, recall: 50, fprMin: 10, fprMax: 30 };
-const meetsTarget = (r: ResultRow) =>
-  r.precision >= TARGET.precision && r.recall >= TARGET.recall && r.fpr >= TARGET.fprMin && r.fpr <= TARGET.fprMax;
 
 const METRICS = [
   { key: 'precision', label: 'Precision' },
@@ -161,17 +158,6 @@ function Bullets({ items }: { items: ReactNode[] }) {
   );
 }
 
-function TargetChip({ row }: { row: ResultRow }) {
-  if (row.task !== 'Next 5 flows (K=5)') return <span style={{ color: 'var(--text-muted)' }}>—</span>;
-  const met = meetsTarget(row);
-  const color = met ? 'var(--color-live)' : 'var(--color-critical)';
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, letterSpacing: '0.4px', color, background: met ? 'var(--color-live-light)' : 'var(--color-critical-light)', padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>
-      {met ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {met ? 'MET' : 'NOT MET'}
-    </span>
-  );
-}
-
 const pct = (v: number) => `${v.toFixed(1)}%`;
 
 export function ModelBenchmarkPage() {
@@ -214,7 +200,6 @@ export function ModelBenchmarkPage() {
                 <th style={{ ...th, textAlign: 'right' }}>FPR</th>
                 <th style={{ ...th, textAlign: 'right' }}>ROC-AUC</th>
                 <th style={{ ...th, textAlign: 'right' }}>PR-AUC</th>
-                <th style={{ ...th, textAlign: 'center' }}>Target</th>
               </tr>
             </thead>
             <tbody>
@@ -236,16 +221,12 @@ export function ModelBenchmarkPage() {
                     <td style={num}>{pct(r.fpr)}</td>
                     <td style={num}>{r.rocAuc.toFixed(3)}</td>
                     <td style={num}>{r.prAuc.toFixed(3)}</td>
-                    <td style={{ ...td, textAlign: 'center' }}><TargetChip row={r} /></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.55, marginTop: 10 }}>
-          Target (K=5): Precision ≥ 50%, Recall ≥ 50%, FPR 10–30%. The LSTM + Attention and the 141-feature Logistic Regression share the same features, K=5 target and 336,386 test rows; the 53-feature rows use the original pipeline features.
-        </p>
       </section>
 
       {/* All metric charts in one card */}
