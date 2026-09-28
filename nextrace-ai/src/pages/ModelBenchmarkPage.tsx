@@ -27,7 +27,6 @@ interface ResultRow {
 const RESULTS: ResultRow[] = [
   { task: 'Next 5 flows (K=5)', model: 'LSTM + Attention', modelKey: 'lstm', input: '50 × 141', precision: 50.6, recall: 54.2, f1: 52.4, fpr: 19.7, rocAuc: 0.771, prAuc: 0.551 },
   { task: 'Next 5 flows (K=5)', model: 'Logistic Regression', modelKey: 'lr141', input: '1 × 141', precision: 32.7, recall: 92.7, f1: 48.4, fpr: 70.8, rocAuc: 0.639, prAuc: 0.342 },
-  { task: 'Next 5 flows (K=5)', model: 'Logistic Regression', modelKey: 'lr53', input: '1 × 53', precision: 33.5, recall: 90.4, f1: 48.9, fpr: 66.5, rocAuc: 0.636, prAuc: 0.338 },
   { task: 'Next flow', model: 'LSTM + Attention', modelKey: 'lstm', input: '50 × 141', precision: 29.4, recall: 39.8, f1: 33.8, fpr: 6.8, rocAuc: 0.841, prAuc: 0.348 },
   { task: 'Next flow', model: 'Logistic Regression', modelKey: 'lr53', input: '1 × 53', precision: 13.7, recall: 57.5, f1: 22.1, fpr: 25.8, rocAuc: 0.750, prAuc: 0.130 },
 ];
