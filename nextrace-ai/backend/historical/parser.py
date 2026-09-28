@@ -164,6 +164,7 @@ def _extract_scapy_packet(pkt: Any) -> dict[str, Any] | None:
     src_port = 0
     dst_port = 0
     flags = ""
+    payload_hex = ""
 
     if pkt.haslayer(TCP):
         tcp = pkt[TCP]
@@ -172,13 +173,20 @@ def _extract_scapy_packet(pkt: Any) -> dict[str, Any] | None:
         f = getattr(tcp, "flags", "")
         flags = str(f) if f else ""
         proto_name = "TCP"
+        if getattr(tcp, "payload", None):
+            payload_hex = bytes(tcp.payload).hex()
     elif pkt.haslayer(UDP):
         udp = pkt[UDP]
         src_port = int(udp.sport)
         dst_port = int(udp.dport)
         proto_name = "UDP"
+        if getattr(udp, "payload", None):
+            payload_hex = bytes(udp.payload).hex()
     elif pkt.haslayer(ICMP):
         proto_name = "ICMP"
+        icmp = pkt[ICMP]
+        if getattr(icmp, "payload", None):
+            payload_hex = bytes(icmp.payload).hex()
 
     return {
         "timestamp": ts,
@@ -189,17 +197,131 @@ def _extract_scapy_packet(pkt: Any) -> dict[str, Any] | None:
         "protocol":  proto_name,
         "size":      size,
         "flags":     flags,
+        "payload_hex": payload_hex,
     }
+
+
+def _parse_pcap_dpkt(path: str) -> list[dict[str, Any]]:
+    """Fast parsing using dpkt if available."""
+    import socket
+    try:
+        import dpkt
+    except ImportError:
+        return []
+
+    records: list[dict[str, Any]] = []
+    with open(path, "rb") as fh:
+        try:
+            if path.endswith(".pcapng"):
+                pcap = dpkt.pcapng.Reader(fh)
+            else:
+                pcap = dpkt.pcap.Reader(fh)
+        except Exception:
+            return []
+
+        for ts, buf in pcap:
+            try:
+                # Use dpkt's ethernet or IP decoders
+                eth = dpkt.ethernet.Ethernet(buf)
+                ip = eth.data
+                
+                if not isinstance(ip, (dpkt.ip.IP, dpkt.ip6.IP6)):
+                    # Handle raw IP or Linux Cooked SLL
+                    if isinstance(eth, (dpkt.ip.IP, dpkt.ip6.IP6)):
+                        ip = eth
+                    elif hasattr(dpkt, 'sll') and isinstance(eth, dpkt.sll.SLL):
+                        ip = eth.data
+                    else:
+                        continue
+                
+                if not isinstance(ip, (dpkt.ip.IP, dpkt.ip6.IP6)):
+                    continue
+
+                if isinstance(ip, dpkt.ip.IP):
+                    src_ip = socket.inet_ntoa(ip.src)
+                    dst_ip = socket.inet_ntoa(ip.dst)
+                    proto_num = ip.p
+                else:
+                    src_ip = socket.inet_ntop(socket.AF_INET6, ip.src)
+                    dst_ip = socket.inet_ntop(socket.AF_INET6, ip.dst)
+                    proto_num = ip.nxt
+                
+                proto_name = PROTO_MAP.get(proto_num, f"IP-{proto_num}")
+                src_port = 0
+                dst_port = 0
+                flags = ""
+
+                payload = ip.data
+                payload_bytes = b""
+                if isinstance(payload, dpkt.tcp.TCP):
+                    src_port = payload.sport
+                    dst_port = payload.dport
+                    proto_name = "TCP"
+                    payload_bytes = payload.data
+                    
+                    f_list = []
+                    if payload.flags & dpkt.tcp.TH_FIN: f_list.append("F")
+                    if payload.flags & dpkt.tcp.TH_SYN: f_list.append("S")
+                    if payload.flags & dpkt.tcp.TH_RST: f_list.append("R")
+                    if payload.flags & dpkt.tcp.TH_PUSH: f_list.append("P")
+                    if payload.flags & dpkt.tcp.TH_ACK: f_list.append("A")
+                    if payload.flags & dpkt.tcp.TH_URG: f_list.append("U")
+                    flags = "".join(f_list)
+                elif isinstance(payload, dpkt.udp.UDP):
+                    src_port = payload.sport
+                    dst_port = payload.dport
+                    proto_name = "UDP"
+                    payload_bytes = payload.data
+                elif hasattr(dpkt, 'icmp') and isinstance(payload, dpkt.icmp.ICMP):
+                    proto_name = "ICMP"
+                    payload_bytes = payload.data
+                elif hasattr(dpkt, 'icmp6') and isinstance(payload, dpkt.icmp6.ICMP6):
+                    proto_name = "ICMPv6"
+                    payload_bytes = payload.data
+                
+                records.append({
+                    "timestamp": float(ts),
+                    "src_ip":    src_ip,
+                    "dst_ip":    dst_ip,
+                    "src_port":  src_port,
+                    "dst_port":  dst_port,
+                    "protocol":  proto_name,
+                    "size":      len(buf),
+                    "flags":     flags,
+                    "payload_hex": payload_bytes.hex() if isinstance(payload_bytes, bytes) else "",
+                })
+            except Exception:
+                continue
+
+    return records
 
 
 def _read_pcap_stream(path: str) -> list[dict[str, Any]]:
     """
-    Stream packets from PCAP / PCAPNG using Scapy PcapReader / PcapNgReader / rdpcap.
-    Continues smoothly even if some packets contain malformed bytes.
+    Stream packets from PCAP / PCAPNG using fast parsers (dpkt, binary)
+    first, and falling back to Scapy for robustness.
     """
     records: list[dict[str, Any]] = []
 
-    # First attempt: Streaming PcapReader / PcapNgReader
+    # First attempt: dpkt (extremely fast for both pcap and pcapng)
+    try:
+        records = _parse_pcap_dpkt(path)
+        if records:
+            logger.info("Parsed successfully using dpkt")
+            return records
+    except Exception as exc:
+        logger.debug("dpkt parsing failed: %s", exc)
+
+    # Second attempt: Direct binary fallback parser for classic libpcap
+    try:
+        records = _parse_pcap_binary_fallback(path)
+        if records:
+            logger.info("Parsed successfully using custom binary parser")
+            return records
+    except Exception as exc:
+        logger.debug("Binary fallback parser failed: %s", exc)
+
+    # Third attempt: Streaming PcapReader / PcapNgReader (Scapy)
     try:
         from scapy.utils import PcapReader, PcapNgReader  # type: ignore
         reader_cls = PcapNgReader if path.endswith(".pcapng") else PcapReader
@@ -212,11 +334,12 @@ def _read_pcap_stream(path: str) -> list[dict[str, Any]]:
                 except Exception:
                     continue
         if records:
+            logger.info("Parsed successfully using Scapy stream")
             return records
     except Exception as exc:
-        logger.debug("PcapReader streaming failed or returned 0 packets (%s), trying rdpcap fallback", exc)
+        logger.debug("PcapReader streaming failed: %s", exc)
 
-    # Second attempt: rdpcap
+    # Fourth attempt: rdpcap (Scapy memory-loaded)
     try:
         from scapy.all import rdpcap  # type: ignore
         packets = rdpcap(path)
@@ -228,17 +351,10 @@ def _read_pcap_stream(path: str) -> list[dict[str, Any]]:
             except Exception:
                 continue
         if records:
+            logger.info("Parsed successfully using Scapy rdpcap")
             return records
     except Exception as exc:
         logger.warning("rdpcap failed: %s", exc)
-
-    # Third attempt: Direct binary fallback parser for classic libpcap
-    try:
-        binary_records = _parse_pcap_binary_fallback(path)
-        if binary_records:
-            return binary_records
-    except Exception as exc:
-        logger.warning("Binary fallback parser failed: %s", exc)
 
     if not records:
         raise ValueError(
@@ -344,6 +460,7 @@ def _parse_ip_raw_bytes(data: bytes, link_type: int) -> dict[str, Any] | None:
     flags = ""
 
     payload = ip_data[ihl:]
+    payload_hex = ""
     if proto_num == 6 and len(payload) >= 14:  # TCP
         src_port, dst_port = struct.unpack(">HH", payload[0:4])
         proto_name = "TCP"
@@ -356,11 +473,18 @@ def _parse_ip_raw_bytes(data: bytes, link_type: int) -> dict[str, Any] | None:
         if flag_byte & 0x10: f_list.append("A")
         if flag_byte & 0x20: f_list.append("U")
         flags = "".join(f_list)
+        data_offset = (payload[12] >> 4) * 4
+        if len(payload) > data_offset:
+            payload_hex = payload[data_offset:].hex()
     elif proto_num == 17 and len(payload) >= 4:  # UDP
         src_port, dst_port = struct.unpack(">HH", payload[0:4])
         proto_name = "UDP"
+        if len(payload) > 8:
+            payload_hex = payload[8:].hex()
     elif proto_num == 1:
         proto_name = "ICMP"
+        if len(payload) > 8:
+            payload_hex = payload[8:].hex()
 
     return {
         "timestamp": 0.0,
@@ -371,6 +495,7 @@ def _parse_ip_raw_bytes(data: bytes, link_type: int) -> dict[str, Any] | None:
         "protocol":  proto_name,
         "size":      len(data),
         "flags":     flags,
+        "payload_hex": payload_hex,
     }
 
 

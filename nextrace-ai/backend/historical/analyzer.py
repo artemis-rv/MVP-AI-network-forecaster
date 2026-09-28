@@ -294,6 +294,37 @@ def _detect_suspicious_activity(
                 f"Volumetric Anomaly: {win['connection_rate']:.1f} packets/sec observed in window #{win['window_index']}.",
             )
 
+    # ── 7. Malicious Application Payload Detection (DPI) ──────────────────────
+    # Using the fast payload_hex extracted by dpkt across all layers (App, Net)
+    MALICIOUS_SIGNATURES = [
+        b"union select", b"1=1--", b"<script>", b"../../", b"/etc/passwd", 
+        b"cmd.exe", b"/bin/sh", b"/bin/bash", b"powershell", b"wget ", b"curl ",
+        b"nc -e", b"eval(", b"base64_decode"
+    ]
+    
+    for pkt in packets:
+        payload_hex = pkt.get("payload_hex", "")
+        if not payload_hex:
+            continue
+            
+        try:
+            raw_bytes = bytes.fromhex(payload_hex)
+            lower_bytes = raw_bytes.lower()
+            
+            for sig in MALICIOUS_SIGNATURES:
+                if sig in lower_bytes:
+                    sig_str = sig.decode("ascii", errors="ignore")
+                    _add_event(
+                        "malicious_payload_indicator", pkt["timestamp"], 
+                        pkt["src_ip"], pkt["dst_ip"], pkt["protocol"],
+                        "critical",
+                        f"Malicious Application Payload Detected: Found signature '{sig_str}' in {pkt['protocol']} payload.",
+                        port=pkt["dst_port"]
+                    )
+                    break
+        except ValueError:
+            pass
+
     events.sort(key=lambda e: e["timestamp"])
     return events
 
