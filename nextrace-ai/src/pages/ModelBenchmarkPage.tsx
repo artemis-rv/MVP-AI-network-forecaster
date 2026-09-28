@@ -215,7 +215,6 @@ export function ModelBenchmarkPage() {
                 <th style={{ ...th, textAlign: 'right' }}>FPR</th>
                 <th style={{ ...th, textAlign: 'right' }}>ROC-AUC</th>
                 <th style={{ ...th, textAlign: 'right' }}>PR-AUC</th>
-                <th style={{ ...th, textAlign: 'center' }}>Target</th>
               </tr>
             </thead>
             <tbody>
@@ -234,7 +233,6 @@ export function ModelBenchmarkPage() {
                   <td style={num}>{pct(r.fpr)}</td>
                   <td style={num}>{r.rocAuc.toFixed(3)}</td>
                   <td style={num}>{r.prAuc.toFixed(3)}</td>
-                  <td style={{ ...td, textAlign: 'center' }}><TargetChip met={r.meetsTarget} /></td>
                 </tr>
               ))}
             </tbody>
