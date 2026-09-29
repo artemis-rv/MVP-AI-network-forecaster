@@ -11,13 +11,11 @@ import {
 } from 'recharts';
 import { useLiveStore } from '@/store/liveStore';
 import { useAppStore } from '@/store/appStore';
-import { useForecastStore } from '@/store/forecastStore';
 import { apiService } from '@/services/api';
 import { wsService } from '@/services/websocket';
 import type { DemoMode, WindowSecs } from '@/types/live';
 import { significantActivities } from '@/lib/activityGrouping';
 import { ActivityList } from '@/components/activity/ActivityList';
-import { ActivityTimeline } from '@/components/activity/ActivityTimeline';
 import { ActivityInspector } from '@/components/activity/ActivityInspector';
 import { useFocusParam } from '@/hooks/useFocusParam';
 import type { TemporalState } from '@/types/live';
@@ -58,7 +56,6 @@ export function LiveMonitoringPage() {
     windowSeconds, mode, setWindowSeconds, setMode,
     activities, trafficSummary, runId,
   } = useLiveStore();
-  const { currentForecast } = useForecastStore();
   const [inspectId, setInspectId] = useState<string | null>(null);
   const grouped = useMemo(() => significantActivities(activities), [activities]);
   const inspected = inspectId ? activities.find(a => a.id === inspectId) ?? null : null;
