@@ -143,9 +143,14 @@ export function LiveMonitoringPage() {
     }];
   }, [realChartData, currentTemporal]);
 
-  const chartData = liveChartData.length > 0
-    ? liveChartData
-    : generateZeroChartData(chartTimeRange);
+  const chartData = useMemo(() => {
+    if (liveChartData.length === 0) {
+      return generateZeroChartData(chartTimeRange);
+    }
+    const cutoff = Date.now() - chartTimeRange * 60 * 1000;
+    const filtered = liveChartData.filter(d => d.timestamp >= cutoff);
+    return filtered.length > 0 ? filtered : generateZeroChartData(chartTimeRange);
+  }, [liveChartData, chartTimeRange]);
 
   // Check backend health and sync running session status on mount / route switch
   useEffect(() => {
@@ -384,8 +389,8 @@ export function LiveMonitoringPage() {
           )}
         </div>
 
-        {/* ── Grouped activities + Attack Timeline ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: 20 }}>
+        {/* ── Grouped activities ── */}
+        <div>
           <div data-tour="live-activities" style={panelStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: 8 }}>
               <div>
@@ -403,23 +408,6 @@ export function LiveMonitoringPage() {
               highlight={highlight}
               maxHeight={320}
               emptyText={isRunning ? 'No suspicious activity grouped yet — benign traffic is summarised in the chart below.' : 'Start a live session to group suspicious traffic into activities.'}
-            />
-          </div>
-
-          <div data-tour="live-timeline" style={{ ...panelStyle, padding: '14px 16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Attack Timeline</h3>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Activity-level events · newest at bottom</span>
-            </div>
-            <ActivityTimeline
-              activities={grouped}
-              onSelect={a => setInspectId(a.id)}
-              onLocate={a => setHighlight({ id: a.id, key: Date.now() })}
-              predicted={currentForecast && !currentForecast.is_benign && isRunning
-                ? { stage: currentForecast.predicted_next_stage, target: currentForecast.target }
-                : null}
-              maxHeight={320}
-              emptyText="Major events appear here when an activity is detected, escalates or changes shape."
             />
           </div>
         </div>
