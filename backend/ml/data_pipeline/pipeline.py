@@ -115,7 +115,7 @@ class DataPipeline:
         cat_encoders = {}
         for col in cat_cols:
             le = LabelEncoder()
-            X.loc[:, col] = le.fit_transform(X[col].astype(str))
+            X[col] = le.fit_transform(X[col].astype(str))
             cat_encoders[col] = le
             
         self.metadata["feature_count"] = X.shape[1]
@@ -145,13 +145,13 @@ class DataPipeline:
         self.scaler.fit(X_train_num)
         
         # We convert X to dataframe after transform so it keeps column names, but for now we just transform in place
-        X_train_scaled = X_train.copy()
-        X_val_scaled = X_val.copy()
-        X_test_scaled = X_test.copy()
+        X_train_scaled = X_train.astype({col: float for col in numeric_cols})
+        X_val_scaled = X_val.astype({col: float for col in numeric_cols})
+        X_test_scaled = X_test.astype({col: float for col in numeric_cols})
 
-        X_train_scaled.loc[:, numeric_cols] = self.scaler.transform(X_train[numeric_cols])
-        X_val_scaled.loc[:, numeric_cols] = self.scaler.transform(X_val[numeric_cols])
-        X_test_scaled.loc[:, numeric_cols] = self.scaler.transform(X_test[numeric_cols])
+        X_train_scaled[numeric_cols] = self.scaler.transform(X_train[numeric_cols])
+        X_val_scaled[numeric_cols] = self.scaler.transform(X_val[numeric_cols])
+        X_test_scaled[numeric_cols] = self.scaler.transform(X_test[numeric_cols])
         
         self.metadata["train_size"] = len(X_train_scaled)
         self.metadata["validation_size"] = len(X_val_scaled)

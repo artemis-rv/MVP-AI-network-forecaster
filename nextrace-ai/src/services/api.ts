@@ -1,7 +1,7 @@
 // NEXTRACE AI — REST API Service
 // All calls go through this module so the base URL is configured in one place.
 
-import type { SessionStatus } from '@/types/live';
+import type { SessionStatus, CaptureInterface, TrafficSourceMetrics } from '@/types/live';
 import type { ForecastResult } from '@/types/forecast';
 import type {
   ForensicStatusResponse,
@@ -13,7 +13,7 @@ import type {
   GenerateReportResponse,
   FindingsResponse,
 } from '@/types/report';
-import type { Alert, AlertStats, AlertStatus } from '@/types/alert';
+import type { Alert, AlertStats, AlertStatus, MitigationRequest, MitigationResult } from '@/types/alert';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -34,11 +34,41 @@ export const apiService = {
     return request('/api/health');
   },
 
+  async getInterfaces(): Promise<{
+    interfaces: CaptureInterface[];
+    default_interface: string | null;
+    platform: string;
+    tshark_available: boolean;
+  }> {
+    return request('/api/live/interfaces');
+  },
+
   async getLiveStatus(): Promise<SessionStatus> {
     return request('/api/live/status');
   },
 
-  async startLive(body: { mode: string; window_seconds: number }): Promise<{ message: string; status: SessionStatus }> {
+  async getLiveMetrics(): Promise<TrafficSourceMetrics> {
+    return request('/api/live/metrics');
+  },
+
+  async testCapture(body: {
+    interface_id: string;
+    duration_seconds?: number;
+    bpf_filter?: string;
+  }): Promise<import('@/types/live').CaptureSelfTestResult> {
+    return request('/api/live/self-test', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async startLive(body: {
+    mode?: string;
+    window_seconds: number;
+    source_type?: 'synthetic' | 'live';
+    interface?: string;
+    bpf_filter?: string;
+  }): Promise<{ message: string; status: SessionStatus }> {
     return request('/api/live/start', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -59,6 +89,10 @@ export const apiService = {
 
   async getForecast(): Promise<ForecastResult> {
     return request('/api/forecast/current');
+  },
+
+  async cancelHistoricalJob(jobId: string): Promise<{ message: string; job_id: string; status: string }> {
+    return request(`/api/historical/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' });
   },
 
   // ── Forensic Analysis — isolated from all live/forecast methods ──────────────
@@ -190,6 +224,17 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  async mitigateAlert(body: MitigationRequest): Promise<MitigationResult> {
+    return request('/api/alerts/mitigate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async getMitigationAudit(): Promise<{ total: number; entries: MitigationResult[] }> {
+    return request('/api/alerts/mitigate/audit');
   },
 
   /** Plain-language explanation of grouped activities (LLM when configured on the server, template otherwise). */

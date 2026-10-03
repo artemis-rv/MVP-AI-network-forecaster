@@ -208,3 +208,28 @@ async def reopen_alert_endpoint(alert_id: str):
         return update_alert(alert_id, {"status": "OPEN"})
     except KeyError:
         raise HTTPException(status_code=404, detail="Alert not found")
+
+
+# ── Firewall Containment Endpoints ─────────────────────────────────────────────
+
+from backend.alerts.firewall import MitigationRequest, execute_mitigation, get_mitigation_audit_log
+
+@router.post("/mitigate")
+async def mitigate_alert_endpoint(body: MitigationRequest):
+    """
+    Execute an analyst-approved endpoint firewall containment action.
+    Defaults to DRY RUN simulation unless explicitly overridden in authorized testing.
+    """
+    try:
+        result = execute_mitigation(body)
+        return result.model_dump()
+    except ValueError as val_err:
+        raise HTTPException(status_code=422, detail=str(val_err))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Mitigation execution error: {exc}")
+
+
+@router.get("/mitigate/audit")
+async def get_mitigation_audit_endpoint():
+    """Retrieve immutable audit ledger of all mitigation requests."""
+    return {"audit_log": get_mitigation_audit_log()}

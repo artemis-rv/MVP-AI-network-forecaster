@@ -22,3 +22,8 @@ class MemmapTemporalDataset(Dataset):
         y_bin = torch.tensor(self.y_bin[idx], dtype=torch.float32)
         y_enc = torch.tensor(self.y_enc[idx], dtype=torch.long)
         return x, y_bin, y_enc
+
+    def close(self):
+        del self.X
+        del self.y_bin
+        del self.y_enc

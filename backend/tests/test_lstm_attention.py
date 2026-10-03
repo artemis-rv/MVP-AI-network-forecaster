@@ -48,3 +48,4 @@ def test_dataset_loading():
         assert x.dtype == torch.float32
         assert y_bin.dtype == torch.float32
         assert y_enc.dtype == torch.int64
+        dataset.close()

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Play, Square, WifiOff, RotateCcw, Trash2,
   Filter, RefreshCw, AlertTriangle, ShieldAlert, CheckCircle2, ShieldCheck, Clock, Activity,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Radio, Cpu, Network,
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -14,7 +14,7 @@ import { useAppStore } from '@/store/appStore';
 import { useForecastStore } from '@/store/forecastStore';
 import { apiService } from '@/services/api';
 import { wsService } from '@/services/websocket';
-import type { DemoMode, WindowSecs } from '@/types/live';
+import type { DemoMode, WindowSecs, CaptureInterface, TrafficSourceMetrics } from '@/types/live';
 import { significantActivities } from '@/lib/activityGrouping';
 import { ActivityList } from '@/components/activity/ActivityList';
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline';
@@ -64,6 +64,13 @@ export function LiveMonitoringPage() {
   const inspected = inspectId ? activities.find(a => a.id === inspectId) ?? null : null;
   const alertCount = grouped.reduce((n, a) => n + a.alertIds.length, 0);
   const [showPackets, setShowPackets] = useState(false);
+
+  // Source selection & Interface discovery
+  const [sourceType, setSourceType] = useState<'synthetic' | 'live'>('synthetic');
+  const [interfaces, setInterfaces] = useState<CaptureInterface[]>([]);
+  const [selectedInterface, setSelectedInterface] = useState<string>('');
+  const [bpfFilter, setBpfFilter] = useState<string>('');
+  const [liveMetrics, setLiveMetrics] = useState<TrafficSourceMetrics | null>(null);
 
   // Deep link (?focus=ACT-0003) and timeline "Show in activity list" → exact row, highlighted
   const [highlight, setHighlight] = useState<{ id: string; key: string | number } | null>(null);
@@ -147,16 +154,34 @@ export function LiveMonitoringPage() {
     ? liveChartData
     : generateZeroChartData(chartTimeRange);
 
-  // Check backend health and sync running session status on mount / route switch
+  // Check backend health, fetch interfaces and sync running session status
   useEffect(() => {
     apiService.checkHealth()
       .then(async () => {
         setBackendAvailable(true);
         try {
+          const ifaceRes = await apiService.getInterfaces();
+          setInterfaces(ifaceRes.interfaces);
+          if (ifaceRes.default_interface) {
+            setSelectedInterface(String(ifaceRes.default_interface));
+          } else if (ifaceRes.interfaces.length > 0) {
+            setSelectedInterface(String(ifaceRes.interfaces[0].index));
+          }
+        } catch (e) {
+          console.warn('Failed to load capture interfaces:', e);
+        }
+
+        try {
           const status = await apiService.getLiveStatus();
           useLiveStore.getState().setSession(status);
           if (status.running && !wsConnected) {
             wsService.connect();
+          }
+          if (status.source_type) {
+            setSourceType(status.source_type);
+          }
+          if (status.interface) {
+            setSelectedInterface(status.interface);
           }
         } catch (e) {
           console.error('Failed to sync live status:', e);
@@ -164,6 +189,23 @@ export function LiveMonitoringPage() {
       })
       .catch(() => setBackendAvailable(false));
   }, [setBackendAvailable, wsConnected]);
+
+  // Periodic metrics polling when active
+  useEffect(() => {
+    if (!isRunning) {
+      setLiveMetrics(null);
+      return;
+    }
+    const interval = setInterval(async () => {
+      try {
+        const m = await apiService.getLiveMetrics();
+        setLiveMetrics(m);
+      } catch {
+        // ignore polling errors
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [isRunning]);
 
   // ── Filtered events ──────────────────────────────────────────
   const filteredEvents = useMemo(() => {
@@ -178,20 +220,29 @@ export function LiveMonitoringPage() {
     });
   }, [displayEvents, searchQuery]);
 
-
-
   // ── Start / Stop handlers ────────────────────────────────────
   async function handleStart() {
     setStarting(true);
     try {
-      // Every start is a new session run: activities, alerts context and forecast begin empty.
       useLiveStore.getState().beginRun();
-      const res = await apiService.startLive({ mode, window_seconds: windowSeconds });
+      const res = await apiService.startLive({
+        mode,
+        window_seconds: windowSeconds,
+        source_type: sourceType,
+        interface: sourceType === 'live' ? selectedInterface : undefined,
+        bpf_filter: sourceType === 'live' && bpfFilter.trim() ? bpfFilter.trim() : undefined,
+      });
       useLiveStore.getState().setSession(res.status);
       wsService.connect();
-      addToast('Live demo started — streaming events.', 'success');
-    } catch {
-      addToast('Unable to connect to live demo backend. Is it running on port 8000?', 'error');
+      addToast(
+        sourceType === 'live'
+          ? `Live Npcap/TShark capture active on ${selectedInterface || 'default'}.`
+          : 'Synthetic demo session started.',
+        'success'
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addToast(`Failed to start capture: ${msg}`, 'error');
     } finally {
       setStarting(false);
     }
@@ -203,7 +254,7 @@ export function LiveMonitoringPage() {
       const res = await apiService.stopLive();
       useLiveStore.getState().setSession(res.status);
       wsService.disconnect();
-      addToast('Live demo stopped.', 'info');
+      addToast('Traffic ingestion stopped.', 'info');
     } catch {
       addToast('Stop request failed. Backend may be unreachable.', 'error');
     } finally {
@@ -241,6 +292,53 @@ export function LiveMonitoringPage() {
     }
   }
 
+  // Self-test state
+  const [testingCapture, setTestingCapture] = useState(false);
+  const [selfTestResult, setSelfTestResult] = useState<import('@/types/live').CaptureSelfTestResult | null>(null);
+  const [showSelfTestResult, setShowSelfTestResult] = useState(false);
+
+  // Trigger automated capture self-test
+  async function handleSelfTest() {
+    if (!selectedInterface && interfaces.length > 0) {
+      setSelectedInterface(String(interfaces[0].index));
+    }
+    const ifaceId = selectedInterface || (interfaces[0] ? String(interfaces[0].index) : '1');
+    setTestingCapture(true);
+    setShowSelfTestResult(true);
+    setSelfTestResult(null);
+    try {
+      const res = await apiService.testCapture({
+        interface_id: ifaceId,
+        duration_seconds: 5,
+        bpf_filter: bpfFilter.trim() || undefined,
+      });
+      setSelfTestResult(res);
+      if (res.healthy) {
+        addToast(`Self-test passed on ${res.interface_name}: ${res.packets.toLocaleString()} packets captured (${res.mbps} Mbps).`, 'success');
+      } else {
+        addToast(`Self-test failed: ${res.error || 'Zero packets captured'}.`, 'error');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSelfTestResult({
+        healthy: false,
+        interface_id: ifaceId,
+        interface_name: 'Unknown',
+        packets: 0,
+        bytes: 0,
+        duration_seconds: 5,
+        packets_per_second: 0,
+        mbps: 0,
+        capture_drops: 0,
+        stderr: msg,
+        error: msg,
+      });
+      addToast(`Self-test execution error: ${msg}`, 'error');
+    } finally {
+      setTestingCapture(false);
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       {/* ── Page Header ── */}
@@ -250,14 +348,29 @@ export function LiveMonitoringPage() {
             <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
               Live Monitoring
             </h1>
-            <StatusBadge running={isRunning} wsConnected={wsConnected} />
+            <StatusBadge
+              running={isRunning}
+              wsConnected={wsConnected}
+              healthStatus={session?.health_status || (isRunning ? (session?.packet_count ? 'RUNNING' : 'NO_TRAFFIC') : 'STOPPED')}
+              packetCount={session?.packet_count ?? 0}
+            />
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Real-time demo traffic stream · Temporal aggregation · Feature engineering
+            Real-time traffic stream · Decoupled Dumpcap ingestion · Temporal aggregation · Attack Forecasting
           </p>
         </div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', background: 'var(--color-warning-light)', border: '1px solid var(--color-warning)', borderRadius: 8, padding: '6px 12px' }}>
-          <AlertTriangle size={12} /> SIMULATED DEMO TRAFFIC — not real network telemetry
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11,
+          color: (session?.running ? session.source_type : sourceType) === 'live' ? 'var(--color-live)' : 'var(--text-muted)',
+          background: (session?.running ? session.source_type : sourceType) === 'live' ? 'var(--color-live-light)' : 'var(--color-warning-light)',
+          border: `1px solid ${(session?.running ? session.source_type : sourceType) === 'live' ? 'var(--color-live)' : 'var(--color-warning)'}`,
+          borderRadius: 8, padding: '6px 12px'
+        }}>
+          {(session?.running ? session.source_type : sourceType) === 'live' ? (
+            <><Network size={13} /> <strong>REAL NETWORK TRAFFIC</strong> — Windows Npcap/Dumpcap ({session?.interface_name || session?.interface || selectedInterface || 'Live Interface'})</>
+          ) : (
+            <><AlertTriangle size={12} /> SYNTHETIC DEMO TRAFFIC — Deterministic generator</>
+          )}
         </div>
       </div>
 
@@ -280,37 +393,223 @@ export function LiveMonitoringPage() {
           </div>
         )}
 
+        {/* ── Explicit NO_TRAFFIC or DEGRADED notification banner ── */}
+        {isRunning && (session?.source_type === 'live' || sourceType === 'live') && (session?.health_status === 'NO_TRAFFIC' || (session?.packet_count === 0 && !starting)) && (
+          <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid var(--color-warning)', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <AlertTriangle size={18} color="var(--color-warning)" />
+              <div>
+                <div style={{ fontWeight: 700, color: 'var(--color-warning)', fontSize: 13 }}>No Network Traffic Observed</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  Capture process is running on <strong>{session?.interface_name || session?.interface || selectedInterface}</strong>, but 0 packets have been captured.
+                  Please generate network activity or run a capture self-test.
+                </div>
+              </div>
+            </div>
+            <button onClick={handleSelfTest} disabled={testingCapture} style={btnStyle('secondary-sm')}>
+              {testingCapture ? <Spinner /> : 'Test Capture'}
+            </button>
+          </div>
+        )}
+
+        {/* ── Capture Self-Test Modal / Result Panel ── */}
+        {showSelfTestResult && (
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 12, padding: '16px 20px', boxShadow: 'var(--shadow-md)', position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Activity size={16} color="var(--primary)" />
+                <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-primary)' }}>
+                  Npcap / Dumpcap Capture Self-Test
+                </span>
+                {selfTestResult && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999,
+                    background: selfTestResult.healthy ? 'var(--color-live-light)' : 'var(--color-critical-light)',
+                    color: selfTestResult.healthy ? 'var(--color-live)' : 'var(--color-critical)',
+                    border: `1px solid ${selfTestResult.healthy ? 'var(--color-live)' : 'var(--color-critical)'}`,
+                  }}>
+                    {selfTestResult.healthy ? 'PASS' : 'FAIL'}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowSelfTestResult(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+              >
+                Dismiss
+              </button>
+            </div>
+
+            {testingCapture ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0', color: 'var(--text-secondary)', fontSize: 13 }}>
+                <Spinner />
+                <span>Executing 5-second raw PCAPNG capture test on interface #{selectedInterface || '1'}...</span>
+              </div>
+            ) : selfTestResult ? (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 12 }}>
+                  <div style={{ background: 'var(--bg-workspace)', padding: '10px 12px', borderRadius: 8 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>INTERFACE</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>{selfTestResult.interface_name} (#{selfTestResult.interface_id})</div>
+                  </div>
+                  <div style={{ background: 'var(--bg-workspace)', padding: '10px 12px', borderRadius: 8 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>PACKETS CAPTURED</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: selfTestResult.packets > 0 ? 'var(--color-live)' : 'var(--color-critical)', marginTop: 2 }}>
+                      {selfTestResult.packets.toLocaleString()}
+                    </div>
+                  </div>
+                  <div style={{ background: 'var(--bg-workspace)', padding: '10px 12px', borderRadius: 8 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>THROUGHPUT</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+                      {selfTestResult.mbps} Mbps ({selfTestResult.packets_per_second} pps)
+                    </div>
+                  </div>
+                  <div style={{ background: 'var(--bg-workspace)', padding: '10px 12px', borderRadius: 8 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>DURATION / DROPS</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: selfTestResult.capture_drops > 0 ? 'var(--color-critical)' : 'var(--text-primary)', marginTop: 2 }}>
+                      {selfTestResult.duration_seconds}s / {selfTestResult.capture_drops} drops
+                    </div>
+                  </div>
+                </div>
+                {selfTestResult.stderr && (
+                  <div style={{ background: 'var(--bg-workspace)', padding: '8px 12px', borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', whiteSpace: 'pre-wrap', maxHeight: 80, overflowY: 'auto' }}>
+                    {selfTestResult.stderr}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
+
         {/* ── Control Panel ── */}
         <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)', padding: '18px 20px' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-end' }}>
 
-            {/* Traffic Mode */}
+            {/* Ingestion Source */}
             <div>
-              <div style={labelStyle}>Traffic Mode</div>
+              <div style={labelStyle}>Ingestion Source</div>
               <div style={{ display: 'flex', gap: 6 }}>
-                {(['benign', 'suspicious'] as DemoMode[]).map(m => (
-                  <button
-                    key={m}
-                    disabled={isRunning}
-                    onClick={() => setMode(m)}
-                    style={{
-                      padding: '8px 16px', borderRadius: 8, border: '1px solid',
-                      fontSize: 13, fontWeight: 600, cursor: isRunning ? 'not-allowed' : 'pointer',
-                      borderColor: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--border-default)',
-                      background: mode === m ? (m === 'suspicious' ? 'var(--color-critical-light)' : 'var(--color-live-light)') : 'var(--bg-card)',
-                      color: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--text-secondary)',
-                      opacity: isRunning ? 0.6 : 1,
-                      transition: 'all var(--transition-fast)',
-                    }}
-                  >
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      {m === 'suspicious' ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
-                      {m === 'suspicious' ? 'Suspicious Demo' : 'Benign Traffic'}
-                    </span>
-                  </button>
-                ))}
+                <button
+                  disabled={isRunning}
+                  onClick={() => setSourceType('synthetic')}
+                  style={{
+                    padding: '8px 14px', borderRadius: 8, border: '1px solid',
+                    fontSize: 12, fontWeight: 600, cursor: isRunning ? 'not-allowed' : 'pointer',
+                    borderColor: sourceType === 'synthetic' ? 'var(--primary)' : 'var(--border-default)',
+                    background: sourceType === 'synthetic' ? 'var(--primary-light)' : 'var(--bg-card)',
+                    color: sourceType === 'synthetic' ? 'var(--primary)' : 'var(--text-secondary)',
+                    opacity: isRunning ? 0.6 : 1,
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <Cpu size={13} /> Synthetic Gen
+                  </span>
+                </button>
+                <button
+                  disabled={isRunning}
+                  onClick={() => setSourceType('live')}
+                  style={{
+                    padding: '8px 14px', borderRadius: 8, border: '1px solid',
+                    fontSize: 12, fontWeight: 600, cursor: isRunning ? 'not-allowed' : 'pointer',
+                    borderColor: sourceType === 'live' ? 'var(--color-live)' : 'var(--border-default)',
+                    background: sourceType === 'live' ? 'var(--color-live-light)' : 'var(--bg-card)',
+                    color: sourceType === 'live' ? 'var(--color-live)' : 'var(--text-secondary)',
+                    opacity: isRunning ? 0.6 : 1,
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <Radio size={13} /> Real Npcap / Dumpcap
+                  </span>
+                </button>
               </div>
             </div>
+
+            {/* Real Capture Interface Selection */}
+            {sourceType === 'live' && (
+              <div>
+                <div style={labelStyle}>Capture Interface</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <select
+                    disabled={isRunning}
+                    value={selectedInterface}
+                    onChange={(e) => setSelectedInterface(e.target.value)}
+                    style={{
+                      padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border-default)',
+                      background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12,
+                      fontWeight: 500, cursor: isRunning ? 'not-allowed' : 'pointer', minWidth: 220,
+                    }}
+                  >
+                    {interfaces.map((iface) => (
+                      <option key={iface.index || iface.id || iface.name} value={String(iface.index)}>
+                        #{iface.index}: {iface.name} {iface.is_recommended ? '★ (Active Recommended)' : ''}
+                      </option>
+                    ))}
+                    {interfaces.length === 0 && <option value="">Detecting interfaces...</option>}
+                  </select>
+                  <button
+                    disabled={testingCapture || isRunning}
+                    onClick={handleSelfTest}
+                    style={{
+                      ...btnStyle('secondary-sm'),
+                      opacity: (testingCapture || isRunning) ? 0.6 : 1,
+                      cursor: (testingCapture || isRunning) ? 'not-allowed' : 'pointer',
+                    }}
+                    title="Run an automated 5-second packet capture verification"
+                  >
+                    {testingCapture ? <Spinner /> : <><Activity size={12} /> Test Capture</>}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* BPF Filter Input */}
+            {sourceType === 'live' && (
+              <div>
+                <div style={labelStyle}>BPF Filter</div>
+                <input
+                  type="text"
+                  disabled={isRunning}
+                  placeholder="e.g. tcp or udp (optional)"
+                  value={bpfFilter}
+                  onChange={(e) => setBpfFilter(e.target.value)}
+                  style={{
+                    padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-default)',
+                    background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12,
+                    fontFamily: 'var(--font-mono)', width: 160,
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Traffic Mode (for Synthetic) */}
+            {sourceType === 'synthetic' && (
+              <div>
+                <div style={labelStyle}>Traffic Mode</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['benign', 'suspicious'] as DemoMode[]).map(m => (
+                    <button
+                      key={m}
+                      disabled={isRunning}
+                      onClick={() => setMode(m)}
+                      style={{
+                        padding: '8px 14px', borderRadius: 8, border: '1px solid',
+                        fontSize: 12, fontWeight: 600, cursor: isRunning ? 'not-allowed' : 'pointer',
+                        borderColor: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--border-default)',
+                        background: mode === m ? (m === 'suspicious' ? 'var(--color-critical-light)' : 'var(--color-live-light)') : 'var(--bg-card)',
+                        color: mode === m ? (m === 'suspicious' ? 'var(--color-critical)' : 'var(--color-live)') : 'var(--text-secondary)',
+                        opacity: isRunning ? 0.6 : 1,
+                        transition: 'all var(--transition-fast)',
+                      }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        {m === 'suspicious' ? <ShieldAlert size={13} /> : <ShieldCheck size={13} />}
+                        {m === 'suspicious' ? 'Suspicious' : 'Benign'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Temporal Window */}
             <div>
@@ -353,7 +652,7 @@ export function LiveMonitoringPage() {
                 >
                   {starting
                     ? <><Spinner /> Starting…</>
-                    : <><Play size={14} /> Start Live Demo</>
+                    : <><Play size={14} /> Start {sourceType === 'live' ? 'Live Capture' : 'Live Stream'}</>
                   }
                 </button>
               ) : (
@@ -371,13 +670,17 @@ export function LiveMonitoringPage() {
             </div>
           </div>
 
-          {/* Session stats */}
+          {/* Session & Ingestion stats */}
           {session && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+              <StatChip label="Capture State" value={session.health_status || (isRunning ? 'RUNNING' : 'STOPPED')} color={session.health_status === 'RUNNING' ? 'var(--color-live)' : session.health_status === 'NO_TRAFFIC' ? 'var(--color-warning)' : undefined} />
+              <StatChip label="Interface" value={session.interface_name || session.interface || 'Wi-Fi'} mono />
               <StatChip label="Session" value={runId ?? session.session_id} mono />
               <StatChip label="Packets" value={session.packet_count.toLocaleString()} />
-              <StatChip label="Benign" value={session.benign_count.toLocaleString()} color="var(--color-live)" />
-              <StatChip label="Suspicious" value={session.suspicious_count.toLocaleString()} color="var(--color-critical)" />
+              <StatChip label="Traffic Rate" value={liveMetrics ? `${(liveMetrics.capture_mbps || 0).toFixed(2)} Mbps` : '0.00 Mbps'} color="var(--primary)" />
+              <StatChip label="Capture Drops" value={`${liveMetrics?.capture_drops ?? 0}`} color={(liveMetrics?.capture_drops ?? 0) > 0 ? 'var(--color-critical)' : undefined} />
+              <StatChip label="Queue Drops" value={`${liveMetrics?.queue_drops ?? 0}`} color={(liveMetrics?.queue_drops ?? 0) > 0 ? 'var(--color-critical)' : undefined} />
+              <StatChip label="Processing Lag" value={`${(liveMetrics?.processing_lag_ms ?? 0).toFixed(1)} ms`} />
               <StatChip label="Entities" value={session.active_entities.length.toString()} />
               <StatChip label="Window" value={`${session.window_seconds}s`} />
             </div>
@@ -433,12 +736,23 @@ export function LiveMonitoringPage() {
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Live Network Activity</h3>
                 {isRunning && <PulseDot color="var(--color-live)" label="LIVE" />}
                 {!isRunning && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', border: '1px solid var(--border-default)', padding: '2px 6px', borderRadius: 4 }}>STOPPED</span>}
-                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-light)', padding: '2px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Activity size={10} /> Synthetic data
+                <span style={{
+                  fontSize: 10, fontWeight: 600,
+                  color: (session?.running ? session.source_type : sourceType) === 'live' ? 'var(--color-live)' : 'var(--primary)',
+                  background: (session?.running ? session.source_type : sourceType) === 'live' ? 'var(--color-live-light)' : 'var(--primary-light)',
+                  padding: '2px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4
+                }}>
+                  {(session?.running ? session.source_type : sourceType) === 'live' ? (
+                    <><Radio size={10} /> Real Npcap Telemetry</>
+                  ) : (
+                    <><Activity size={10} /> Synthetic generator</>
+                  )}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Synthetic telemetry · rolling temporal windows</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {(session?.running ? session.source_type : sourceType) === 'live' ? 'Real-time packet capture · rolling temporal windows' : 'Synthetic telemetry · rolling temporal windows'}
+                </span>
                 <div style={{ display: 'flex', gap: 4, background: 'var(--bg-workspace)', padding: 2, borderRadius: 6 }}>
                   {[1, 5, 15].map(m => (
                     <button
@@ -598,16 +912,46 @@ const panelStyle: React.CSSProperties = {
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
-function StatusBadge({ running, wsConnected }: { running: boolean; wsConnected: boolean }) {
-  if (running && wsConnected)
-    return <PulseDot color="var(--color-live)" label="LIVE" />;
-  if (running && !wsConnected)
+function StatusBadge({
+  running,
+  wsConnected,
+  healthStatus,
+  packetCount,
+}: {
+  running: boolean;
+  wsConnected: boolean;
+  healthStatus?: string;
+  packetCount: number;
+}) {
+  if (!running) {
+    return (
+      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 999, border: '1px solid var(--border-default)', color: 'var(--text-muted)', background: 'var(--bg-input)' }}>
+        ● STOPPED
+      </span>
+    );
+  }
+
+  if (!wsConnected) {
     return <PulseDot color="var(--color-warning)" label="RECONNECTING" />;
-  return (
-    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 999, border: '1px solid var(--border-default)', color: 'var(--text-muted)', background: 'var(--bg-input)' }}>
-      ● STOPPED
-    </span>
-  );
+  }
+
+  if (healthStatus === 'STARTING') {
+    return <PulseDot color="var(--primary)" label="STARTING" />;
+  }
+
+  if (healthStatus === 'NO_TRAFFIC' || packetCount === 0) {
+    return <PulseDot color="var(--color-warning)" label="NO TRAFFIC" />;
+  }
+
+  if (healthStatus === 'DEGRADED') {
+    return <PulseDot color="var(--color-warning)" label="DEGRADED" />;
+  }
+
+  if (healthStatus === 'FAILED') {
+    return <PulseDot color="var(--color-critical)" label="FAILED" />;
+  }
+
+  return <PulseDot color="var(--color-live)" label="LIVE CAPTURING" />;
 }
 
 function PulseDot({ color, label }: { color: string; label: string }) {

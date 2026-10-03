@@ -27,14 +27,13 @@ import { HistoricalNetworkGraph } from '@/components/historical/HistoricalNetwor
 import { groupHistoricalEvents, significantActivities, SEVERITY_RANK } from '@/lib/activityGrouping';
 import { buildHistoricalReport, forensicPartFrom, historicalLimitations, nextSteps } from '@/lib/reportBuilder';
 import { deriveRiskEntities, type DashboardEntity } from '@/utils/entityRisk';
-import { ActivityList, SeverityPill } from '@/components/activity/ActivityList';
+import { SeverityPill } from '@/components/activity/ActivityList';
 import { SEVERITY_STYLE } from '@/components/activity/severity';
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline';
 import { ActivityInspector } from '@/components/activity/ActivityInspector';
 import { StageMap } from '@/components/activity/StageMap';
 import { toStageMapItems } from '@/components/activity/stageMapItems';
 import { PlainLanguagePanel } from '@/components/activity/PlainLanguagePanel';
-import { EntityBehaviour } from '@/components/activity/EntityBehaviour';
 import { Tabs } from '@/components/ui/Tabs';
 import { useFocusParam } from '@/hooks/useFocusParam';
 import { buildStageMap, affectedAssets, recommendedActions } from '@/lib/socPlaybook';
@@ -444,7 +443,8 @@ function ResultView({ result, jobId, filename, isDemo }: {
   const [inspectId, setInspectId] = useState<string | null>(null);
   const [tab, setTab] = useState<ResultTab>('overview');
   const [entityIp, setEntityIp] = useState<string | null>(null);
-  const [highlight, setHighlight] = useState<{ id: string; key: string | number } | null>(null);
+  const [_highlight, setHighlight] = useState<{ id: string; key: string | number } | null>(null);
+  void _highlight;
   const inspected = inspectId ? activities.find(a => a.id === inspectId) ?? null : null;
 
   // Deep link (?focus=HACT-0003) from alerts, timelines or reports → exact activity row + inspector
@@ -672,8 +672,9 @@ function TrafficTimelineChart({ windows, events, onClick }: { windows: TemporalW
   return (
     <ResponsiveContainer width="100%" height={180}>
       <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }} onClick={(e) => {
-        if (e && e.activePayload && e.activePayload.length > 0 && onClick) {
-          onClick(e.activePayload[0].payload.ts);
+        const payload = (e as unknown as { activePayload?: Array<{ payload: { ts: number } }> })?.activePayload;
+        if (payload && payload.length > 0 && onClick) {
+          onClick(payload[0].payload.ts);
         }
       }} style={{ cursor: onClick ? 'pointer' : 'default' }}>
         <defs>

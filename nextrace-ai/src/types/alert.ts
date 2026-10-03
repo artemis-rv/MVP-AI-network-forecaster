@@ -43,3 +43,29 @@ export interface AlertStats {
   medium: number;
   low: number;
 }
+
+export interface MitigationRequest {
+  action: 'BLOCK_REMOTE_IP' | 'UNBLOCK_REMOTE_IP' | 'RATE_LIMIT_IP';
+  target_host: string;
+  remote_ip: string;
+  direction?: 'inbound' | 'outbound' | 'both';
+  duration_seconds?: number;
+  analyst_id: string;
+  reason: string;
+  dry_run?: boolean;
+}
+
+export interface MitigationResult {
+  action_id: string;
+  status: 'SUCCESS' | 'DRY_RUN_SUCCESS' | 'REJECTED' | 'FAILED';
+  action: string;
+  remote_ip: string;
+  target_host: string;
+  rule_name: string;
+  command_executed: string;
+  analyst_id: string;
+  timestamp: number;
+  audit_hash: string;
+  details: string;
+}
+

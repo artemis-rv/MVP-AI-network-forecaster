@@ -20,8 +20,6 @@ import { useLiveStore } from '@/store/liveStore';
 import { useAppStore } from '@/store/appStore';
 import { LiveEntityGraph } from '@/components/investigation/LiveEntityGraph';
 import { TimelinePanel } from '@/components/investigation/TimelinePanel';
-import { EntityBehaviour } from '@/components/activity/EntityBehaviour';
-import { activityHref } from '@/hooks/useFocusParam';
 import { RelatedActivityTable } from '@/components/investigation/RelatedActivityTable';
 import { ATTACK_STAGES, STAGE_COLORS } from '@/types/forecast';
 import type { InvestigationContext } from '@/types/investigation';

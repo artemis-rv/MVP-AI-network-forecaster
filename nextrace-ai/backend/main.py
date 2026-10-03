@@ -4,10 +4,16 @@ NEXTRACE AI — FastAPI Application Entry Point
 from __future__ import annotations
 
 import os
+from pathlib import Path
+import sys
+
+_parent_dir = str(Path(__file__).resolve().parent.parent)
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# ... other imports ...
 from backend.api.health import router as health_router
 from backend.api.live import router as live_router
 from backend.api.forecast import router as forecast_router

@@ -144,16 +144,6 @@ function Bullets({ items }: { items: ReactNode[] }) {
 
 const pct = (v: number) => `${v.toFixed(1)}%`;
 
-function TargetChip({ met }: { met: boolean }) {
-  const color = met ? 'var(--color-live)' : 'var(--color-critical)';
-  const bg = met ? 'var(--color-live-light)' : 'var(--color-critical-light)';
-  return (
-    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.4px', color, background: bg, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>
-      {met ? 'MET' : 'NOT MET'}
-    </span>
-  );
-}
-
 function SameFeatureChart() {
   return (
     <div style={{ width: '100%', height: 280 }} data-testid="chart-same-feature">

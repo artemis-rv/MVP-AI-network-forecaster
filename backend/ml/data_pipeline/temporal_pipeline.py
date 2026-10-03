@@ -86,7 +86,7 @@ class TemporalDataPipeline:
         cat_encoders = {}
         for col in cat_cols:
             le = LabelEncoder()
-            X.loc[:, col] = le.fit_transform(X[col].astype(str))
+            X[col] = le.fit_transform(X[col].astype(str))
             cat_encoders[col] = le
             
         self.metadata["feature_count"] = X.shape[1]
@@ -139,13 +139,13 @@ class TemporalDataPipeline:
         X_train_num = X_train[numeric_cols]
         self.scaler.fit(X_train_num)
         
-        X_train_scaled = X_train.copy()
-        X_val_scaled = X_val.copy()
-        X_test_scaled = X_test.copy()
+        X_train_scaled = X_train.astype({col: float for col in numeric_cols})
+        X_val_scaled = X_val.astype({col: float for col in numeric_cols})
+        X_test_scaled = X_test.astype({col: float for col in numeric_cols})
         
-        X_train_scaled.loc[:, numeric_cols] = self.scaler.transform(X_train[numeric_cols])
-        X_val_scaled.loc[:, numeric_cols] = self.scaler.transform(X_val[numeric_cols])
-        X_test_scaled.loc[:, numeric_cols] = self.scaler.transform(X_test[numeric_cols])
+        X_train_scaled[numeric_cols] = self.scaler.transform(X_train[numeric_cols])
+        X_val_scaled[numeric_cols] = self.scaler.transform(X_val[numeric_cols])
+        X_test_scaled[numeric_cols] = self.scaler.transform(X_test[numeric_cols])
         
         os.makedirs(self.output_dir, exist_ok=True)
         

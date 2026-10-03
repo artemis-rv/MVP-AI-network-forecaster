@@ -85,7 +85,7 @@ Dataset*/
 *.weights
 backend/ml/baseline/output/
 backend/ml/data_pipeline/output/
-backend/ml/data_pipeline/temporal_output/
-backend/ml/temporal/output/
-backend/ml/models/lstm_attention/output/
-backend/ml/models/lstm_attention/experiments/
+# Live captures and PCAP files
+captures/
+*.pcap
+*.pcapng

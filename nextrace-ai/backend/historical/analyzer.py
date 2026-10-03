@@ -13,6 +13,7 @@ from typing import Any
 from backend.historical.parser import parse_pcap
 from backend.historical.flow_builder import build_flows
 from backend.historical.feature_engineering import aggregate_temporal_windows
+from backend.forecasting.engine import RuleBasedForecastEngine
 
 
 # ── Heuristic thresholds (configured for real capture analysis) ───────────────
@@ -93,7 +94,22 @@ def run_analysis(
     # 6 — Entity relationships
     entity_relationships = _build_entity_relationships(flows, suspicious_events)
 
-    # 7 — Metadata
+    # 7 — Forecast Engine integration
+    forecast_engine = RuleBasedForecastEngine()
+    window_forecasts = []
+    final_forecast = None
+    for win in windows:
+        sus_dsts = [
+            e["dst_ip"] for e in suspicious_events
+            if win["window_start"] <= e["timestamp"] < win["window_end"]
+        ]
+        tgt = max(set(sus_dsts), key=sus_dsts.count) if sus_dsts else None
+        mode = "suspicious" if win.get("suspicious_ratio", 0) > 0.05 or sus_dsts else "benign"
+        fc = forecast_engine.predict(win, mode=mode, observed_target=tgt)
+        window_forecasts.append(fc)
+        final_forecast = fc
+
+    # 8 — Metadata
     protocol_counts = Counter(p["protocol"] for p in packets)
     src_ip_counts   = Counter(p["src_ip"]   for p in packets if p["src_ip"] not in ("0.0.0.0", ""))
     dst_ip_counts   = Counter(p["dst_ip"]   for p in packets if p["dst_ip"] not in ("0.0.0.0", ""))
@@ -124,6 +140,8 @@ def run_analysis(
         "suspicious_events":    suspicious_events,
         "activity_timeline":    activity_timeline,
         "entity_relationships": entity_relationships,
+        "window_forecasts":     window_forecasts,
+        "final_forecast":       final_forecast,
     }
 
 
