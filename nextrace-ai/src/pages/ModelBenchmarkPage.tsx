@@ -1,21 +1,21 @@
 import type { ReactNode } from 'react';
 import {
-  BarChart3, Info, GitBranch, ListChecks, Cpu, ShieldCheck, ArrowDown, CheckCircle2, XCircle,
-  Clock, Layers, ClipboardCheck,
+  BarChart3, GitBranch, ListChecks, Cpu, ShieldCheck, ArrowDown, CheckCircle2,
+  Clock, Layers,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList,
 } from 'recharts';
 
-// Measured chronological test-set results. Values are fixed; do not recompute or round differently.
-// LSTM + Attention = single model v3a_state5_seq50 (K=5) and v2b_seq50_bce (next flow); no ensemble.
-type ModelKey = 'lstm' | 'lr141' | 'lr53';
+// Measured NF-CICIDS2018-v3 next-5-flow benchmark results (backend/ml/models/cicids2018/*_next5_v1).
+// Values are fixed; do not recompute or round differently. Percentages are stored to 3 decimals.
+// One frozen protocol for all four models; each threshold = argmax validation F1, test evaluated once.
+type ModelKey = 'lr' | 'lstm' | 'attn' | 'tf';
+type Split = 'Test' | 'Validation';
 
 interface ResultRow {
-  task: 'Next 5 flows (K=5)' | 'Next flow';
-  model: string;
+  split: Split;
   modelKey: ModelKey;
-  input: string;
   precision: number;
   recall: number;
   f1: number;
@@ -24,17 +24,39 @@ interface ResultRow {
   prAuc: number;
 }
 
+interface ModelInfo {
+  label: string;
+  color: string;
+  input: string;
+  params: number;
+  threshold: number;
+  bestEpoch: number;
+  epochsRun: number;
+  trainMin: number;
+}
+
+const MODELS: Record<ModelKey, ModelInfo> = {
+  lr: { label: 'Logistic Regression', color: '#94a3b8', input: '29,850 flat', params: 29851, threshold: 0.153, bestEpoch: 1, epochsRun: 4, trainMin: 2.9 },
+  lstm: { label: 'Simple LSTM', color: '#0ea5e9', input: '50 × 131', params: 280913, threshold: 0.406, bestEpoch: 2, epochsRun: 5, trainMin: 35.6 },
+  attn: { label: 'LSTM + Attention', color: '#6366f1', input: '50 × 131', params: 281042, threshold: 0.450, bestEpoch: 7, epochsRun: 8, trainMin: 58.0 },
+  tf: { label: 'Transformer', color: '#f59e0b', input: '50 × 131', params: 303697, threshold: 0.268, bestEpoch: 4, epochsRun: 7, trainMin: 74.8 },
+};
+const MODEL_ORDER: ModelKey[] = ['lr', 'lstm', 'attn', 'tf'];
+
 const RESULTS: ResultRow[] = [
-  { task: 'Next 5 flows (K=5)', model: 'LSTM + Attention', modelKey: 'lstm', input: '50 × 141', precision: 50.6, recall: 54.2, f1: 52.4, fpr: 19.7, rocAuc: 0.771, prAuc: 0.551 },
-  { task: 'Next 5 flows (K=5)', model: 'Logistic Regression', modelKey: 'lr141', input: '1 × 141', precision: 32.7, recall: 92.7, f1: 48.4, fpr: 70.8, rocAuc: 0.639, prAuc: 0.342 },
-  { task: 'Next flow', model: 'LSTM + Attention', modelKey: 'lstm', input: '50 × 141', precision: 29.4, recall: 39.8, f1: 33.8, fpr: 6.8, rocAuc: 0.841, prAuc: 0.348 },
-  { task: 'Next flow', model: 'Logistic Regression', modelKey: 'lr53', input: '1 × 53', precision: 13.7, recall: 57.5, f1: 22.1, fpr: 25.8, rocAuc: 0.750, prAuc: 0.130 },
+  { split: 'Test', modelKey: 'lr', precision: 36.109, recall: 21.428, f1: 26.896, fpr: 15.308, rocAuc: 0.5466, prAuc: 0.3289 },
+  { split: 'Test', modelKey: 'lstm', precision: 57.708, recall: 6.837, f1: 12.225, fpr: 2.023, rocAuc: 0.5461, prAuc: 0.3442 },
+  { split: 'Test', modelKey: 'attn', precision: 51.631, recall: 12.055, f1: 19.546, fpr: 4.560, rocAuc: 0.6215, prAuc: 0.3899 },
+  { split: 'Test', modelKey: 'tf', precision: 29.265, recall: 5.732, f1: 9.586, fpr: 5.593, rocAuc: 0.5363, prAuc: 0.2989 },
+  { split: 'Validation', modelKey: 'lr', precision: 17.600, recall: 37.717, f1: 24.000, fpr: 17.586, rocAuc: 0.6591, prAuc: 0.1763 },
+  { split: 'Validation', modelKey: 'lstm', precision: 33.702, recall: 27.603, f1: 30.349, fpr: 5.408, rocAuc: 0.6644, prAuc: 0.2892 },
+  { split: 'Validation', modelKey: 'attn', precision: 40.755, recall: 25.889, f1: 31.664, fpr: 3.748, rocAuc: 0.6967, prAuc: 0.3096 },
+  { split: 'Validation', modelKey: 'tf', precision: 28.271, recall: 31.836, f1: 29.948, fpr: 8.044, rocAuc: 0.7014, prAuc: 0.3009 },
 ];
 
-const MODEL_STYLE: Record<ModelKey, { color: string; label: string }> = {
-  lstm: { color: '#6366f1', label: 'LSTM + Attention (50 × 141)' },
-  lr141: { color: '#94a3b8', label: 'Logistic Regression (141 features)' },
-  lr53: { color: '#64748b', label: 'Logistic Regression (53 features)' },
+const SPLIT_NOTE: Record<Split, string> = {
+  Test: 'Test · 03-02 · Bot (unseen)',
+  Validation: 'Validation · 03-01 · Infilteration',
 };
 const TEMPORAL = '#06b6d4';
 
@@ -45,8 +67,8 @@ const METRICS = [
   { key: 'fpr', label: 'FPR' },
 ] as const;
 
-function chartData(task: ResultRow['task']) {
-  const rows = RESULTS.filter((r) => r.task === task);
+function chartData(split: Split) {
+  const rows = RESULTS.filter((r) => r.split === split);
   return METRICS.map((m) => ({
     metric: m.label,
     ...Object.fromEntries(rows.map((r) => [r.modelKey, r[m.key]])),
@@ -72,14 +94,13 @@ function SectionTitle({ icon, children, sub }: { icon: ReactNode; children: Reac
   );
 }
 
-function TaskChart({ task, title }: { task: ResultRow['task']; title: string }) {
-  const keys = RESULTS.filter((r) => r.task === task).map((r) => r.modelKey);
+function SplitChart({ split }: { split: Split }) {
   return (
-    <div style={{ minWidth: 0 }} data-testid={`chart-${task === 'Next flow' ? 'next-flow' : 'k5'}`}>
-      <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{title}</h3>
-      <div style={{ width: '100%', height: 270 }}>
+    <div style={{ minWidth: 0 }} data-testid={`chart-${split.toLowerCase()}`}>
+      <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{SPLIT_NOTE[split]}</h3>
+      <div style={{ width: '100%', height: 290 }}>
         <ResponsiveContainer>
-          <BarChart data={chartData(task)} margin={{ top: 20, right: 8, left: -12, bottom: 0 }} barCategoryGap="22%">
+          <BarChart data={chartData(split)} margin={{ top: 20, right: 8, left: -12, bottom: 0 }} barCategoryGap="18%">
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
             <XAxis dataKey="metric" tick={{ fontSize: 11.5, fill: 'var(--text-muted)' }} axisLine={{ stroke: 'var(--border-default)' }} tickLine={false} />
             {/* Fixed 0-100% scale on both panels so bar heights are directly comparable. */}
@@ -89,10 +110,28 @@ function TaskChart({ task, title }: { task: ResultRow['task']; title: string }) 
               contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 11 }}
               formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
             />
-            <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
-            {keys.map((k) => (
-              <Bar key={k} dataKey={k} name={MODEL_STYLE[k].label} fill={MODEL_STYLE[k].color} radius={[4, 4, 0, 0]} maxBarSize={34}>
-                <LabelList dataKey={k} position="top" formatter={(v) => `${Number(v).toFixed(1)}`} style={{ fontSize: 9.5, fill: 'var(--text-secondary)' }} />
+            <Legend itemSorter={null} wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+            {MODEL_ORDER.map((k) => (
+              <Bar
+                key={k}
+                dataKey={k}
+                name={MODELS[k].label}
+                fill={MODELS[k].color}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={26}
+                stroke={k === 'attn' ? '#4f46e5' : undefined}
+                strokeWidth={k === 'attn' ? 1.5 : 0}
+              >
+                <LabelList
+                  dataKey={k}
+                  position="top"
+                  formatter={(v) => `${Number(v).toFixed(1)}`}
+                  style={{
+                    fontSize: 9,
+                    fill: k === 'attn' ? '#6366f1' : 'var(--text-secondary)',
+                    fontWeight: k === 'attn' ? 700 : 400,
+                  }}
+                />
               </Bar>
             ))}
           </BarChart>
@@ -161,11 +200,9 @@ function Bullets({ items }: { items: ReactNode[] }) {
 const pct = (v: number) => `${v.toFixed(1)}%`;
 
 export function ModelBenchmarkPage() {
-  const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid var(--border-default)', whiteSpace: 'nowrap' };
-  const td: React.CSSProperties = { padding: '10px 12px', fontSize: 13, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-subtle)', whiteSpace: 'nowrap' };
+  const th: React.CSSProperties = { textAlign: 'left', padding: '10px 9px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid var(--border-default)', whiteSpace: 'nowrap' };
+  const td: React.CSSProperties = { padding: '10px 9px', fontSize: 13, color: 'var(--text-primary)', borderBottom: '1px solid var(--border-subtle)', whiteSpace: 'nowrap' };
   const num: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12.5 };
-  const lstmK5 = RESULTS[0];
-  const lr141 = RESULTS[1];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1400, margin: '0 auto', width: '100%' }}>
@@ -175,7 +212,7 @@ export function ModelBenchmarkPage() {
           <BarChart3 size={24} color="var(--primary)" /> Model Benchmark
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-          Chronological temporal forecasting benchmark · LSTM + Attention vs Logistic Regression · untouched test set
+          NF-CICIDS2018-v3 · next-5-flow attack forecasting · Logistic Regression, Simple LSTM, LSTM + Attention, Transformer · one frozen protocol
         </p>
       </div>
 
@@ -183,17 +220,19 @@ export function ModelBenchmarkPage() {
       <section style={card}>
         <SectionTitle
           icon={<ListChecks size={16} color="var(--primary)" />}
-          sub="All rows: chronological split, thresholds selected on validation only, evaluated once on the untouched test set. Input = time steps × features per step."
+          sub="Task: from the previous 50 flows, predict whether any of the next 5 flows is an attack. Chronological session split; each threshold = argmax validation F1, frozen before a single test evaluation. Input = time steps × features per step."
         >
           Benchmark Results
         </SectionTitle>
         <div style={{ overflowX: 'auto' }}>
-          <table data-testid="benchmark-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+          <table data-testid="benchmark-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 940 }}>
             <thead>
               <tr>
-                <th style={th}>Task</th>
+                <th style={th}>Split</th>
                 <th style={th}>Model</th>
                 <th style={th}>Input</th>
+                <th style={{ ...th, textAlign: 'right' }}>Params</th>
+                <th style={{ ...th, textAlign: 'right' }}>Threshold</th>
                 <th style={{ ...th, textAlign: 'right' }}>Precision</th>
                 <th style={{ ...th, textAlign: 'right' }}>Recall</th>
                 <th style={{ ...th, textAlign: 'right' }}>F1</th>
@@ -204,118 +243,212 @@ export function ModelBenchmarkPage() {
             </thead>
             <tbody>
               {RESULTS.map((r, i) => {
-                const firstOfTask = i === 0 || RESULTS[i - 1].task !== r.task;
+                const firstOfSplit = i === 0 || RESULTS[i - 1].split !== r.split;
+                const m = MODELS[r.modelKey];
+                const isAttn = r.modelKey === 'attn';
                 return (
-                  <tr key={i} style={{ background: r.modelKey === 'lstm' ? 'rgba(99, 102, 241, 0.06)' : undefined, borderTop: firstOfTask && i > 0 ? '2px solid var(--border-default)' : undefined }}>
-                    <td style={{ ...td, color: 'var(--text-secondary)', fontWeight: firstOfTask ? 600 : 400 }}>{firstOfTask ? r.task : ''}</td>
-                    <td style={td}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: r.modelKey === 'lstm' ? 600 : 400 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 2, background: MODEL_STYLE[r.modelKey].color }} />
-                        {r.model}
+                  <tr
+                    key={i}
+                    style={{
+                      borderTop: firstOfSplit && i > 0 ? '2px solid var(--border-default)' : undefined,
+                      background: isAttn ? 'rgba(99, 102, 241, 0.10)' : undefined,
+                    }}
+                  >
+                    <td
+                      style={{
+                        ...td,
+                        color: 'var(--text-secondary)',
+                        fontWeight: firstOfSplit ? 600 : 400,
+                        borderLeft: isAttn ? '3px solid #6366f1' : '3px solid transparent',
+                      }}
+                    >
+                      {firstOfSplit ? SPLIT_NOTE[r.split] : ''}
+                    </td>
+                    <td style={{ ...td, fontWeight: isAttn ? 700 : 400 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 2,
+                            background: m.color,
+                            boxShadow: isAttn ? `0 0 8px ${m.color}` : undefined,
+                          }}
+                        />
+                        <span style={{ color: isAttn ? '#6366f1' : undefined }}>{m.label}</span>
+                        {isAttn && (
+                          <span
+                            style={{
+                              fontSize: 9.5,
+                              fontWeight: 700,
+                              letterSpacing: '0.5px',
+                              color: '#6366f1',
+                              background: 'rgba(99, 102, 241, 0.18)',
+                              border: '1px solid rgba(99, 102, 241, 0.4)',
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            Selected
+                          </span>
+                        )}
                       </span>
                     </td>
-                    <td style={{ ...td, fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--text-secondary)' }}>{r.input}</td>
-                    <td style={num}>{pct(r.precision)}</td>
-                    <td style={num}>{pct(r.recall)}</td>
-                    <td style={num}>{pct(r.f1)}</td>
-                    <td style={num}>{pct(r.fpr)}</td>
-                    <td style={num}>{r.rocAuc.toFixed(3)}</td>
-                    <td style={num}>{r.prAuc.toFixed(3)}</td>
+                    <td
+                      style={{
+                        ...td,
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12.5,
+                        color: isAttn ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        fontWeight: isAttn ? 600 : 400,
+                      }}
+                    >
+                      {m.input}
+                    </td>
+                    <td style={{ ...num, fontWeight: isAttn ? 700 : 400, color: isAttn ? 'var(--text-primary)' : undefined }}>
+                      {m.params.toLocaleString('en-US')}
+                    </td>
+                    <td style={{ ...num, fontWeight: isAttn ? 700 : 400, color: isAttn ? 'var(--text-primary)' : undefined }}>
+                      {m.threshold.toFixed(3)}
+                    </td>
+                    <td style={{ ...num, fontWeight: isAttn ? 700 : 400, color: isAttn ? 'var(--text-primary)' : undefined }}>
+                      {pct(r.precision)}
+                    </td>
+                    <td style={{ ...num, fontWeight: isAttn ? 700 : 400, color: isAttn ? 'var(--text-primary)' : undefined }}>
+                      {pct(r.recall)}
+                    </td>
+                    <td style={{ ...num, fontWeight: isAttn ? 700 : 400, color: isAttn ? 'var(--text-primary)' : undefined }}>
+                      {pct(r.f1)}
+                    </td>
+                    <td style={{ ...num, fontWeight: isAttn ? 700 : 400, color: isAttn ? 'var(--text-primary)' : undefined }}>
+                      {pct(r.fpr)}
+                    </td>
+                    <td style={{ ...num, fontWeight: isAttn ? 700 : 400, color: isAttn ? 'var(--text-primary)' : undefined }}>
+                      {r.rocAuc.toFixed(3)}
+                    </td>
+                    <td style={{ ...num, fontWeight: isAttn ? 700 : 400, color: isAttn ? 'var(--text-primary)' : undefined }}>
+                      {r.prAuc.toFixed(3)}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.55 }}>
+          Positive rate of the next-5 target: train 17.3%, validation 9.1%, test 28.8%. Neural inputs are 75 numeric features + 56 learned categorical-embedding dims per flow (131);
+          Logistic Regression uses the same 50-flow window flattened to 3,750 numeric + 26,100 one-hot features.
+        </p>
       </section>
 
-      {/* All metric charts in one card */}
+      {/* Metric charts */}
       <section style={card}>
         <SectionTitle
           icon={<BarChart3 size={16} color="var(--primary)" />}
-          sub="Precision, recall, F1 and false positive rate for every model, grouped by forecasting task. Both panels share a fixed 0–100% axis; for FPR, lower means fewer false alarms."
+          sub="Precision, recall, F1 and false positive rate at each model's validation-selected threshold. Both panels share a fixed 0–100% axis; for FPR, lower means fewer false alarms."
         >
           Metric Comparison
         </SectionTitle>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 440px), 1fr))', gap: 24 }}>
-          <TaskChart task="Next 5 flows (K=5)" title="Next 5 flows (K=5)" />
-          <TaskChart task="Next flow" title="Next flow" />
+          <SplitChart split="Test" />
+          <SplitChart split="Validation" />
         </div>
       </section>
 
-      {/* Findings and compliance */}
-      <section style={{ ...card, borderLeft: '4px solid var(--primary)' }}>
-        <SectionTitle icon={<ClipboardCheck size={16} color="var(--primary)" />}>Findings &amp; Target Compliance</SectionTitle>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ background: 'var(--color-live-light)', border: '1px solid var(--color-live)', borderRadius: 10, padding: '12px 14px', fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.6px', color: 'var(--color-live)', textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CheckCircle2 size={13} /> LSTM + Attention: target met
-              </div>
-              {pct(lstmK5.precision)} precision, {pct(lstmK5.recall)} recall, {pct(lstmK5.fpr)} FPR. Precision is only 0.6 points above the threshold.
+      {/* Model details */}
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }} data-testid="model-cards">
+        {([
+          ['lr', ['Classical linear baseline: logit = wᵀx + b', 'Same 50-flow window, flattened', '3,750 numeric + 26,100 one-hot = 29,850 features', 'L2 via weight decay 1e-5']],
+          ['lstm', ['2-layer LSTM, 128 hidden units, dropout 0.2', 'Final hidden state → 128 → 64 → 1', 'No attention', 'Categorical embeddings: 56 dims']],
+          ['attn', ['Same LSTM as Simple LSTM', 'Temporal attention over all 50 outputs', 'Linear(128 → 1) scorer, softmax over time', 'Context vector → 128 → 64 → 1']],
+          ['tf', ['Encoder-only, 2 layers, d_model 128, 4 heads', 'Feed-forward 256, dropout 0.2, GELU', '[CLS] token + learned positions (51)', 'CLS output → 128 → 64 → 1']],
+        ] as [ModelKey, string[]][]).map(([k, items]) => {
+          const isAttn = k === 'attn';
+          return (
+            <div
+              key={k}
+              style={{
+                ...card,
+                borderTop: `3px solid ${MODELS[k].color}`,
+                border: isAttn ? `2px solid ${MODELS[k].color}` : '1px solid var(--border-default)',
+                background: isAttn ? 'rgba(99, 102, 241, 0.05)' : 'var(--bg-card)',
+                boxShadow: isAttn ? '0 0 16px rgba(99, 102, 241, 0.15)' : undefined,
+              }}
+            >
+              <SectionTitle icon={<Cpu size={16} color={MODELS[k].color} />}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {MODELS[k].label}
+                  {isAttn && (
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                        letterSpacing: '0.5px',
+                        color: '#6366f1',
+                        background: 'rgba(99, 102, 241, 0.18)',
+                        border: '1px solid rgba(99, 102, 241, 0.4)',
+                        padding: '1px 6px',
+                        borderRadius: 4,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Selected Model
+                    </span>
+                  )}
+                </span>
+              </SectionTitle>
+              <Bullets
+                items={[
+                  ...items,
+                  `${MODELS[k].params.toLocaleString('en-US')} parameters`,
+                  `Best epoch ${MODELS[k].bestEpoch} of ${MODELS[k].epochsRun} run · ${MODELS[k].trainMin.toFixed(1)} min training`,
+                  `Threshold ${MODELS[k].threshold.toFixed(3)}, selected on validation`,
+                ]}
+              />
             </div>
-            <div style={{ background: 'var(--color-critical-light)', border: '1px solid var(--color-critical)', borderRadius: 10, padding: '12px 14px', fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.6px', color: 'var(--color-critical)', textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <XCircle size={13} /> Logistic Regression: target not achieved
-              </div>
-              {pct(lr141.precision)} precision and {pct(lr141.fpr)} FPR. Validation precision never exceeded 36.8% at any threshold.
-            </div>
-          </div>
-          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 9 }}>
-            {[
-              `With the same 141 features and K=5 target, LSTM + Attention reached ROC-AUC ${lstmK5.rocAuc.toFixed(3)} vs ${lr141.rocAuc.toFixed(3)} and PR-AUC ${lstmK5.prAuc.toFixed(3)} vs ${lr141.prAuc.toFixed(3)}, at ${pct(lstmK5.fpr)} FPR vs ${pct(lr141.fpr)}.`,
-              'Logistic Regression receives only the current 141-feature state; LSTM + Attention receives the preceding 50 states. The gain reflects sequence modelling, not a different feature set.',
-              'Adding the 88 engineered features barely changed Logistic Regression (PR-AUC 0.342 vs 0.338), so the improvement does not come from the features alone.',
-              'For next-flow forecasting, LSTM + Attention raised precision from 13.7% to 29.4% and lowered FPR from 25.8% to 6.8%.',
-            ].map((t, i) => (
-              <li key={i} style={{ display: 'flex', gap: 10, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                <Info size={14} color={TEMPORAL} style={{ flexShrink: 0, marginTop: 3 }} />
-                <span>{t}</span>
-              </li>
-            ))}
-            <li style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.55, paddingLeft: 24 }}>
-              Threshold rules (validation only): K=5 LSTM + Attention and 53-feature Logistic Regression, best F1 with precision ≥ 52% and FPR ≤ 30% (best F1 overall if no threshold qualifies); 141-feature Logistic Regression and next-flow rows, best F1. ROC-AUC and PR-AUC are threshold-independent.
-            </li>
-          </ul>
-        </div>
+          );
+        })}
       </section>
 
-      {/* Model details and evaluation protocol */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
-        <div style={{ ...card, borderTop: `3px solid ${MODEL_STYLE.lstm.color}` }}>
-          <SectionTitle icon={<Cpu size={16} color={MODEL_STYLE.lstm.color} />}>LSTM + Attention</SectionTitle>
-          <Bullets items={[
-            'Single model (no ensemble)',
-            'Input: 50 flows × 141 features',
-            '2-layer LSTM, 128 hidden units',
-            'Temporal attention over the 50 steps',
-            'Threshold 0.42, selected on validation',
-          ]} />
-        </div>
-        <div style={{ ...card, borderTop: `3px solid ${MODEL_STYLE.lr141.color}` }}>
-          <SectionTitle icon={<Cpu size={16} color={MODEL_STYLE.lr141.color} />}>Logistic Regression</SectionTitle>
-          <Bullets items={[
-            'Non-sequential: current state only',
-            'Same-feature baseline: 141 features',
-            'Original baseline: 53 features',
-            'Class-balanced, chronological training',
-            'Threshold selected on validation',
-          ]} />
-        </div>
+      {/* Evaluation protocol */}
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
         <div style={{ ...card, borderTop: '3px solid var(--color-live)' }} data-testid="data-integrity">
           <SectionTitle icon={<ShieldCheck size={16} color="var(--color-live)" />}>Evaluation protocol</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {[
-              ['Chronological split', '70 / 15 / 15'],
-              ['Train', '1,570,051'],
-              ['Validation', '336,440'],
-              ['Test', '336,440'],
-              ['Threshold selection', 'validation only'],
-              ['Final evaluation', 'untouched test set'],
+              ['Dataset', 'NF-CICIDS2018-v3 · 20,115,529 flows'],
+              ['Split', 'chronological, by capture session'],
+              ['Train windows (02-14 … 02-28)', '16,137,599'],
+              ['Validation windows (03-01)', '2,147,083'],
+              ['Test windows (03-02)', '1,830,307'],
+              ['Window / horizon', '50 flows / next 5 flows'],
+              ['Threshold selection', 'validation only (argmax F1)'],
+              ['Final evaluation', 'test set, evaluated once'],
             ].map(([k, v]) => (
               <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12.5, paddingBottom: 6, borderBottom: '1px solid var(--border-subtle)' }}>
                 <span style={{ color: 'var(--text-muted)' }}>{k}</span>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: /\d/.test(v) ? 'var(--font-mono)' : undefined, textAlign: 'right' }}>{v}</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: /^[\d,]+$/.test(v) ? 'var(--font-mono)' : undefined, textAlign: 'right' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ ...card, borderTop: `3px solid ${TEMPORAL}` }} data-testid="training-protocol">
+          <SectionTitle icon={<ShieldCheck size={16} color={TEMPORAL} />}>Training protocol (identical for all models)</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {[
+              ['Optimizer', 'Adam, lr 1e-3, weight decay 1e-5'],
+              ['Batch size / seed', '2048 / 42'],
+              ['Loss', 'BCE with logits, no class weighting'],
+              ['Windows per epoch', '6,128,327'],
+              ['Epoch sampling', 'all positives + seeded 25% of negatives'],
+              ['Epochs', 'max 8, early-stopping patience 3'],
+              ['Checkpoint', 'best validation PR-AUC'],
+              ['Inputs', 'no labels, no future flows, no raw IPs/timestamps'],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12.5, paddingBottom: 6, borderBottom: '1px solid var(--border-subtle)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: /^[\d,]+$/.test(v) ? 'var(--font-mono)' : undefined, textAlign: 'right' }}>{v}</span>
               </div>
             ))}
           </div>
@@ -329,12 +462,12 @@ export function ModelBenchmarkPage() {
             Current Model Pipeline
           </SectionTitle>
           <Pipeline stages={[
-            { name: 'Data', status: 'done' },
-            { name: 'Chronological Split', status: 'done' },
-            { name: 'Temporal Features', status: 'done' },
-            { name: 'LSTM + Attention', status: 'done' },
-            { name: 'K=5 Forecasting', status: 'done' },
-            { name: 'Benchmark', status: 'done' },
+            { name: 'NF-CICIDS2018-v3 Data', status: 'done' },
+            { name: 'Leakage-safe Preprocessing', status: 'done' },
+            { name: 'Session Split (train / val / test)', status: 'done' },
+            { name: 'Causal Host-history Features', status: 'done' },
+            { name: 'Next-5-flow Window Loader', status: 'done' },
+            { name: 'Four-model Benchmark', status: 'done' },
           ]} />
         </div>
         <div style={card}>
