@@ -4,6 +4,15 @@ NEXTRACE AI — FastAPI Application Entry Point
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+# Ensure project root (parent directory of backend) is in sys.path
+# so 'backend' can be resolved regardless of CWD when running `python main.py`
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -93,4 +102,5 @@ if __name__ == "__main__":
         port=8000,
         reload=True,
         log_level="info",
+        app_dir=str(BASE_DIR),
     )

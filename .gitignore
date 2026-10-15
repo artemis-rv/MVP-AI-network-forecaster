@@ -48,7 +48,6 @@ venv.bak/
 !.vscode/extensions.json
 !.vscode/settings.json
 .idea/
-.claude/
 .DS_Store
 Thumbs.db
 *.suo
@@ -90,3 +89,8 @@ backend/ml/data_pipeline/temporal_output/
 backend/ml/temporal/output/
 backend/ml/models/lstm_attention/output/
 backend/ml/models/lstm_attention/experiments/
+
+experiments/
+backend.zip
+REPORTS_INDEX.md
+research_paper/
