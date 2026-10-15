@@ -94,3 +94,6 @@ experiments/
 backend.zip
 REPORTS_INDEX.md
 research_paper/
+
+.claude/
+captures/

@@ -1,14 +1,12 @@
 // NEXTRACE AI — WebSocket Service
-// Singleton that manages the /ws/live connection and dispatches messages to the Zustand store.
+// Manages the /ws/live/{clientId} connection and dispatches messages to the Zustand store.
 
 import type { WSMessage, PacketEvent, TemporalState, SessionStatus } from '@/types/live';
 import type { ForecastResult } from '@/types/forecast';
 import { useLiveStore } from '@/store/liveStore';
 import { useForecastStore } from '@/store/forecastStore';
 import { receiveAlert } from '@/services/activityAlerts';
-
-const WS_BASE = import.meta.env.VITE_WS_BASE_URL ?? 'ws://localhost:8000';
-const WS_URL  = `${WS_BASE}/ws/live`;
+import { getLiveWsUrl } from '@/services/api';
 
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECTS     = 5;
@@ -79,7 +77,7 @@ class WebSocketService {
       this.ws = null;
     }
     try {
-      const socket = new WebSocket(WS_URL);
+      const socket = new WebSocket(getLiveWsUrl());
       this.ws = socket;
 
       socket.onopen = () => {

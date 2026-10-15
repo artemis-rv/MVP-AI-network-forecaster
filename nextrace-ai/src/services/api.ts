@@ -14,8 +14,20 @@ import type {
   FindingsResponse,
 } from '@/types/report';
 import type { Alert, AlertStats, AlertStatus } from '@/types/alert';
+import { getClientId } from '@/utils/clientId';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
+/** Build WebSocket URL for this browser tab's isolated session. */
+export function getLiveWsUrl(): string {
+  const wsBase = BASE.replace(/^http/, 'ws');
+  return `${wsBase}/ws/live/${getClientId()}`;
+}
+
+/** Headers required by every live-session REST call. */
+function liveHeaders(): Record<string, string> {
+  return { 'Content-Type': 'application/json', 'X-Client-Id': getClientId() };
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -35,26 +47,27 @@ export const apiService = {
   },
 
   async getLiveStatus(): Promise<SessionStatus> {
-    return request('/api/live/status');
+    return request('/api/live/status', { headers: liveHeaders() });
   },
 
   async startLive(body: { mode: string; window_seconds: number }): Promise<{ message: string; status: SessionStatus }> {
     return request('/api/live/start', {
       method: 'POST',
+      headers: liveHeaders(),
       body: JSON.stringify(body),
     });
   },
 
   async stopLive(): Promise<{ message: string; status: SessionStatus }> {
-    return request('/api/live/stop', { method: 'POST' });
+    return request('/api/live/stop', { method: 'POST', headers: liveHeaders() });
   },
 
   async resetLive(): Promise<{ message: string; status: SessionStatus }> {
-    return request('/api/live/reset', { method: 'POST' });
+    return request('/api/live/reset', { method: 'POST', headers: liveHeaders() });
   },
 
   async getLiveSummary(): Promise<SessionStatus> {
-    return request('/api/live/summary');
+    return request('/api/live/summary', { headers: liveHeaders() });
   },
 
   async getForecast(): Promise<ForecastResult> {

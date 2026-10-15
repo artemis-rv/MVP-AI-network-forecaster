@@ -1,11 +1,13 @@
 """
 NEXTRACE AI — Live Session Service
-Manages exactly one demo live session at a time.
 Runs the packet generator as an asyncio background task,
 accumulates events, computes temporal windows, and
 broadcasts to registered WebSocket clients.
 
-This session namespace is intentionally isolated from future
+Each browser tab receives its own LiveSession instance via SessionManager,
+keyed by an anonymous client_id UUID generated in the browser.
+
+This session namespace is intentionally isolated from
 historical-PCAP processing (see SRS §6 — Data Isolation).
 """
 from __future__ import annotations
@@ -32,10 +34,10 @@ PROVISIONAL_FORECAST_AFTER = 3.0
 
 
 class LiveSession:
-    """Singleton live-demo session."""
+    """Per-user live-demo session (one instance per browser tab via SessionManager)."""
 
-    def __init__(self) -> None:
-        self.session_id: str = "live_demo_001"
+    def __init__(self, session_id: str = "live_demo_001") -> None:
+        self.session_id: str = session_id
         self.running: bool = False
         self.mode: str = "benign"
         self.window_seconds: int = 15
@@ -276,5 +278,6 @@ class LiveSession:
         return self._current_forecast
 
 
-# ─── Module-level singleton ───────────────────────────────────
+# ─── Backward-compat default instance (used by /api/forecast/current) ────────
+# All live routes now get their session from SessionManager instead.
 live_session = LiveSession()

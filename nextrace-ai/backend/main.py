@@ -28,6 +28,7 @@ from backend.api.reports import router as reports_router
 from backend.api.admin import router as admin_router
 from backend.api.alerts import router as alerts_router
 from backend.api.explain import router as explain_router
+from backend.services.session_manager import session_manager
 
 app = FastAPI(
     title="NEXTRACE AI Backend",
@@ -36,6 +37,16 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    session_manager.start()
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    await session_manager.shutdown()
 
 # ── CORS — allow local dev servers, Vercel apps, and custom domains ───────
 allowed_origins = [
